@@ -2069,6 +2069,8 @@ html.page-visible body{visibility:visible;}
 .fulfillment-choice-available{font-size:12px;color:#816b5b;margin-top:3px}
 .fulfillment-choice input{box-sizing:border-box;width:100%;padding:9px;border:1px solid #cbb3a1;border-radius:9px;background:#fffaf6;color:#4d382d;font:inherit;text-align:center}
 .fulfillment-choice input:focus{outline:2px solid #b48c73;outline-offset:1px}
+.fulfillment-choice.is-empty{opacity:.42;background:#f2efec;filter:grayscale(.6)}
+.fulfillment-choice.is-empty input{background:#e8e4e0;cursor:not-allowed}
 .fulfillment-footer{display:grid;gap:12px;padding-top:12px;border-top:1px solid #e8d8cc}
 #fulfillmentCount{font-weight:750;color:#745544}
 #fulfillmentCount.fulfillment-error{color:#b23d3d}
@@ -3746,7 +3748,7 @@ function renderVariantWarehousePicker(row){
   const q=row.querySelector(".variant-warehouse-search").value.trim().toLocaleLowerCase();
   const chosen=row.dataset.warehouseKey||"";
   sel.replaceChildren(new Option("不連結",""));
-  const matches=warehouseCandidates.filter(x=>[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(q));
+  const matches=warehouseCandidates.filter(x=>x.qty>0&&[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(q));
   for(const x of matches.slice(0,250))sel.add(new Option([x.item.name,x.item.variant,x.item.category,`共${x.qty}`].filter(Boolean).join("｜"),x.key));
   const chosenItem=warehouseCandidates.find(x=>x.key===chosen);
   if(chosenItem&&![...sel.options].some(o=>o.value===chosen))sel.add(new Option(`${chosenItem.item.name}（已選取）`,chosen));
@@ -3760,7 +3762,7 @@ function renderAllVariantWarehousePickers(){
 function showWarehouseChoice(){
   const sel=$("#warehouseItemChoice"),query=$("#warehouseItemSearch").value.trim().toLocaleLowerCase();
   const chosen=sel.value||sel.dataset.chosen||"";
-  const matches=warehouseCandidates.filter(x=>[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(query));
+  const matches=warehouseCandidates.filter(x=>x.qty>0&&[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(query));
   sel.replaceChildren(new Option("不連結",""));
   for(const x of matches.slice(0,250)){
     const label=[x.item.name,x.item.variant,x.item.category,x.item.gender].filter(Boolean).join("｜");
@@ -4573,13 +4575,13 @@ function chooseFulfillmentAccounts(order,row,candidates){
     description.textContent=`訂單 ${order.orderNumber||order.id}\n${row.item.name||"商品"}${row.item.variant?"／"+row.item.variant:""} × ${row.qty}\n請點選各帳號的出貨數量。`;
     list.replaceChildren();
     const inputs=candidates.map(a=>{
-      const label=document.createElement("label");label.className="fulfillment-choice";
+      const label=document.createElement("label");label.className="fulfillment-choice";if(a.remaining<=0)label.classList.add("is-empty");
       const info=document.createElement("div");
       const name=document.createElement("div");name.className="fulfillment-choice-name";name.textContent=a.label;
       const gameId=document.createElement("div");gameId.className="fulfillment-choice-id";gameId.textContent=a.gameId?`ID：${a.gameId}`:"ID：未設定";
       const available=document.createElement("div");available.className="fulfillment-choice-available";available.textContent=`可出 ${a.remaining} 個`;
       info.append(name,gameId,available);
-      const input=document.createElement("input");input.type="number";input.min="0";input.max=String(a.remaining);input.step="1";input.value="0";input.inputMode="numeric";input.setAttribute("aria-label",`${a.label} 出貨數量`);
+      const input=document.createElement("input");input.type="number";input.min="0";input.max=String(a.remaining);input.step="1";input.value="0";input.inputMode="numeric";input.disabled=a.remaining<=0;input.setAttribute("aria-label",`${a.label} 出貨數量`);
       label.append(info,input);list.append(label);
       return {account:a,input};
     });
