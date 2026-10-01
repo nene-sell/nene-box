@@ -2069,7 +2069,7 @@ html.page-visible body{visibility:visible;}
 .fulfillment-choice-available{font-size:12px;color:#816b5b;margin-top:3px}
 .fulfillment-choice input{box-sizing:border-box;width:100%;padding:9px;border:1px solid #cbb3a1;border-radius:9px;background:#fffaf6;color:#4d382d;font:inherit;text-align:center}
 .fulfillment-choice input:focus{outline:2px solid #b48c73;outline-offset:1px}
-.fulfillment-choice.is-empty{opacity:.42;background:#f2efec;filter:grayscale(.6)}
+.fulfillment-choice.is-empty{opacity:.48;background:#e6e2df;filter:grayscale(1);pointer-events:none}
 .fulfillment-choice.is-empty input{background:#e8e4e0;cursor:not-allowed}
 .fulfillment-footer{display:grid;gap:12px;padding-top:12px;border-top:1px solid #e8d8cc}
 #fulfillmentCount{font-weight:750;color:#745544}
@@ -4633,10 +4633,12 @@ async function planWarehouseFulfillment(order){
   for(const row of linkedRows){
     const candidates=[];
     for(const a of accounts){
-      const available=(a.items||[]).filter(i=>warehouseIdentity(i)===row.key)
-        .reduce((sum,i)=>sum+Math.max(0,Math.floor(Number(i.qty)||0)),0);
-      const remaining=available-(used.get(a.id+"\u001f"+row.key)||0);
-      if(remaining>0)candidates.push({id:a.id,label:String(a.number||a.name||a.gameId||a.id),gameId:String(a.gameId||""),remaining});
+      const matchingItems=(a.items||[]).filter(i=>warehouseIdentity(i)===row.key);
+      if(!matchingItems.length)continue;
+      const available=matchingItems.reduce((sum,i)=>sum+Math.max(0,Math.floor(Number(i.qty)||0)),0);
+      const remaining=Math.max(0,available-(used.get(a.id+"\u001f"+row.key)||0));
+      // 曾持有這件道具的帳號即使數量為零，也保留在配貨清單並禁用輸入。
+      candidates.push({id:a.id,label:String(a.number||a.name||a.gameId||a.id),gameId:String(a.gameId||""),remaining});
     }
     if(candidates.reduce((n,a)=>n+a.remaining,0)<row.qty)
       throw new Error(`「${row.item.name||"商品"}」目前實際庫存不足，請先確認小倉倉`);
