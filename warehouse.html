@@ -523,7 +523,7 @@
   <input id="tempShotInput" type="file" accept="image/*" multiple hidden>
   <div id="tempShotGrid" class="tempShotGrid"></div><div class="actions"><button class="btn" id="closeTempShots" type="button">關閉</button></div></div></dialog><dialog id="swapAccountDlg"><div class="modal">
 <h3>交換帳號資料</h3>
-<div class="note" style="margin-bottom:10px">兩個編號保持不變，互換遊戲 ID、整份道具庫存（含數量、款式、圖片）及資源紀錄。臨時截圖保留在原編號。</div>
+<div class="note" style="margin-bottom:10px">兩個編號保持不變，整個帳號資料一起交換位置：遊戲 ID、道具、資源紀錄、臨時截圖及帳號設定都跟著搬家。</div>
 <div class="field"><label>第一個帳號</label><input id="swapAccountSearchA" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountA" size="5" style="width:100%;margin-top:6px"></select></div>
 <div style="text-align:center;font-weight:900">⇅</div>
 <div class="field"><label>第二個帳號</label><input id="swapAccountSearchB" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountB" size="5" style="width:100%;margin-top:6px"></select></div>
@@ -1232,7 +1232,7 @@ function renderSwapAccountPreview(){
   const a=d.accounts.find(x=>String(x.id)===String($("#swapAccountA")?.value||""));
   const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB")?.value||""));
   $("#swapAccountPreview").textContent=(a&&b&&a.id!==b.id)
-    ? `編號固定不變：${a.number||a.name||"未命名"} 接收 ${b.gameId||"無遊戲 ID"}、${(b.items||[]).length} 筆道具及資源；${b.number||b.name||"未命名"} 接收 ${a.gameId||"無遊戲 ID"}、${(a.items||[]).length} 筆道具及資源。`
+    ? `編號固定不變：${a.number||a.name||"未命名"} 接收 ${b.gameId||"無遊戲 ID"} 的整份資料（含臨時截圖）；${b.number||b.name||"未命名"} 接收 ${a.gameId||"無遊戲 ID"} 的整份資料（含臨時截圖）。`
     : "請選擇兩個不同帳號";
 }
 $("#swapAccountNumbers").onclick=()=>{
@@ -1259,27 +1259,48 @@ $("#swapAccountConfirm").onclick=async()=>{
       resourcePendingAccountId=null;
     }
   }
-  const aData={gameId:a.gameId||"",items:structuredClone(a.items||[]),resources:structuredClone(a.resources||{})};
-  const bData={gameId:b.gameId||"",items:structuredClone(b.items||[]),resources:structuredClone(b.resources||{})};
-  if(!confirm(`確定交換兩個編號底下的遊戲 ID、道具及資源？\n\n${swapAccountLabel(a)}（${aData.items.length} 筆道具）\n⇅\n${swapAccountLabel(b)}（${bData.items.length} 筆道具）\n\n編號固定不變；臨時截圖不交換。`))return;
+  // 帳號編號與文件 ID 是固定位置；其餘帳號欄位（包含性別、類型、資源等）整份交換。
+  const fixedFields=new Set(["id","number","name"]);
+  const movable=account=>Object.fromEntries(Object.entries(account).filter(([key])=>!fixedFields.has(key)).map(([key,value])=>[key,structuredClone(value)]));
+  const aData=movable(a),bData=movable(b);
   const confirmBtn=$("#swapAccountConfirm");
   confirmBtn.disabled=true;
   try{
-    // 同一筆 Firestore batch 原子更新兩個帳號；帳號文件 ID 與編號完全不動。
+    // 先讀取兩邊真正存放在 Firebase 的臨時截圖，不依賴是否打開過截圖視窗。
+    const [aSnap,bSnap]=await Promise.all([getDocs(tempShotCol(String(a.id))),getDocs(tempShotCol(String(b.id)))]);
+    const aShots=aSnap.docs.map(x=>({id:x.id,data:x.data()}));
+    const bShots=bSnap.docs.map(x=>({id:x.id,data:x.data()}));
+    if([...tempShotsCache.get(String(a.id))||[],...tempShotsCache.get(String(b.id))||[]].some(x=>x._uploading)){
+      alert("仍有臨時截圖正在上傳，請等待上傳完成後再交換。");return;
+    }
+    // Firestore 每筆 batch 最多 500 次寫入。所有文件必須一次成功，絕不分批交換一半。
+    const operations=2+2*(aShots.length+bShots.length);
+    if(operations>450){alert(`這兩個帳號共有 ${aShots.length+bShots.length} 張臨時截圖，超過安全交換上限。請先備份並整理截圖，這次沒有修改任何資料。`);return;}
+    if(!confirm(`確定讓兩個帳號完整交換編號位置？\n\n${swapAccountLabel(a)}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖）\n⇅\n${swapAccountLabel(b)}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖）\n\n編號固定；遊戲 ID、道具、資源、帳號設定及臨時截圖全部跟著帳號交換。`))return;
+    // 同一筆原子 batch：交換帳號資料、刪除舊截圖並在對方編號下重建。
     const batch=writeBatch(db);
-    batch.update(accountRef(String(a.id)),bData);
-    batch.update(accountRef(String(b.id)),aData);
+    batch.update(accountRef(String(a.id)),{...bData,tempShotCount:bShots.length});
+    batch.update(accountRef(String(b.id)),{...aData,tempShotCount:aShots.length});
+    for(const shot of aShots)batch.delete(tempShotRef(String(a.id),shot.id));
+    for(const shot of bShots)batch.delete(tempShotRef(String(b.id),shot.id));
+    for(const shot of aShots)batch.set(tempShotRef(String(b.id),shot.id),shot.data);
+    for(const shot of bShots)batch.set(tempShotRef(String(a.id),shot.id),shot.data);
     await batch.commit();
-    Object.assign(a,bData);Object.assign(b,aData);
+    // 同步畫面快取，避免交換後短暫顯示原本帳號的截圖。
+    Object.assign(a,bData,{tempShotCount:bShots.length});
+    Object.assign(b,aData,{tempShotCount:aShots.length});
+    tempShotsCache.set(String(a.id),bShots.map(x=>({id:x.id,...x.data})));
+    tempShotsCache.set(String(b.id),aShots.map(x=>({id:x.id,...x.data})));
     d.updated=new Date().toLocaleString("zh-TW");
     render();
+    if(active===String(a.id)||active===String(b.id))renderTempShots(active);
     try{await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});}
     catch(metaErr){console.warn("帳號交換成功，更新時間未能同步",metaErr);}
     $("#su").textContent=d.updated;
     swapAccountDlg.close();
   }catch(err){
     console.error(err);
-    alert("交換失敗，兩個帳號的資料都沒有交換。\n"+(err?.message||String(err)));
+    alert("交換失敗，請重新整理確認帳號資料。\n"+(err?.message||String(err)));
   }finally{confirmBtn.disabled=false;}
 };
 $("#batchA").onclick=()=>{
