@@ -2281,46 +2281,8 @@ onSnapshot(doc(db,"publicSettings","warehouseStock"),snap=>{
   if(typeof renderCart==="function")renderCart();
 },err=>console.error("公開庫存讀取失敗",err));
 
-// Admin-side projection: keep public product stock in sync even when the
-// warehouse page is closed. Publish only aggregate quantities, never accounts.
-let marketStockStops=[],marketStockLinks=[],marketStockAccounts=[],marketStockTimer=null;
-let marketLinksReady=false,marketAccountsReady=false;
-function publishMarketStock(){
-  clearTimeout(marketStockTimer);
-  marketStockTimer=setTimeout(async()=>{
-    if(auth.currentUser?.uid!==ADMIN_UID||!marketLinksReady||!marketAccountsReady)return;
-    const totals=new Map();
-    const key=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
-    for(const a of marketStockAccounts)for(const item of (a.items||[])){
-      const k=key(item);
-      totals.set(k,(totals.get(k)||0)+Math.max(0,Math.floor(Number(item.qty)||0)));
-    }
-    const products={};
-    for(const link of marketStockLinks){
-      const v={};
-      for(const entry of (link.data.variantLinks||[])){
-        if(entry.variant&&entry.itemKey)v[entry.variant]=totals.get(entry.itemKey)||0;
-      }
-      const value={variants:v};
-      if(link.data.itemKey)value.stock=totals.get(link.data.itemKey)||0;
-      products[link.id]=value;
-    }
-    try{
-      await setDoc(doc(db,"publicSettings","warehouseStock"),{products,updatedAt:new Date().toISOString()});
-    }catch(e){console.error("賣場公開庫存同步失敗",e);}
-  },600);
-}
-onAuthStateChanged(auth,user=>{
-  marketStockStops.forEach(stop=>stop());marketStockStops=[];
-  marketLinksReady=false;marketAccountsReady=false;
-  if(user?.uid!==ADMIN_UID)return;
-  marketStockStops.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
-    marketStockLinks=snap.docs.map(d=>({id:d.id,data:d.data()}));marketLinksReady=true;publishMarketStock();
-  },e=>console.error("賣場連結同步失敗",e)));
-  marketStockStops.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),snap=>{
-    marketStockAccounts=snap.docs.map(d=>d.data());marketAccountsReady=true;publishMarketStock();
-  },e=>console.error("賣場庫存同步失敗",e)));
-});
+// Warehouse is the single publisher of public stock. The marketplace only reads it.
+// This avoids two pages overwriting one another with stale/empty totals.
 function getVariants(p){
   return Array.isArray(p?.variants)
     ? p.variants
