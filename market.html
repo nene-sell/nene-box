@@ -2364,8 +2364,52 @@ onSnapshot(doc(db,"publicSettings","warehouseStock"),snap=>{
   if(typeof renderCart==="function")renderCart();
 },err=>console.error("公開庫存讀取失敗",err));
 
-// Warehouse is the single publisher of public stock. The marketplace only reads it.
-// This avoids two pages overwriting one another with stale/empty totals.
+// Admin-side stock publisher: updating a link in the marketplace must refresh
+// public stock even if the separate warehouse page is not open. Only publish
+// after both inventory and link snapshots are loaded (never an empty interim map).
+let marketStockLinks=new Map(),marketStockAccounts=[],marketLinksReady=false,marketAccountsReady=false;
+let marketStockPublishTimer=null,marketLastStockPublished="",marketStockUnsubs=[];
+const marketStockKey=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
+function queueMarketStockPublish(){
+  clearTimeout(marketStockPublishTimer);
+  if(!marketLinksReady||!marketAccountsReady||auth.currentUser?.uid!==ADMIN_UID)return;
+  marketStockPublishTimer=setTimeout(async()=>{
+    if(!marketLinksReady||!marketAccountsReady||auth.currentUser?.uid!==ADMIN_UID)return;
+    const totals={};
+    for(const account of marketStockAccounts)for(const item of (account.items||[])){
+      const key=marketStockKey(item);
+      totals[key]=(totals[key]||0)+Math.max(0,Math.floor(Number(item.qty)||0));
+    }
+    const output={};
+    for(const [id,link] of marketStockLinks){
+      const variants={};
+      for(const v of (link.variantLinks||[]))if(v.variant&&v.itemKey)variants[v.variant]=totals[v.itemKey]||0;
+      const entry={variants};
+      if(link.itemKey)entry.stock=totals[link.itemKey]||0;
+      output[id]=entry;
+    }
+    const hash=JSON.stringify(output);
+    if(hash===marketLastStockPublished)return;
+    try{
+      await setDoc(doc(db,"publicSettings","warehouseStock"),{products:output,updatedAt:new Date().toISOString()});
+      marketLastStockPublished=hash;
+    }catch(err){console.error("賣場公開庫存同步失敗",err);}
+  },350);
+}
+onAuthStateChanged(auth,user=>{
+  marketStockUnsubs.forEach(unsub=>unsub());marketStockUnsubs=[];
+  clearTimeout(marketStockPublishTimer);
+  marketLinksReady=false;marketAccountsReady=false;marketLastStockPublished="";
+  if(user?.uid!==ADMIN_UID)return;
+  marketStockUnsubs.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
+    marketStockLinks=new Map(snap.docs.map(d=>[d.id,d.data()]));
+    marketLinksReady=true;queueMarketStockPublish();
+  },err=>console.error("商品連結同步失敗",err)));
+  marketStockUnsubs.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),snap=>{
+    marketStockAccounts=snap.docs.map(d=>d.data());
+    marketAccountsReady=true;queueMarketStockPublish();
+  },err=>console.error("小倉倉庫存同步失敗",err)));
+});
 function getVariants(p){
   return Array.isArray(p?.variants)
     ? p.variants
@@ -4155,6 +4199,7 @@ $("#productForm").addEventListener("submit", async e=>{
     }
     try{
       await saveWarehouseLink(savedProductId,variantLinks);
+      // The inventoryLinks listener above publishes the refreshed linked stock.
     }catch(linkError){
       console.error("商品已儲存，但小倉倉連結未成功",linkError);
       $("#productId").value=savedProductId;
