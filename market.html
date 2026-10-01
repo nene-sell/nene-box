@@ -4511,7 +4511,7 @@ document.addEventListener("click",e=>{
 // 目前賣場的圖片實際以 data URL 存在 Firestore 商品文件中；展示影片則是 GitHub Pages/外部網址路徑。
 // 備份採 ZIP：manifest.json + media/images + media/videos，避免把大型媒體全部硬塞進單一 JSON。
 const BACKUP_FORMAT="nene-sell-full-backup";
-const BACKUP_VERSION=1;
+const BACKUP_VERSION=2;
 const BACKUP_COLLECTIONS=["products","orders"];
 
 function backupSafeName(s="file"){
@@ -4706,7 +4706,7 @@ async function replaceFirestoreWithDocs(target){
 }
 async function restoreFullBackup(file){
   if(!isAdmin()||!file)return;
-  const btn=$("#restoreBtn"),old=btn.textContent;btn.disabled=true;btn.textContent="檢查備份…";
+  const btn=$("#restoreBtn"),old=btn.textContent;btn.disabled=true;btn.textContent="⏳ 檢查備份…";
   try{
     const {zip,manifest}=await validateBackupZip(file);
     const target=await buildRestoreDocs(zip,manifest); // 所有檔案先完整讀好，尚未動 Firebase
@@ -4714,7 +4714,7 @@ async function restoreFullBackup(file){
     if(!first){toast("已取消還原，資料未修改");return;}
     const second=confirm("最後確認：這個動作會刪除／覆蓋 Firebase 目前的商品與訂單資料，再還原成備份內容。\n\n按『取消』不會修改任何資料。確定開始嗎？");
     if(!second){toast("已取消還原，資料未修改");return;}
-    btn.textContent="還原中…";
+    btn.textContent="⏳ 還原中…";
     // 寫入前再抓一份記憶體回復點；若中途失敗，盡力自動回滾。
     const rollback=await collectAllStoreDocs();
     const rollbackDecoded={};
