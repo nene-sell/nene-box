@@ -1749,7 +1749,15 @@ html.page-visible body{visibility:visible;}
 .topbar .admin-tools #adminBtn{margin:0!important}
 @media(max-width:600px){.topbar .admin-tools{right:8px;bottom:8px;gap:4px;max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:flex-end}}
 </style>
-<style>html.embedded-market #adminBtn,html.embedded-market #backupBtn,html.embedded-market #restoreBtn{display:none!important}</style><script>if(window.self!==window.top)document.documentElement.classList.add('embedded-market');</script></head>
+<style>html.embedded-market #adminBtn,html.embedded-market #backupBtn,html.embedded-market #restoreBtn{display:none!important}</style><script>if(window.self!==window.top)document.documentElement.classList.add('embedded-market');</script><style id="nene-mobile-duplicate-title-fix">
+/* On narrow screens, the parent header owns the site name. */
+@media (max-width: 620px) {
+  .topbar .brand { display: none !important; }
+  .hero h1, .hero h2 { display: none !important; }
+  .hero:empty { display: none !important; }
+}
+</style>
+</head>
 <body>
 <header class="topbar">
   <div class="brand">
