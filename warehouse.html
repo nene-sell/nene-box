@@ -1,6 +1,4 @@
-<!doctype html>
-<!-- nene-box warehouse restore fix 20261001-0440 -->
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>🤎內內的小倉倉🤎</title>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>🤎內內的小倉倉🤎</title>
 <style>
 :root{--bg:#ded0c5;--p:#f1e6dd;--line:#bda493;--text:#3f3029;--muted:#725f55;--a:#9f725c}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(#e4d7cd,#d5c3b6);color:var(--text);font-family:system-ui,"Microsoft JhengHei",sans-serif}button,input{font:inherit}.wrap{width:100%;max-width:none;margin:0;padding:clamp(10px,1.5vw,20px)}h1{margin:0;font-size:25px}header p{margin:5px 0 18px;color:var(--muted)}.box,.panel,.stat{background:var(--p);border:1px solid var(--line);border-radius:20px}.box{padding:17px}.search{display:flex;gap:9px}.search input{flex:1;padding:13px;border:1px solid var(--line);border-radius:13px}.btn{border:0;border-radius:12px;padding:11px 14px;background:#d5c0b1;color:var(--text);font-weight:700;cursor:pointer}.primary{background:var(--a);color:#fff}.danger{background:#efd6d3;color:#914f4b}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.stat{padding:14px}.stat small{color:var(--muted)}.stat b{display:block;font-size:22px;margin-top:4px}.main{display:grid;grid-template-columns:minmax(250px,20vw) minmax(0,1fr);gap:14px}.panel{padding:15px}.head{display:flex;justify-content:space-between;align-items:center}.accountTypeTabs{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 7px;overflow:visible;padding-bottom:0}.accountTypeTab{flex:0 0 auto;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:999px;background:#dfcec1;color:#59463c;font-weight:800;cursor:pointer;font-size:12px;white-space:nowrap}.accountTypeTab.active{background:#ad8068;color:#fff8f3;border-color:#946650;box-shadow:none;font-weight:900}.accountSearch{display:flex;gap:6px;margin:7px 0 10px}.accountSearch input{min-width:0;flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}.accountSearch .btn{padding:9px 10px}.accounts{display:flex;flex-direction:column;gap:7px}.acc{padding:10px;border-radius:11px;background:#ddcbbf;cursor:pointer;display:flex;justify-content:space-between}.acc.active{background:#aa7c65;color:#fff9f5;box-shadow:inset 0 0 0 1px #8f624d}.acc.active small{color:#f2e3da}.acc[draggable="true"]{user-select:none}.acc.dragging{opacity:.45}.dragHandle{cursor:grab;font-size:18px;padding-left:6px}.toolbar{display:flex;gap:7px;flex-wrap:wrap}.genderTabs{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 0}.genderTab.active,.candyTab.active{background:var(--a);color:#fff}.categoryTabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.catTab{padding:8px 12px}.catTab.active{background:var(--a);color:#fff}.field select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}.items{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.item{border:1px solid #e1ccbd;border-radius:15px;padding:12px;background:#fff;display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center}.thumb{width:58px;height:58px;border-radius:11px;background:#eadfd7;display:grid;place-items:center;overflow:hidden}.thumb img{width:100%;height:100%;object-fit:cover;display:block}.recCard{display:grid;grid-template-columns:112px 1fr 46px;gap:8px;align-items:center;margin:8px 0;padding:8px;border:1px solid #e1ccbd;border-radius:13px;background:#fff}.recPic{width:112px;height:102px;border-radius:10px;object-fit:contain;background:#e8ddd5}.recFields{display:grid;grid-template-columns:minmax(0,1fr) 90px 64px;gap:6px}.recFields input[type="number"]{text-align:center}.cropNote{font-size:11px;color:var(--muted);margin-top:3px}.item h3{font-size:14px;margin:0 0 4px}.meta{font-size:12px;color:var(--muted)}.qty{font-size:19px;font-weight:800;color:#986650}.itemActions{display:flex;flex-direction:column;gap:5px;align-items:flex-end}.mini{border:0;border-radius:8px;padding:5px 7px;cursor:pointer;background:#eadbd0;color:#6b5145;font-size:11px}.mini.del{background:#f2dcda;color:#984f4b}.empty{padding:35px 8px;text-align:center;color:var(--muted)}#results{display:none;margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}.row{display:flex;justify-content:space-between;padding:7px 2px}.total{font-weight:800;color:#986650;margin-top:8px}dialog{width:min(430px,92vw);border:1px solid var(--line);border-radius:18px;background:var(--p);padding:20px;color:var(--text)}dialog::backdrop{background:#3c2c2866}.field{margin:10px 0}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.field input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px}.actions{display:flex;justify-content:flex-end;gap:7px;margin-top:15px}.note{font-size:12px;color:var(--muted);margin-top:15px}
@@ -732,7 +730,7 @@ async function loadCloud(){
   }
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
-  // nene-box：搬家後保留原始庫存，不在載入時自動改分類或刪除資料。
+  // nene-box：保留原始資料，不在載入時自動改分類或刪除資料。
 
   active=d.accounts[0]?.id||null;
   render();
@@ -2315,15 +2313,34 @@ $("#googleLogin").onclick=async()=>{
 
 async function exportFullBackup(){
   try{
-    // d contains the live warehouse state. Keep the whole state instead of
-    // hand-picking fields so future account/item/resource fields are portable too.
     const state=JSON.parse(JSON.stringify(d||{}));
+    if(!Array.isArray(state.accounts))state.accounts=[];
+    if(!Array.isArray(state.itemMemory))state.itemMemory=[];
+
+    // v3: 臨時截圖也屬於完整備份。逐帳號直接從 Firestore 讀取，
+    // 不依賴目前是否曾打開過臨時截圖視窗。
+    const tempShots={};
+    let tempShotTotal=0;
+    for(let i=0;i<state.accounts.length;i++){
+      const a=state.accounts[i];
+      const accountId=String(a.id||"");
+      if(!accountId)continue;
+      const snap=await getDocs(tempShotCol(accountId));
+      const shots=snap.docs.map(x=>({id:x.id,...x.data()}));
+      if(shots.length){
+        tempShots[accountId]=shots;
+        tempShotTotal+=shots.length;
+      }
+      a.tempShotCount=shots.length;
+    }
+
     const payload={
       format:"nene-items-portable-backup",
-      version:2,
+      version:3,
       app:"🤎內內的小倉倉🤎",
       exportedAt:new Date().toISOString(),
-      state
+      state,
+      tempShots
     };
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"});
     const url=URL.createObjectURL(blob);
@@ -2334,9 +2351,10 @@ async function exportFullBackup(){
     a.download=`內內的小倉倉_完整備份_${stamp}.json`;
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
+    alert(`完整備份完成。\n帳號：${state.accounts.length} 個\n臨時截圖：${tempShotTotal} 張`);
   }catch(err){
     console.error(err);
-    alert("備份失敗，請再試一次。");
+    alert("備份失敗｜"+(err?.message||String(err)));
   }
 }
 
@@ -2346,11 +2364,12 @@ async function restorePortableBackup(file){
     const raw=await file.text();
     const backup=JSON.parse(raw);
     let state=null;
+    let tempShots={};
 
     if(backup && backup.format==="nene-items-portable-backup" && backup.state){
       state=backup.state;
+      if(backup.tempShots && typeof backup.tempShots==="object")tempShots=backup.tempShots;
     }else if(backup && backup.format==="nene-items-backup"){
-      // Compatible with the first backup format already issued.
       state={
         accounts:Array.isArray(backup.accounts)?backup.accounts:[],
         itemMemory:Array.isArray(backup.itemMemory)?backup.itemMemory:[]
@@ -2360,9 +2379,10 @@ async function restorePortableBackup(file){
     }
 
     if(!Array.isArray(state.accounts))throw new Error("備份中沒有帳號資料");
+    const tempShotTotal=Object.values(tempShots).reduce((n,arr)=>n+(Array.isArray(arr)?arr.length:0),0);
 
     const ok=confirm(
-      `⚠️ 即將還原完整備份\n\n帳號：${state.accounts.length} 個\n\n`+
+      `⚠️ 即將還原完整備份\n\n帳號：${state.accounts.length} 個\n臨時截圖：${tempShotTotal} 張\n\n`+
       `還原會以備份內容覆蓋目前倉庫資料。\n請先確認你選的是正確的備份檔。\n\n確定要繼續嗎？`
     );
     if(!ok)return;
@@ -2372,26 +2392,18 @@ async function restorePortableBackup(file){
     );
     if(!okAgain)return;
 
-    // Replace local state first. Preserve unknown top-level fields from the backup.
     d=JSON.parse(JSON.stringify(state));
     if(!Array.isArray(d.accounts))d.accounts=[];
     if(!Array.isArray(d.itemMemory))d.itemMemory=[];
 
-    // Write accounts directly in chunks to avoid one huge batch.
+    // 先還原帳號；小批次避免含圖片/記憶資料時超過 Firestore request size。
     const existingSnap=await getDocs(accountCol());
     const incomingIds=new Set(d.accounts.map(a=>String(a.id)));
-
-    // Delete account docs not present in the backup.
     let ops=[];
     for(const docSnap of existingSnap.docs){
-      if(!incomingIds.has(String(docSnap.id))){
-        ops.push({type:"delete",ref:docSnap.ref});
-      }
+      if(!incomingIds.has(String(docSnap.id)))ops.push({type:"delete",ref:docSnap.ref});
     }
-    for(const a of d.accounts){
-      ops.push({type:"set",ref:accountRef(String(a.id)),data:a});
-    }
-
+    for(const a of d.accounts)ops.push({type:"set",ref:accountRef(String(a.id)),data:a});
     for(let i=0;i<ops.length;i+=20){
       const batch=writeBatch(db);
       for(const op of ops.slice(i,i+20)){
@@ -2401,37 +2413,59 @@ async function restorePortableBackup(file){
       await batch.commit();
     }
 
-    // Restore recognition memory as a replace operation when the collection helpers exist.
-    if(typeof memoryCol==="function"){
-      const oldMem=await getDocs(memoryCol());
-      let memOps=[];
-      for(const docSnap of oldMem.docs)memOps.push({type:"delete",ref:docSnap.ref});
-      for(const m of (d.itemMemory||[])){
-        const mid=String(m.id||m.memoryId||crypto.randomUUID());
-        memOps.push({type:"set",ref:doc(memoryCol(),mid),data:{...m,id:mid}});
+    // 辨識記憶完整取代。
+    const oldMem=await getDocs(memoryCol());
+    let memOps=[];
+    for(const docSnap of oldMem.docs)memOps.push({type:"delete",ref:docSnap.ref});
+    for(const m of (d.itemMemory||[])){
+      const mid=String(m.id||m.memoryId||crypto.randomUUID());
+      memOps.push({type:"set",ref:memoryRef(mid),data:{...m,id:mid}});
+    }
+    for(let i=0;i<memOps.length;i+=20){
+      const batch=writeBatch(db);
+      for(const op of memOps.slice(i,i+20)){
+        if(op.type==="delete")batch.delete(op.ref);
+        else batch.set(op.ref,op.data);
       }
-      for(let i=0;i<memOps.length;i+=20){
-        const batch=writeBatch(db);
-        for(const op of memOps.slice(i,i+20)){
-          if(op.type==="delete")batch.delete(op.ref);
-          else batch.set(op.ref,op.data);
-        }
-        await batch.commit();
-      }
+      await batch.commit();
     }
 
-    // Refresh metadata without relying on the old monolithic save().
-    if(typeof metaRef==="function"){
-      await setDoc(metaRef(),{
-        updated:new Date().toISOString(),
-        backupRestoreVersion:2,
-        backupRestoredAt:new Date().toISOString()
-      },{merge:true});
+    // v3 備份才會完整取代臨時截圖；v1/v2 沒有截圖內容，因此不碰現有 tempShots。
+    if(Number(backup.version)>=3 && backup.tempShots && typeof backup.tempShots==="object"){
+      for(const a of d.accounts){
+        const accountId=String(a.id||"");
+        if(!accountId)continue;
+        const oldShots=await getDocs(tempShotCol(accountId));
+        for(let i=0;i<oldShots.docs.length;i+=20){
+          const batch=writeBatch(db);
+          oldShots.docs.slice(i,i+20).forEach(x=>batch.delete(x.ref));
+          await batch.commit();
+        }
+        const incoming=Array.isArray(tempShots[accountId])?tempShots[accountId]:[];
+        for(let i=0;i<incoming.length;i+=5){
+          const batch=writeBatch(db);
+          for(const shot of incoming.slice(i,i+5)){
+            const sid=String(shot.id||crypto.randomUUID());
+            const data={...shot}; delete data.id; delete data._uploading;
+            batch.set(tempShotRef(accountId,sid),data);
+          }
+          await batch.commit();
+        }
+        const localAccount=d.accounts.find(x=>String(x.id)===accountId);
+        if(localAccount)localAccount.tempShotCount=incoming.length;
+      }
+      tempShotsCache.clear();
     }
+
+    await setDoc(metaRef(),{
+      updated:new Date().toISOString(),
+      backupRestoreVersion:Number(backup.version)||2,
+      backupRestoredAt:new Date().toISOString()
+    },{merge:true});
 
     active=d.accounts[0]?.id||null;
     render();
-    alert("完整備份已還原完成。");
+    alert(`完整備份已還原完成。\n帳號：${d.accounts.length} 個\n臨時截圖：${tempShotTotal} 張`);
   }catch(err){
     console.error(err);
     alert("還原失敗："+(err?.message||String(err))+"\n\n原本的小倉倉不會被修改。");
