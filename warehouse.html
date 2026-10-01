@@ -658,11 +658,12 @@ $("#deleteTempShotConfirm").onclick=async()=>{
 // Public stock projection: only linked-item aggregate counts, never account details.
 const publicStockRef=()=>doc(db,"publicSettings","warehouseStock");
 let linkedItems=new Map(), stockAccounts=[], publishTimer=null, lastPublished="";
+let linkedItemsReady=false,stockAccountsReady=false;
 const stockKey=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
 function queueStockPublish(){
   clearTimeout(publishTimer);
   publishTimer=setTimeout(async()=>{
-    if(auth.currentUser?.uid!==ADMIN_UID)return;
+    if(auth.currentUser?.uid!==ADMIN_UID||!linkedItemsReady||!stockAccountsReady)return;
     const totals={};
     for(const a of stockAccounts)for(const i of (a.items||[])){
       const key=stockKey(i);
@@ -686,12 +687,13 @@ function queueStockPublish(){
 let stopPublicSync=[];
 onAuthStateChanged(auth,user=>{
   stopPublicSync.forEach(fn=>fn());stopPublicSync=[];
+  linkedItemsReady=false;stockAccountsReady=false;
   if(user?.uid!==ADMIN_UID)return;
   stopPublicSync.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
-    linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));queueStockPublish();
+    linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));linkedItemsReady=true;queueStockPublish();
   },err=>console.error("讀取商品連結失敗",err)));
   stopPublicSync.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),snap=>{
-    stockAccounts=snap.docs.map(d=>d.data());queueStockPublish();
+    stockAccounts=snap.docs.map(d=>d.data());stockAccountsReady=true;queueStockPublish();
   },err=>console.error("讀取庫存同步資料失敗",err)));
 });
 const MIGRATION_VERSION=2;
