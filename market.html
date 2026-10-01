@@ -1733,6 +1733,22 @@ html.page-visible body{visibility:visible;}
 #discordProfileLink:hover{background:#f6e9df}
 @media(max-width:600px){.topbar{padding:10px 12px!important}.brand .logo{width:40px;height:40px}.brand h1{font-size:17px}}
 </style>
+<style id="nene-single-header-v2">
+/* The parent navigation is the only public header. Retain admin controls as a discreet dock. */
+.topbar{height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;overflow:visible!important;background:transparent!important;box-shadow:none!important}
+.topbar .brand{display:none!important}
+.topbar .admin-tools{position:fixed!important;right:12px;bottom:12px;z-index:100;display:flex!important;align-items:center;gap:7px;padding:5px;border-radius:13px;background:rgba(248,239,231,.95);box-shadow:0 2px 12px rgba(70,48,36,.14)}
+.topbar .admin-tools #adminBtn{margin:0!important}
+@media(max-width:600px){.topbar .admin-tools{right:8px;bottom:8px;gap:4px;max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:flex-end}}
+</style>
+<style id="nene-single-header-v2">
+/* Parent navigation is the sole visible banner; keep original management controls. */
+.topbar{height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;overflow:visible!important;background:transparent!important;box-shadow:none!important}
+.topbar .brand{display:none!important}
+.topbar .admin-tools{position:fixed!important;right:12px;bottom:12px;z-index:100;display:flex!important;align-items:center;gap:7px;padding:5px;border-radius:13px;background:rgba(248,239,231,.95);box-shadow:0 2px 12px rgba(70,48,36,.14)}
+.topbar .admin-tools #adminBtn{margin:0!important}
+@media(max-width:600px){.topbar .admin-tools{right:8px;bottom:8px;gap:4px;max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:flex-end}}
+</style>
 </head>
 <body>
 <header class="topbar">
