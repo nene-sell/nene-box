@@ -1944,7 +1944,7 @@ html.page-visible body{visibility:visible;}
     </div>
     <div class="notice">圖片會在上架前自動縮小壓縮，再和商品資料一起存到 Firestore。建議原圖不要太誇張大張。</div>
     <div id="warehouseLinkBox" style="margin:13px 0;padding:12px;border:1px solid #dbc9bc;border-radius:12px;background:#faf5f0">
-      <strong style="font-size:13px">🤎 對應小倉倉道具</strong>
+      <strong style="font-size:13px">🤎 對應小倉倉道具（無款式商品）</strong>
       <p class="hint" style="margin:5px 0">只有管理員看得到；目前只連結及查看庫存，不會自動扣庫存。</p>
       <input id="warehouseItemSearch" type="search" placeholder="搜尋小倉倉道具名稱／分類" style="width:100%;margin:7px 0;padding:9px;border:1px solid #d9c7b9;border-radius:9px">
       <select id="warehouseItemChoice" style="width:100%;padding:9px;border:1px solid #d9c7b9;border-radius:9px;background:#fff"><option value="">不連結</option></select>
@@ -3585,8 +3585,14 @@ function addVariantRow(name="",stock=0,imageData="",reserved=0){
       <input class="variant-image-input" type="file" accept="image/*">
     </label>
     <img class="variant-image-preview ${imageData?"":"hidden"}" src="${imageData||""}" alt="款式圖片預覽">
-    <button class="btn danger variant-remove" type="button">刪除</button>`;
-  row.querySelector(".variant-remove").onclick=()=>row.remove();
+    <button class="btn danger variant-remove" type="button">刪除</button>
+    <div class="variant-warehouse-link" style="width:100%;padding:8px;background:#faf5f0;border-radius:9px;margin-top:5px">
+      <label style="font-size:12px">小倉倉道具連結（此款式專用）</label>
+      <input class="variant-warehouse-search" type="search" placeholder="搜尋道具名稱／顏色" style="width:100%;padding:6px;margin:5px 0">
+      <select class="variant-warehouse-select" style="width:100%;padding:6px"><option value="">不連結</option></select>
+      <div class="variant-warehouse-info" style="font-size:11px;margin-top:4px"></div>
+    </div>`;
+  row.querySelector(".variant-remove").onclick=()=>{row.remove();renderAllVariantWarehousePickers();};
   const input=row.querySelector(".variant-image-input");
   const preview=row.querySelector(".variant-image-preview");
   input.onchange=async()=>{
@@ -3602,6 +3608,13 @@ function addVariantRow(name="",stock=0,imageData="",reserved=0){
     }
   };
   $("#variantRows").appendChild(row);
+  if($("#warehouseLinkBox"))$("#warehouseLinkBox").style.display="none";
+  row.querySelector(".variant-warehouse-search").addEventListener("input",()=>renderVariantWarehousePicker(row));
+  row.querySelector(".variant-warehouse-select").addEventListener("change",()=>{
+    row.dataset.warehouseKey=row.querySelector(".variant-warehouse-select").value;
+    renderVariantWarehouseInfo(row);
+  });
+  renderVariantWarehousePicker(row);
 }
 function loadVariantRows(p){$("#variantRows").innerHTML="";getVariants(p).forEach(v=>addVariantRow(v.name,v.stock,v.imageData||"",v.reserved||0));}
 function collectVariants(){return $$(".variant-row",$("#variantRows")).map(r=>({
@@ -3678,6 +3691,27 @@ async function loadWarehouseCandidates(force=false){
   try{return await warehouseLoadPromise;}
   finally{warehouseLoadPromise=null;}
 }
+function renderVariantWarehouseInfo(row){
+  const x=warehouseCandidates.find(x=>x.key===row.dataset.warehouseKey);
+  row.querySelector(".variant-warehouse-info").textContent=x
+    ?`庫存 ${x.qty}｜${x.owners.map(o=>`${o.owner} ×${o.qty}`).join("、")}`:"尚未連結";
+}
+function renderVariantWarehousePicker(row){
+  const sel=row.querySelector(".variant-warehouse-select");
+  const q=row.querySelector(".variant-warehouse-search").value.trim().toLocaleLowerCase();
+  const chosen=row.dataset.warehouseKey||"";
+  sel.replaceChildren(new Option("不連結",""));
+  const matches=warehouseCandidates.filter(x=>[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(q));
+  for(const x of matches.slice(0,250))sel.add(new Option([x.item.name,x.item.variant,x.item.category,`共${x.qty}`].filter(Boolean).join("｜"),x.key));
+  const chosenItem=warehouseCandidates.find(x=>x.key===chosen);
+  if(chosenItem&&![...sel.options].some(o=>o.value===chosen))sel.add(new Option(`${chosenItem.item.name}（已選取）`,chosen));
+  sel.value=chosen;
+  renderVariantWarehouseInfo(row);
+}
+function renderAllVariantWarehousePickers(){
+  $$(".variant-row",$("#variantRows")).forEach(renderVariantWarehousePicker);
+  $("#warehouseLinkBox").style.display=$$(".variant-row",$("#variantRows")).length?"none":"";
+}
 function showWarehouseChoice(){
   const sel=$("#warehouseItemChoice"),query=$("#warehouseItemSearch").value.trim().toLocaleLowerCase();
   const chosen=sel.value||sel.dataset.chosen||"";
@@ -3707,7 +3741,7 @@ $("#warehouseItemSearch").addEventListener("input",showWarehouseChoice);
 $("#warehouseItemChoice").addEventListener("change",showWarehouseInfo);
 $("#warehouseRefreshBtn").onclick=async()=>{
   $("#warehouseItemInfo").textContent="正在讀取小倉倉…";
-  try{await loadWarehouseCandidates(true);showWarehouseChoice();}
+  try{await loadWarehouseCandidates(true);showWarehouseChoice();renderAllVariantWarehousePickers();}
   catch(err){console.error(err);$("#warehouseItemInfo").textContent="讀取失敗，請確認管理員已登入。";}
 };
 async function loadWarehouseLinkForProduct(id){
@@ -3723,18 +3757,27 @@ async function loadWarehouseLinkForProduct(id){
     ]);
     if(warehouseCurrentProductId!==id)return;
     sel.dataset.chosen=link?.exists()?String(link.data().itemKey||""):"";
+    const links=link?.exists()?(link.data().variantLinks||[]):[];
+    $$(".variant-row",$("#variantRows")).forEach(row=>{
+      const name=row.querySelector(".variant-name").value.trim();
+      row.dataset.warehouseKey=String(links.find(x=>x.variant===name)?.itemKey||"");
+    });
     showWarehouseChoice();
+    renderAllVariantWarehousePickers();
   }catch(err){
     console.error(err);
     if(warehouseCurrentProductId===id)$("#warehouseItemInfo").textContent="小倉倉資料讀取失敗："+(err.message||err);
   }
 }
-async function saveWarehouseLink(id){
-  const key=$("#warehouseItemChoice").value;
+async function saveWarehouseLink(id,variantLinks=[]){
+  const key=variantLinks.length?"":$("#warehouseItemChoice").value;
   const ref=doc(db,"inventoryLinks",id);
+  const links=variantLinks.filter(v=>v.variant&&v.itemKey).map(v=>({variant:v.variant,itemKey:v.itemKey}));
   if(key){
     const [category,name,variant,gender,candyType]=warehouseParseKey(key);
-    await setDoc(ref,{productId:id,itemKey:key,category,name,variant,gender,candyType,updatedAt:serverTimestamp()});
+    await setDoc(ref,{productId:id,itemKey:key,category,name,variant,gender,candyType,variantLinks:links,updatedAt:serverTimestamp()});
+  }else if(links.length){
+    await setDoc(ref,{productId:id,variantLinks:links,updatedAt:serverTimestamp()});
   }else{
     const existing=await getDoc(ref);
     if(existing.exists())await deleteDoc(ref);
@@ -3763,6 +3806,7 @@ function openProduct(p=null){
   if($("#productIsNew")) $("#productIsNew").checked=!!p && isNewActive(p);
   if($("#productStatus")) $("#productStatus").value=(p?.status==="sold"?"sold":"selling");
   loadVariantRows(p);
+  renderAllVariantWarehousePickers();
   $("#productImage").value="";
   editingImage=p?.imageData||"";
   editingExchangeOffers=(p?.category==="交換區") ? normalizeExchangeOffers(p) : [{name:"",imageData:""}];
@@ -4003,6 +4047,7 @@ $("#productForm").addEventListener("submit", async e=>{
       updatedAt:serverTimestamp()
     };
 
+    const variantLinks=$$(".variant-row",$("#variantRows")).map(r=>({variant:r.querySelector(".variant-name").value.trim(),itemKey:r.dataset.warehouseKey||""}));
     let savedProductId=id;
     if(id){
       await updateDoc(doc(db,"products",id),payload);
@@ -4015,7 +4060,7 @@ $("#productForm").addEventListener("submit", async e=>{
       savedProductId=added.id;
     }
     try{
-      await saveWarehouseLink(savedProductId);
+      await saveWarehouseLink(savedProductId,variantLinks);
     }catch(linkError){
       console.error("商品已儲存，但小倉倉連結未成功",linkError);
       $("#productId").value=savedProductId;
