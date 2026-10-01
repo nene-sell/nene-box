@@ -4,20 +4,40 @@
 <style>
 *{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#ded0c5;color:#49372e}
 body{display:flex;flex-direction:column;overflow:hidden}
-header{height:62px;flex:none;display:flex;align-items:center;gap:12px;padding:8px 14px;background:#f7eee8;border-bottom:1px solid #c8ad9b}
-header b{white-space:nowrap}.tabs{display:flex;gap:7px}
+header{display:none;height:62px;flex:none;display:flex;align-items:center;gap:12px;padding:8px 14px;background:#f7eee8;border-bottom:1px solid #c8ad9b}
+body.admin-view header{display:flex}header b{white-space:nowrap}.tabs{display:flex;gap:7px}
 .tab{border:1px solid #c8ad9b;border-radius:999px;padding:9px 13px;background:#fff7f2;color:#49372e;font-weight:800;cursor:pointer}
 .tab.on{background:#9f725c;color:#fff}
+[hidden]{display:none!important}
 main{position:relative;flex:1;min-height:0}
 iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;visibility:hidden;pointer-events:none}
 iframe.on{visibility:visible;pointer-events:auto}
 @media(max-width:620px){header{height:56px;padding:6px 8px;gap:7px}header b{font-size:14px}.tab{font-size:12px;padding:8px 10px}}
 </style></head>
 <body><header><b>🤎內內的百寶箱🤎</b><div class="tabs">
-<button class="tab on" data-id="market">販售與收購</button><button class="tab" data-id="warehouse">小倉倉</button>
+<button class="tab on" data-id="market">販售與收購</button><button class="tab" data-id="warehouse" id="warehouseTab" hidden>小倉倉</button>
 </div></header><main>
-<iframe id="market" class="on" src="market.html?v=20261001-zero-stock-v2"></iframe>
-<iframe id="warehouse" src="warehouse.html?v=20261001-warehouse-zero-search-v1"></iframe>
-</main><script>
-document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("iframe").forEach(x=>x.classList.toggle("on",x.id===b.dataset.id))});
+<iframe id="market" class="on" title="販售與收購" src="market.html?v=20261001-safe-order-delete-v1"></iframe>
+<iframe id="warehouse" title="小倉倉" data-src="warehouse.html?v=20261001-warehouse-zero-search-v1"></iframe>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {getAuth,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+const app=initializeApp({apiKey:"AIzaSyAA2CR7TLIwJ4vBK-kS6qavj93g3LvgQdU",authDomain:"nene-box.firebaseapp.com",projectId:"nene-box",storageBucket:"nene-box.firebasestorage.app",messagingSenderId:"582362181502",appId:"1:582362181502:web:17f4360f56a6f8a3a80d2f"});
+const ADMIN_UID="zzy1kG02vkft00TTdRtfG6iMbNL2";
+const market=document.getElementById("market"),warehouse=document.getElementById("warehouse"),warehouseTab=document.getElementById("warehouseTab");
+let isAdmin=false;
+function show(id){
+ if(id==="warehouse"&&!isAdmin)return;
+ document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.id===id));
+ market.classList.toggle("on",id==="market");warehouse.classList.toggle("on",id==="warehouse");
+ if(id==="warehouse"&&!warehouse.getAttribute("src"))warehouse.src=warehouse.dataset.src;
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>show(b.dataset.id)));
+onAuthStateChanged(getAuth(app),user=>{
+ isAdmin=user?.uid===ADMIN_UID;
+ document.body.classList.toggle("admin-view",isAdmin);
+ warehouseTab.hidden=!isAdmin;
+ if(!isAdmin){show("market");warehouse.removeAttribute("src");}
+});
 </script></body></html>
