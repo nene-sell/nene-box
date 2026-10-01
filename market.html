@@ -2026,13 +2026,25 @@ html.page-visible body{visibility:visible;}
   </div>
 </dialog>
 
+<style>
+/* 訂單管理：待交易／歷史紀錄分頁 */
+.orders-tabs{display:flex;gap:7px;margin:0 0 15px;padding:4px;border-radius:12px;background:rgba(143,111,88,.09)}
+.orders-tab{flex:1;min-width:0;padding:9px 10px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:750;cursor:pointer}
+.orders-tab.active{background:var(--panel);color:var(--text);box-shadow:0 1px 5px rgba(70,48,30,.1)}
+.orders-tab span{font-size:11px;opacity:.7;margin-left:3px}
+</style>
+
 <dialog id="ordersDialog" class="orders-dialog">
   <form method="dialog" onsubmit="return false;">
     <button type="button" class="close" data-close="ordersDialog">×</button>
     <h3>訂單管理</h3>
-    <p class="orders-help">買家下單後會先顯示「待交易」，只有你按完成交易時才會扣庫存。</p>
+    <p class="orders-help">待交易與歷史訂單分開顯示；切換分頁不會更動庫存。</p>
+    <div class="orders-tabs" role="tablist" aria-label="訂單分類">
+      <button id="pendingOrdersTab" type="button" class="orders-tab active" role="tab" aria-selected="true">待交易 <span id="pendingOrdersCount">0</span></button>
+      <button id="historyOrdersTab" type="button" class="orders-tab" role="tab" aria-selected="false">歷史訂單 <span id="historyOrdersCount">0</span></button>
+    </div>
     <div id="ordersList" class="orders-list"></div>
-    <div id="ordersEmpty" class="cart-empty">目前沒有訂單。</div>
+    <div id="ordersEmpty" class="cart-empty">目前沒有待交易訂單。</div>
   </form>
 </dialog>
 
@@ -3966,7 +3978,9 @@ onAuthStateChanged(auth,user=>{
   render();
 });
 
-$("#ordersBtn")?.addEventListener("click",()=>{ if(isAdmin()){renderOrders();$("#ordersDialog").showModal();} });
+$("#ordersBtn")?.addEventListener("click",()=>{ if(isAdmin()){ordersView="pending";renderOrders();$("#ordersDialog").showModal();} });
+$("#pendingOrdersTab")?.addEventListener("click",()=>{ordersView="pending";renderOrders();});
+$("#historyOrdersTab")?.addEventListener("click",()=>{ordersView="history";renderOrders();});
 
 
 $("#categorySettingsBtn")?.addEventListener("click",()=>{
@@ -4253,10 +4267,20 @@ async function checkoutSaleCart(orderInfo){
 
 let adminOrders=[];
 let stopOrdersListener=null;
+let ordersView="pending";
 function renderOrders(){
   const box=$("#ordersList"), empty=$("#ordersEmpty");
   if(!box)return;
-  const rows=[...adminOrders].sort((a,b)=>String(b.createdAtText||b.orderNumber||"").localeCompare(String(a.createdAtText||a.orderNumber||"")));
+  const pending=adminOrders.filter(o=>o.status==="待交易");
+  const history=adminOrders.filter(o=>o.status!=="待交易");
+  $("#pendingOrdersCount").textContent=String(pending.length);
+  $("#historyOrdersCount").textContent=String(history.length);
+  for(const [tab,selected] of [["#pendingOrdersTab",ordersView==="pending"],["#historyOrdersTab",ordersView==="history"]]){
+    $(tab).classList.toggle("active",selected);
+    $(tab).setAttribute("aria-selected",String(selected));
+  }
+  const rows=[...(ordersView==="pending"?pending:history)].sort((a,b)=>String(b.createdAtText||b.orderNumber||"").localeCompare(String(a.createdAtText||a.orderNumber||"")));
+  empty.textContent=ordersView==="pending"?"目前沒有待交易訂單。":"目前沒有歷史訂單。";
   empty.classList.toggle("hidden",rows.length>0);
   box.innerHTML=rows.map(o=>{
     const items=Array.isArray(o.items)?o.items:[];
