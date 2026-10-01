@@ -2272,12 +2272,20 @@ function esc(s=""){
 }
 
 
+// Public warehouse totals. No account-level inventory is exposed to buyers.
+let publicWarehouseStock={};
+function syncedEntry(p){return publicWarehouseStock[String(p?.id||"")]||null;}
+onSnapshot(doc(db,"publicSettings","warehouseStock"),snap=>{
+  publicWarehouseStock=snap.exists()?(snap.data().products||{}):{};
+  if(typeof render==="function")render();
+  if(typeof renderCart==="function")renderCart();
+},err=>console.error("公開庫存讀取失敗",err));
 function getVariants(p){
   return Array.isArray(p?.variants)
     ? p.variants
         .map(v=>({
           name:String(v?.name||"").trim(),
-          stock:Math.max(0,Math.floor(Number(v?.stock)||0)),
+          stock:Math.max(0,Math.floor(Number(syncedEntry(p)?.variants?.[String(v?.name||"")] ?? v?.stock)||0)),
           reserved:Math.max(0,Math.floor(Number(v?.reserved ?? v?.reservedQty)||0)),
           imageData:String(v?.imageData||"")
         }))
@@ -2290,7 +2298,7 @@ function getStock(p){
   if(variants.length){
     return variants.reduce((sum,v)=>sum+v.stock,0);
   }
-  const n=Number(p?.stock);
+  const n=Number(syncedEntry(p)?.stock ?? p?.stock);
   return Number.isFinite(n) && n>=0 ? Math.floor(n) : 1;
 }
 
@@ -4379,6 +4387,12 @@ async function checkoutSaleCart(orderInfo){
     variant:String(item.variant||"")
   }));
   if(!items.length) throw new Error("購物車是空的");
+  if(items.some(item=>{
+    const entry=syncedEntry({id:item.id});
+    return entry&&(Object.prototype.hasOwnProperty.call(entry.variants||{},item.variant)||Object.prototype.hasOwnProperty.call(entry,"stock"));
+  })){
+    throw new Error("此商品已連結小倉倉；目前僅開放庫存同步顯示，訂單扣庫存功能尚未啟用，請先私訊賣家確認交易。");
+  }
 
   // 免費版安全流程：買家只建立待交易訂單，不允許直接修改商品庫存。
   // 先用目前公開商品資料確認畫面上的庫存與訂單內容；真正扣庫存由管理員按「完成交易」時執行。
