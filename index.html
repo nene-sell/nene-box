@@ -1,41 +1,5 @@
-<!doctype html>
-<html lang="zh-Hant">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>🤎內內的百寶箱🤎</title>
-<style>
-:root{--bg:#ded0c5;--panel:#f7eee8;--line:#c8ad9b;--text:#49372e;--accent:#9f725c}
-*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text)}
-body{display:flex;flex-direction:column;overflow:hidden}
-#top{height:62px;flex:0 0 62px;display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);z-index:5}
-#brand{font-weight:900;white-space:nowrap}
-#tabs{display:flex;gap:7px;overflow:auto}
-.tab{border:1px solid var(--line);border-radius:999px;padding:9px 13px;background:#fff7f2;color:var(--text);font-weight:800;cursor:pointer;white-space:nowrap}
-.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-#stage{position:relative;flex:1;min-height:0}
-.appframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;visibility:hidden;pointer-events:none}
-.appframe.active{visibility:visible;pointer-events:auto}
-@media(max-width:620px){#top{height:56px;flex-basis:56px;padding:6px 8px;gap:7px}#brand{font-size:14px}.tab{font-size:12px;padding:8px 10px}}
-</style>
-</head>
-<body>
-<header id="top">
-  <div id="brand">🤎內內的百寶箱🤎</div>
-  <nav id="tabs">
-    <button class="tab active" data-app="market">販售與收購</button>
-    <button class="tab" data-app="warehouse">小倉倉</button>
-  </nav>
-</header>
-<main id="stage">
-  <iframe id="market" class="appframe active" src="./market.html" title="內內｜販售與收購"></iframe>
-  <iframe id="warehouse" class="appframe" src="./warehouse.html" title="內內的小倉倉"></iframe>
-</main>
-<script>
-document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{
-  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===btn));
-  document.querySelectorAll(".appframe").forEach(x=>x.classList.toggle("active",x.id===btn.dataset.app));
-}));
-</script>
-</body>
-</html>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>🤎內內的百寶箱🤎</title>
+<style>:root{--bg:#ded0c5;--p:#f7eee8;--line:#c8ad9b;--t:#49372e;--a:#9f725c}*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--t)}body{display:flex;flex-direction:column;overflow:hidden}header{height:62px;display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--p);border-bottom:1px solid var(--line)}b{white-space:nowrap}.tabs{display:flex;gap:7px}.tab{border:1px solid var(--line);border-radius:999px;padding:9px 13px;background:#fff7f2;color:var(--t);font-weight:800;cursor:pointer}.tab.on{background:var(--a);color:white}main{position:relative;flex:1;min-height:0}iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:white;display:none}iframe.on{display:block}@media(max-width:620px){header{height:56px;padding:6px 8px;gap:7px}header>b{font-size:14px}.tab{font-size:12px;padding:8px 10px}}</style></head>
+<body><header><b>🤎內內的百寶箱🤎</b><div class="tabs"><button class="tab on" data-id="market">販售與收購</button><button class="tab" data-id="warehouse">小倉倉</button></div></header>
+<main><iframe id="market" class="on" src="./market.html"></iframe><iframe id="warehouse" src="./warehouse.html"></iframe></main>
+<script>document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("iframe").forEach(x=>x.classList.toggle("on",x.id===b.dataset.id))});</script></body></html>
