@@ -667,7 +667,6 @@ function queueStockPublish(){
     const totals={};
     for(const a of stockAccounts)for(const i of (a.items||[])){
       const key=stockKey(i);
-      if(!linkedItems.has(key))continue;
       totals[key]=(totals[key]||0)+Math.max(0,Math.floor(Number(i.qty)||0));
     }
     const output={};
