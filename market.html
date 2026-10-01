@@ -1943,6 +1943,14 @@ html.page-visible body{visibility:visible;}
       <button id="removeExchangeWantImageBtn" class="btn hidden" type="button">移除想要的道具圖片</button>
     </div>
     <div class="notice">圖片會在上架前自動縮小壓縮，再和商品資料一起存到 Firestore。建議原圖不要太誇張大張。</div>
+    <div id="warehouseLinkBox" style="margin:13px 0;padding:12px;border:1px solid #dbc9bc;border-radius:12px;background:#faf5f0">
+      <strong style="font-size:13px">🤎 對應小倉倉道具</strong>
+      <p class="hint" style="margin:5px 0">只有管理員看得到；目前只連結及查看庫存，不會自動扣庫存。</p>
+      <input id="warehouseItemSearch" type="search" placeholder="搜尋小倉倉道具名稱／分類" style="width:100%;margin:7px 0;padding:9px;border:1px solid #d9c7b9;border-radius:9px">
+      <select id="warehouseItemChoice" style="width:100%;padding:9px;border:1px solid #d9c7b9;border-radius:9px;background:#fff"><option value="">不連結</option></select>
+      <div id="warehouseItemInfo" style="font-size:12px;margin-top:8px;line-height:1.6;color:#765e50"></div>
+      <button id="warehouseRefreshBtn" class="btn" type="button" style="font-size:12px;padding:6px 10px;margin-top:7px">更新小倉倉資料</button>
+    </div>
     <div id="productError" class="error"></div>
     <button id="saveProductBtn" class="btn primary full" type="submit">儲存商品</button>
   </form>
@@ -3636,9 +3644,109 @@ function updateProductFormMode(){
   if(exchange && !$("#productPrice").value) $("#productPrice").value="交換";
 }
 
+
+// 商品對應獨立儲存在 inventoryLinks；不改小倉倉資料，也不會自動扣庫存。
+let warehouseCandidates=[];
+let warehouseLinkCache=new Map();
+let warehouseLoadPromise=null;
+let warehouseCurrentProductId="";
+const warehouseIdentity=x=>[x.category||"",x.name||"",x.variant||"",x.gender||"",x.candyType||""].map(String).join("\u001f");
+const warehouseParseKey=k=>k.split("\u001f");
+const warehouseEscape=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function loadWarehouseCandidates(force=false){
+  if(!isAdmin())return;
+  if(warehouseLoadPromise&&!force)return warehouseLoadPromise;
+  warehouseLoadPromise=(async()=>{
+    const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts"));
+    const map=new Map();
+    snap.forEach(ds=>{
+      const a=ds.data();
+      const owner=String(a.number||a.name||a.gameId||ds.id);
+      for(const item of (Array.isArray(a.items)?a.items:[])){
+        if(!item?.name)continue;
+        const key=warehouseIdentity(item);
+        if(!map.has(key))map.set(key,{key,item,qty:0,owners:[]});
+        const entry=map.get(key);
+        const qty=Math.max(0,Number(item.qty)||0);
+        entry.qty+=qty;
+        entry.owners.push({owner,qty});
+      }
+    });
+    warehouseCandidates=[...map.values()].sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
+    return warehouseCandidates;
+  })();
+  try{return await warehouseLoadPromise;}
+  finally{warehouseLoadPromise=null;}
+}
+function showWarehouseChoice(){
+  const sel=$("#warehouseItemChoice"),query=$("#warehouseItemSearch").value.trim().toLocaleLowerCase();
+  const chosen=sel.value||sel.dataset.chosen||"";
+  const matches=warehouseCandidates.filter(x=>[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(query));
+  sel.replaceChildren(new Option("不連結",""));
+  for(const x of matches.slice(0,250)){
+    const label=[x.item.name,x.item.variant,x.item.category,x.item.gender].filter(Boolean).join("｜");
+    sel.add(new Option(`${label}（共 ${x.qty}）`,x.key));
+  }
+  if(chosen&&!matches.some(x=>x.key===chosen)){
+    const found=warehouseCandidates.find(x=>x.key===chosen);
+    if(found)sel.add(new Option([found.item.name,found.item.variant,"已選取"].filter(Boolean).join("｜"),chosen));
+  }
+  sel.value=chosen&&[...sel.options].some(o=>o.value===chosen)?chosen:"";
+  sel.dataset.chosen=sel.value;
+  showWarehouseInfo();
+}
+function showWarehouseInfo(){
+  const key=$("#warehouseItemChoice").value;
+  $("#warehouseItemChoice").dataset.chosen=key;
+  const x=warehouseCandidates.find(x=>x.key===key);
+  $("#warehouseItemInfo").textContent=x
+    ? `總數 ${x.qty}｜持有帳號：${x.owners.map(o=>`${o.owner} ×${o.qty}`).join("、")}`
+    : (warehouseCandidates.length?"尚未連結小倉倉道具":"按「更新小倉倉資料」讀取庫存");
+}
+$("#warehouseItemSearch").addEventListener("input",showWarehouseChoice);
+$("#warehouseItemChoice").addEventListener("change",showWarehouseInfo);
+$("#warehouseRefreshBtn").onclick=async()=>{
+  $("#warehouseItemInfo").textContent="正在讀取小倉倉…";
+  try{await loadWarehouseCandidates(true);showWarehouseChoice();}
+  catch(err){console.error(err);$("#warehouseItemInfo").textContent="讀取失敗，請確認管理員已登入。";}
+};
+async function loadWarehouseLinkForProduct(id){
+  const sel=$("#warehouseItemChoice");
+  sel.dataset.chosen="";
+  warehouseCurrentProductId=id||"";
+  $("#warehouseItemSearch").value="";
+  if(!isAdmin())return;
+  try{
+    const [candidates,link]=await Promise.all([
+      loadWarehouseCandidates(),
+      id?getDoc(doc(db,"inventoryLinks",id)):Promise.resolve(null)
+    ]);
+    if(warehouseCurrentProductId!==id)return;
+    sel.dataset.chosen=link?.exists()?String(link.data().itemKey||""):"";
+    showWarehouseChoice();
+  }catch(err){
+    console.error(err);
+    if(warehouseCurrentProductId===id)$("#warehouseItemInfo").textContent="小倉倉資料讀取失敗："+(err.message||err);
+  }
+}
+async function saveWarehouseLink(id){
+  const key=$("#warehouseItemChoice").value;
+  const ref=doc(db,"inventoryLinks",id);
+  if(key){
+    const [category,name,variant,gender,candyType]=warehouseParseKey(key);
+    await setDoc(ref,{productId:id,itemKey:key,category,name,variant,gender,candyType,updatedAt:serverTimestamp()});
+  }else{
+    const existing=await getDoc(ref);
+    if(existing.exists())await deleteDoc(ref);
+  }
+}
+
 function openProduct(p=null){
   $("#productDialogTitle").textContent=p?"編輯商品":"新增商品";
   $("#productId").value=p?.id||"";
+  $("#warehouseItemChoice").dataset.chosen="";
+  $("#warehouseItemInfo").textContent="正在讀取小倉倉…";
+  loadWarehouseLinkForProduct(p?.id||"");
   $("#productCategory").value=p?.category||"家具";
   $("#productName").value=p?.name||"";
   $("#productPrice").value=p?.price||"";
@@ -3895,14 +4003,23 @@ $("#productForm").addEventListener("submit", async e=>{
       updatedAt:serverTimestamp()
     };
 
+    let savedProductId=id;
     if(id){
       await updateDoc(doc(db,"products",id),payload);
     }else{
-      await addDoc(collection(db,"products"),{
+      const added=await addDoc(collection(db,"products"),{
         ...payload,
         sortOrder:-Date.now(),
         createdAt:serverTimestamp()
       });
+      savedProductId=added.id;
+    }
+    try{
+      await saveWarehouseLink(savedProductId);
+    }catch(linkError){
+      console.error("商品已儲存，但小倉倉連結未成功",linkError);
+      $("#productId").value=savedProductId;
+      throw new Error("商品已儲存，但小倉倉連結未成功；請確認連線後重新儲存。");
     }
 
     $("#productDialog").close();
