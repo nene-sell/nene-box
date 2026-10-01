@@ -983,6 +983,11 @@ $("#editItemSave").onclick=async()=>{
   x.qty=Math.max(1,+$("#editItemQty").value||1);
   await rememberItemName(x.image,x.name,x.variant);
   editItemDlg.close();
+
+  // 先立即刷新目前帳號畫面，不必切換帳號才看到修改結果。
+  render();
+
+  // 再寫入 Firebase；沿用原本完整儲存流程，避免影響辨識記憶與其他資料。
   await save();
 };
 document.querySelectorAll(".catTab").forEach(btn=>btn.onclick=()=>{
