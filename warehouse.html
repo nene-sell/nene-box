@@ -401,7 +401,7 @@
 <div class="authbar"><span id="userLabel"></span><button class="mini" id="logout">登出</button></div><header><h1>🤎內內的小倉倉🤎</h1><p>庫存管理</p></header>
 <section class="box"><div class="search"><input id="q" placeholder="搜尋物品，例如：珊瑚、藤編、粉色…"><button class="btn primary" id="go">搜尋</button></div><div id="grandTotal" class="stat" style="display:none;margin-top:12px"></div><div id="results"></div></section>
 <div class="stats"><div class="stat"><small>帳號數</small><b id="sa">0</b></div><div class="stat"><small>物品種類</small><b id="sk">0</b></div><div class="stat"><small>庫存總數</small><b id="sq">0</b></div><div class="stat"><small>最近更新</small><b id="su" style="font-size:13px">尚未</b></div></div>
-<div class="main"><aside class="panel"><div class="head"><h3>帳號</h3><div style="display:flex;gap:6px"><button class="btn" id="swapAccountNumbers" type="button">交換編號</button><button class="btn" id="batchA">批次新增</button><button class="btn" id="newA">＋</button></div></div><div class="accountTypeTabs"><button class="accountTypeTab active" data-account-type="一次性">一次號</button><button class="accountTypeTab" data-account-type="永久">永久號</button><button class="accountTypeTab" data-account-type="主要培養">培養號</button></div><div class="accountSearch"><input id="accountSearch" placeholder="搜尋帳號／ID"><button class="btn" id="accountSearchBtn" type="button">搜尋</button></div><div style="margin:0 0 9px">
+<div class="main"><aside class="panel"><div class="head"><h3>帳號</h3><div style="display:flex;gap:6px"><button class="btn" id="swapAccountNumbers" type="button">交換帳號資料</button><button class="btn" id="batchA">批次新增</button><button class="btn" id="newA">＋</button></div></div><div class="accountTypeTabs"><button class="accountTypeTab active" data-account-type="一次性">一次號</button><button class="accountTypeTab" data-account-type="永久">永久號</button><button class="accountTypeTab" data-account-type="主要培養">培養號</button></div><div class="accountSearch"><input id="accountSearch" placeholder="搜尋帳號／ID"><button class="btn" id="accountSearchBtn" type="button">搜尋</button></div><div style="margin:0 0 9px">
   <div style="display:flex;gap:6px">
   <button class="btn" id="backupAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">💾 完整備份</button>
   <button class="btn" id="restoreAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">♻️ 還原備份</button>
@@ -522,8 +522,8 @@
   </div>
   <input id="tempShotInput" type="file" accept="image/*" multiple hidden>
   <div id="tempShotGrid" class="tempShotGrid"></div><div class="actions"><button class="btn" id="closeTempShots" type="button">關閉</button></div></div></dialog><dialog id="swapAccountDlg"><div class="modal">
-<h3>交換帳號編號</h3>
-<div class="note" style="margin-bottom:10px">只交換兩個帳號的編號；ID、道具、資源紀錄、臨時截圖等資料都不會移動。</div>
+<h3>交換帳號資料</h3>
+<div class="note" style="margin-bottom:10px">兩個編號保持不變，互換遊戲 ID、整份道具庫存（含數量、款式、圖片）及資源紀錄。臨時截圖保留在原編號。</div>
 <div class="field"><label>第一個帳號</label><input id="swapAccountSearchA" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountA" size="5" style="width:100%;margin-top:6px"></select></div>
 <div style="text-align:center;font-weight:900">⇅</div>
 <div class="field"><label>第二個帳號</label><input id="swapAccountSearchB" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountB" size="5" style="width:100%;margin-top:6px"></select></div>
@@ -1232,7 +1232,7 @@ function renderSwapAccountPreview(){
   const a=d.accounts.find(x=>String(x.id)===String($("#swapAccountA")?.value||""));
   const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB")?.value||""));
   $("#swapAccountPreview").textContent=(a&&b&&a.id!==b.id)
-    ? `交換後：${b.number||b.name||"未命名"} → ${a.gameId||a.name||"原帳號"}　｜　${a.number||a.name||"未命名"} → ${b.gameId||b.name||"原帳號"}`
+    ? `編號固定不變：${a.number||a.name||"未命名"} 接收 ${b.gameId||"無遊戲 ID"}、${(b.items||[]).length} 筆道具及資源；${b.number||b.name||"未命名"} 接收 ${a.gameId||"無遊戲 ID"}、${(a.items||[]).length} 筆道具及資源。`
     : "請選擇兩個不同帳號";
 }
 $("#swapAccountNumbers").onclick=()=>{
@@ -1250,24 +1250,37 @@ $("#swapAccountConfirm").onclick=async()=>{
   const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB").value));
   if(!a||!b)return alert("請選擇兩個帳號");
   if(String(a.id)===String(b.id))return alert("請選擇兩個不同帳號");
-  const an=a.number,bn=b.number;
-  if(!confirm(`確定交換帳號編號？\n\n${swapAccountLabel(a)}\n⇅\n${swapAccountLabel(b)}\n\n只會交換編號，其他資料完全不變。`))return;
-  a.number=bn;b.number=an;
-  render();
+  // 先將正在編輯的資源欄位收進目前帳號，避免延遲儲存覆蓋交換結果。
+  if(typeof resourceSaveTimer!=="undefined" && resourceSaveTimer){
+    clearTimeout(resourceSaveTimer);resourceSaveTimer=null;
+    if(resourcePendingAccountId){
+      const pending=d.accounts.find(x=>String(x.id)===String(resourcePendingAccountId));
+      if(pending)await persistResourceAccount(String(pending.id));
+      resourcePendingAccountId=null;
+    }
+  }
+  const aData={gameId:a.gameId||"",items:structuredClone(a.items||[]),resources:structuredClone(a.resources||{})};
+  const bData={gameId:b.gameId||"",items:structuredClone(b.items||[]),resources:structuredClone(b.resources||{})};
+  if(!confirm(`確定交換兩個編號底下的遊戲 ID、道具及資源？\n\n${swapAccountLabel(a)}（${aData.items.length} 筆道具）\n⇅\n${swapAccountLabel(b)}（${bData.items.length} 筆道具）\n\n編號固定不變；臨時截圖不交換。`))return;
+  const confirmBtn=$("#swapAccountConfirm");
+  confirmBtn.disabled=true;
   try{
+    // 同一筆 Firestore batch 原子更新兩個帳號；帳號文件 ID 與編號完全不動。
     const batch=writeBatch(db);
-    batch.set(accountRef(String(a.id)),{number:a.number},{merge:true});
-    batch.set(accountRef(String(b.id)),{number:b.number},{merge:true});
-    batch.commit && await batch.commit();
+    batch.update(accountRef(String(a.id)),bData);
+    batch.update(accountRef(String(b.id)),aData);
+    await batch.commit();
+    Object.assign(a,bData);Object.assign(b,aData);
     d.updated=new Date().toLocaleString("zh-TW");
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    render();
+    try{await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});}
+    catch(metaErr){console.warn("帳號交換成功，更新時間未能同步",metaErr);}
     $("#su").textContent=d.updated;
     swapAccountDlg.close();
   }catch(err){
-    a.number=an;b.number=bn;render();
     console.error(err);
-    alert("交換失敗，編號已恢復原狀。\n"+(err?.message||String(err)));
-  }
+    alert("交換失敗，兩個帳號的資料都沒有交換。\n"+(err?.message||String(err)));
+  }finally{confirmBtn.disabled=false;}
 };
 $("#batchA").onclick=()=>{
   $("#ban").value="";
