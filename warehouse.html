@@ -984,11 +984,36 @@ $("#editItemSave").onclick=async()=>{
   await rememberItemName(x.image,x.name,x.variant);
   editItemDlg.close();
 
-  // 先立即刷新目前帳號畫面，不必切換帳號才看到修改結果。
+  // 立刻更新目前畫面，不用切換帳號才看到新數量／名稱。
   render();
 
-  // 再寫入 Firebase；沿用原本完整儲存流程，避免影響辨識記憶與其他資料。
-  await save();
+  try{
+    // 修改單一道具只儲存目前帳號，不再為一個修改重寫全部帳號。
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(accountRef(String(a.id)),a);
+    await setDoc(metaRef(),{
+      schemaVersion:MIGRATION_VERSION,
+      migratedFromLegacy:true,
+      updated:d.updated
+    },{merge:true});
+
+    // 有圖片的道具同步保存辨識記憶。
+    if(x.image){
+      const related=(d.itemMemory||[]).filter(m=>
+        String(m.name||"")===String(x.name||"") &&
+        String(m.variant||"")===String(x.variant||"")
+      );
+      for(let j=0;j<related.length;j++){
+        const m=related[j];
+        const idx=(d.itemMemory||[]).indexOf(m);
+        await setDoc(memoryRef(stableMemoryId(m,idx<0?j:idx)),m);
+      }
+    }
+    $("#su").textContent=d.updated;
+  }catch(err){
+    console.error(err);
+    alert("修改道具儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));
+  }
 };
 document.querySelectorAll(".catTab").forEach(btn=>btn.onclick=()=>{
   activeCategory=btn.dataset.cat||"家具";
@@ -2087,7 +2112,7 @@ async function rememberItemName(image,name,variant=""){
   }
   if(duplicate>=0)d.itemMemory[duplicate]=rec;else d.itemMemory.push(rec);
 }
-const INVENTORY_MEMORY_BACKFILL_VERSION=2;
+const INVENTORY_MEMORY_BACKFILL_VERSION=3;
 let inventoryMemoryBackfillRunning=false;
 async function backfillInventoryMemory(){
   if(inventoryMemoryBackfillRunning||!currentUser||!migrationReady)return;
