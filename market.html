@@ -1702,6 +1702,7 @@ html.page-visible body{visibility:visible;}
 }
 </style>
 
+<!-- nene-box market restore compatibility 20261001-0526 -->
 </head>
 <body>
 <header class="topbar">
@@ -1787,7 +1788,17 @@ html.page-visible body{visibility:visible;}
     <input id="loginEmail" type="email" autocomplete="username" required>
     <input id="loginPassword" type="password" autocomplete="current-password" required>
     <div id="loginError" class="error"></div>
-    <button class="btn primary full" type="submit">登入</button>
+    <button class="btn primary full" type="submit">Email／密碼登入</button>
+    <button id="googleLoginBtn" class="btn full" type="button" style="margin-top:10px">使用 Google 登入</button>
+
+    <div id="adminPasswordSetup" hidden style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(120,100,90,.18)">
+      <div style="font-weight:700;margin-bottom:8px">設定 Email 登入密碼</div>
+      <div style="font-size:13px;opacity:.72;margin-bottom:10px">只會綁定目前登入的百寶箱管理員帳號，不會新增第二個管理員。</div>
+      <input id="newLoginPassword" type="password" autocomplete="new-password" placeholder="新密碼（至少 6 碼）">
+      <input id="newLoginPassword2" type="password" autocomplete="new-password" placeholder="再輸入一次新密碼" style="margin-top:8px">
+      <button id="setLoginPasswordBtn" class="btn primary full" type="button" style="margin-top:10px">設定登入密碼</button>
+      <div id="passwordSetupError" class="error"></div>
+    </div>
   </form>
 </dialog>
 
@@ -2036,7 +2047,7 @@ html.page-visible body{visibility:visible;}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, EmailAuthProvider, linkWithCredential, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, setDoc,
@@ -2057,6 +2068,8 @@ const ADMIN_UID="zzy1kG02vkft00TTdRtfG6iMbNL2";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -3913,6 +3926,30 @@ async function deleteProduct(p){
   }
 }
 
+$("#googleLoginBtn").onclick=async()=>{
+  $("#loginError").textContent="";
+  try{
+    const cred=await signInWithPopup(auth,googleProvider);
+    if(cred.user.uid !== ADMIN_UID){
+      await signOut(auth);
+      throw new Error("這個 Google 帳號沒有管理員權限");
+    }
+    $("#loginDialog").close();
+    $("#loginForm").reset();
+    toast("管理員已登入");
+  }catch(err){
+    console.error(err);
+    const code=String(err?.code||"");
+    if(code==="auth/popup-closed-by-user"){
+      $("#loginError").textContent="";
+    }else if(code==="auth/popup-blocked"){
+      $("#loginError").textContent="瀏覽器封鎖了 Google 登入視窗，請允許彈出式視窗後再試。";
+    }else{
+      $("#loginError").textContent=err?.message||"Google 登入失敗。";
+    }
+  }
+};
+
 $("#loginForm").addEventListener("submit", async e=>{
   e.preventDefault();
   $("#loginError").textContent="";
@@ -3931,9 +3968,70 @@ $("#loginForm").addEventListener("submit", async e=>{
     toast("管理員已登入");
   }catch(err){
     console.error(err);
-    $("#loginError").textContent="登入失敗，請確認 Email 和密碼。";
+    const code=String(err?.code||"");
+    if(code==="auth/invalid-credential"||code==="auth/wrong-password"||code==="auth/user-not-found"){
+      $("#loginError").textContent="這組 Email／密碼目前不是百寶箱的有效登入方式；可直接使用下方 Google 登入。";
+    }else if(code==="auth/too-many-requests"){
+      $("#loginError").textContent="登入嘗試次數過多，請稍後再試。";
+    }else{
+      $("#loginError").textContent=err?.message||"登入失敗。";
+    }
   }
 });
+
+
+function refreshAdminPasswordSetup(){
+  const box=$("#adminPasswordSetup");
+  if(!box) return;
+  box.hidden=!(auth.currentUser && auth.currentUser.uid===ADMIN_UID);
+}
+
+$("#setLoginPasswordBtn").onclick=async()=>{
+  const errBox=$("#passwordSetupError");
+  errBox.textContent="";
+  const user=auth.currentUser;
+  if(!user || user.uid!==ADMIN_UID){
+    errBox.textContent="目前不是百寶箱管理員帳號。";
+    return;
+  }
+  const email=String(user.email||"").trim();
+  const p1=$("#newLoginPassword").value;
+  const p2=$("#newLoginPassword2").value;
+  if(!email){
+    errBox.textContent="目前登入帳號沒有 Email，無法設定密碼登入。";
+    return;
+  }
+  if(p1.length<6){
+    errBox.textContent="密碼至少需要 6 碼。";
+    return;
+  }
+  if(p1!==p2){
+    errBox.textContent="兩次輸入的密碼不一樣。";
+    return;
+  }
+  try{
+    const credential=EmailAuthProvider.credential(email,p1);
+    await linkWithCredential(user,credential);
+    $("#newLoginPassword").value="";
+    $("#newLoginPassword2").value="";
+    toast("Email／密碼登入已設定完成");
+    errBox.textContent="設定完成。之後可用這個 Email＋密碼登入。";
+  }catch(err){
+    console.error(err);
+    const code=String(err?.code||"");
+    if(code==="auth/provider-already-linked"){
+      errBox.textContent="這個管理員帳號已經有 Email／密碼登入方式，不需要重複設定。";
+    }else if(code==="auth/requires-recent-login"){
+      errBox.textContent="為了安全，請先登出後重新用 Google 登入，再立刻設定密碼。";
+    }else if(code==="auth/email-already-in-use"||code==="auth/credential-already-in-use"){
+      errBox.textContent="這個 Email 已被另一個 Firebase 登入帳號使用，先不要新增帳號。";
+    }else if(code==="auth/weak-password"){
+      errBox.textContent="密碼強度不足，請換一組較長的密碼。";
+    }else{
+      errBox.textContent=err?.message||"設定密碼失敗。";
+    }
+  }
+};
 
 $("#adminBtn").onclick=async()=>{
   if(isAdmin()){
@@ -4511,7 +4609,7 @@ document.addEventListener("click",e=>{
 // 目前賣場的圖片實際以 data URL 存在 Firestore 商品文件中；展示影片則是 GitHub Pages/外部網址路徑。
 // 備份採 ZIP：manifest.json + media/images + media/videos，避免把大型媒體全部硬塞進單一 JSON。
 const BACKUP_FORMAT="nene-sell-full-backup";
-const BACKUP_VERSION=2;
+const BACKUP_VERSION=3;
 const BACKUP_COLLECTIONS=["products","orders"];
 
 function backupSafeName(s="file"){
@@ -4668,7 +4766,7 @@ async function validateBackupZip(file){
   const mf=zip.file("manifest.json");if(!mf)throw new Error("這不是完整備份：缺少 manifest.json");
   const manifest=JSON.parse(await mf.async("string"));
   if(manifest.format!==BACKUP_FORMAT)throw new Error("備份格式不正確");
-  if(Number(manifest.version)>BACKUP_VERSION)throw new Error("此備份版本較新，請使用新版網站還原");
+  if(Number(manifest.version)>BACKUP_VERSION)throw new Error(`此備份是 v${manifest.version}，目前網站只支援到 v${BACKUP_VERSION}。請重新整理百寶箱後再還原。`);
   if(!manifest.collections||!Array.isArray(manifest.collections.products)||!Array.isArray(manifest.collections.orders))throw new Error("備份資料不完整");
   // 在修改 Firebase 前，先驗證所有圖片媒體都真的存在於 ZIP。
   const refs=[];
@@ -4799,6 +4897,10 @@ $("#productBuyerOffer").onchange=updateProductFormMode;
 
 <script>
 setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-settings-loading"),2000);
+
+onAuthStateChanged(auth,()=>{
+  refreshAdminPasswordSetup();
+});
 </script>
 
 
