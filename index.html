@@ -17,7 +17,7 @@ iframe.on{visibility:visible;pointer-events:auto}
 <button class="tab on" data-id="market">販售與收購</button><button class="tab" data-id="warehouse">小倉倉</button>
 </div></header><main>
 <iframe id="market" class="on" src="market.html"></iframe>
-<iframe id="warehouse" src="warehouse.html"></iframe>
+<iframe id="warehouse" src="warehouse.html?v=20261001-0435"></iframe>
 </main><script>
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("iframe").forEach(x=>x.classList.toggle("on",x.id===b.dataset.id))});
 </script></body></html>
