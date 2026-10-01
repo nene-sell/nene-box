@@ -2110,16 +2110,18 @@ async function rememberItemName(image,name,variant=""){
       if(shapeDistance(features.shapeSig,m.shapeSig)<=.16&&colorDistance(features.colorSig,m.colorSig)<=.18){duplicate=i;break}
     }else if(Array.isArray(m.sig)&&signatureDistance(sig,m.sig)<=.55){duplicate=i;break}
   }
-  if(duplicate>=0)d.itemMemory[duplicate]=rec;else d.itemMemory.push(rec);
+  if(duplicate>=0)d.itemMemory[duplicate]=rec;
+  else d.itemMemory.push(rec);
 }
-const INVENTORY_MEMORY_BACKFILL_VERSION=3;
+const INVENTORY_MEMORY_BACKFILL_VERSION=4;
 let inventoryMemoryBackfillRunning=false;
 async function backfillInventoryMemory(){
   if(inventoryMemoryBackfillRunning||!currentUser||!migrationReady)return;
   inventoryMemoryBackfillRunning=true;
   try{
     const metaSnap=await getDoc(metaRef()),meta=metaSnap.exists()?metaSnap.data():{};
-    if(Number(meta.inventoryMemoryBackfillVersion||0)>=INVENTORY_MEMORY_BACKFILL_VERSION)return;
+    // v4：搬家後即使舊 meta 說補建完成，也實際檢查現有庫存圖片，
+    // 把缺少的「圖片 → 名稱／款式」記憶重新補回新 Firebase。
     const candidates=[];
     for(const a of (d.accounts||[]))for(const item of (a.items||[])){
       if(item?.image&&String(item?.name||"").trim()&&item.name!=="待確認")candidates.push({image:item.image,name:String(item.name).trim(),variant:String(item.variant||"").trim()});
@@ -2145,7 +2147,7 @@ async function backfillInventoryMemory(){
       }
       d.itemMemory.push(...newMem);
     }
-    await setDoc(metaRef(),{inventoryMemoryBackfillVersion:INVENTORY_MEMORY_BACKFILL_VERSION,inventoryMemoryBackfilledAt:new Date().toISOString(),recognitionEngineVersion:2},{merge:true});
+    await setDoc(metaRef(),{inventoryMemoryBackfillVersion:INVENTORY_MEMORY_BACKFILL_VERSION,inventoryMemoryBackfilledAt:new Date().toISOString(),recognitionEngineVersion:2,recognitionMemoryRepair:"inventory-rescan-v4"},{merge:true});
   }catch(err){console.error("精準辨識記憶補建失敗",err)}
   finally{inventoryMemoryBackfillRunning=false}
 }
