@@ -730,10 +730,8 @@ async function loadCloud(){
   }
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
-  for(const a of (d.accounts||[]))for(const item of (a.items||[])){
-    if(item?.category==="當週信封")item.category="家具";
-  }
-  await cleanupRemovedMaterials();
+  // nene-box：搬家後保留原始庫存，不在載入時自動改分類或刪除資料。
+
   active=d.accounts[0]?.id||null;
   render();
   setTimeout(()=>backfillInventoryMemory(),300);
@@ -829,7 +827,7 @@ function render(){
   $("#lastLoginText").textContent=a?.lastLogin||"尚未記錄";
   $("#accountActions").style.display=a?"flex":"none";$("#deleteAccount").style.display=a?"inline-block":"none";$("#editAccount").style.display=a?"inline-block":"none";
   $("#resourceBox").style.display=a?"block":"none";
-  $ ("#openTempShots").style.display="inline-block";
+  $("#openTempShots").style.display=a?"inline-block":"none";
   if(a){
     if(tempShotsCache.has(a.id))renderTempShots(a.id);
 
