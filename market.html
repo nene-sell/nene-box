@@ -1712,22 +1712,12 @@ html.page-visible body{visibility:visible;}
 #loginError{font-size:12px;text-align:center;}
 </style>
 <style>
-/* 選物所：完全移除舊個人介紹橫列；管理按鈕保留為右上角小工具 */
-.topbar{position:static!important;display:contents!important;padding:0!important;border:0!important;background:transparent!important;min-height:0!important}
-.topbar .admin-tools{position:fixed!important;right:12px;top:10px;z-index:10001;display:flex;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 24px);gap:5px;background:rgba(247,238,232,.95);border:1px solid #d9c7ba;border-radius:13px;padding:5px;box-shadow:0 2px 10px rgba(60,42,30,.08)}
-.topbar .admin-tools #adminBtn{font-size:11px!important;padding:7px 9px!important}
-.market-dc-link{position:fixed!important;right:12px;bottom:16px;top:auto;z-index:1000;box-shadow:0 3px 12px rgba(60,42,30,.12)}
-body.market-admin .market-dc-link{display:none!important}
+/* 選物所：移除個人介紹列，僅保留買家可用的私訊入口與管理按鈕 */
+.topbar{min-height:54px;padding-top:8px!important;padding-bottom:8px!important}
 .market-dc-link{display:inline-flex;align-items:center;border:1px solid #d4c0b2;background:#fff8f3;color:#816352;text-decoration:none;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700;white-space:nowrap}
 .market-dc-link:hover{background:#f1e2d8}
 </style>
-<style id="nene-final-no-profile-v2">
-/* Final override: remove all original profile/header strip without hiding admin actions */
-body>.topbar{display:contents!important;position:static!important;height:0!important;min-height:0!important;background:transparent!important;border:0!important;box-shadow:none!important}
-body>.topbar .admin-tools{position:fixed!important;top:8px!important;right:10px!important;z-index:10002!important}
-body>.topbar .market-dc-link{position:fixed!important;top:auto!important;bottom:14px!important;right:12px!important}
-body.market-admin>.topbar .market-dc-link{display:none!important}
-</style></head>
+</head>
 <body>
 <header class="topbar">
   <a class="market-dc-link" href="https://discord.com/users/868208720407040060" target="_blank" rel="noopener noreferrer" aria-label="Discord 私訊內內">💬 點我私訊 ♡</a>
@@ -4185,7 +4175,6 @@ $("#adminBtn").onclick=async()=>{
 
 onAuthStateChanged(auth,user=>{
   currentUser = user && user.uid===ADMIN_UID ? user : null;
-  document.body.classList.toggle("market-admin",isAdmin());
   $("#ordersBtn")?.classList.toggle("hidden",!isAdmin());
   $("#backupBtn")?.classList.toggle("hidden",!isAdmin());
   $("#restoreBtn")?.classList.toggle("hidden",!isAdmin());
