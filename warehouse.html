@@ -1,0 +1,2702 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>🤎內內的小倉倉🤎</title>
+<style>
+:root{--bg:#ded0c5;--p:#f1e6dd;--line:#bda493;--text:#3f3029;--muted:#725f55;--a:#9f725c}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(#e4d7cd,#d5c3b6);color:var(--text);font-family:system-ui,"Microsoft JhengHei",sans-serif}button,input{font:inherit}.wrap{width:100%;max-width:none;margin:0;padding:clamp(10px,1.5vw,20px)}h1{margin:0;font-size:25px}header p{margin:5px 0 18px;color:var(--muted)}.box,.panel,.stat{background:var(--p);border:1px solid var(--line);border-radius:20px}.box{padding:17px}.search{display:flex;gap:9px}.search input{flex:1;padding:13px;border:1px solid var(--line);border-radius:13px}.btn{border:0;border-radius:12px;padding:11px 14px;background:#d5c0b1;color:var(--text);font-weight:700;cursor:pointer}.primary{background:var(--a);color:#fff}.danger{background:#efd6d3;color:#914f4b}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.stat{padding:14px}.stat small{color:var(--muted)}.stat b{display:block;font-size:22px;margin-top:4px}.main{display:grid;grid-template-columns:minmax(250px,20vw) minmax(0,1fr);gap:14px}.panel{padding:15px}.head{display:flex;justify-content:space-between;align-items:center}.accountTypeTabs{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 7px;overflow:visible;padding-bottom:0}.accountTypeTab{flex:0 0 auto;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:999px;background:#dfcec1;color:#59463c;font-weight:800;cursor:pointer;font-size:12px;white-space:nowrap}.accountTypeTab.active{background:#ad8068;color:#fff8f3;border-color:#946650;box-shadow:none;font-weight:900}.accountSearch{display:flex;gap:6px;margin:7px 0 10px}.accountSearch input{min-width:0;flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}.accountSearch .btn{padding:9px 10px}.accounts{display:flex;flex-direction:column;gap:7px}.acc{padding:10px;border-radius:11px;background:#ddcbbf;cursor:pointer;display:flex;justify-content:space-between}.acc.active{background:#aa7c65;color:#fff9f5;box-shadow:inset 0 0 0 1px #8f624d}.acc.active small{color:#f2e3da}.acc[draggable="true"]{user-select:none}.acc.dragging{opacity:.45}.dragHandle{cursor:grab;font-size:18px;padding-left:6px}.toolbar{display:flex;gap:7px;flex-wrap:wrap}.genderTabs{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 0}.genderTab.active,.candyTab.active{background:var(--a);color:#fff}.categoryTabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.catTab{padding:8px 12px}.catTab.active{background:var(--a);color:#fff}.field select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}.items{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.item{border:1px solid #e1ccbd;border-radius:15px;padding:12px;background:#fff;display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center}.thumb{width:58px;height:58px;border-radius:11px;background:#eadfd7;display:grid;place-items:center;overflow:hidden}.thumb img{width:100%;height:100%;object-fit:cover;display:block}.recCard{display:grid;grid-template-columns:112px 1fr 46px;gap:8px;align-items:center;margin:8px 0;padding:8px;border:1px solid #e1ccbd;border-radius:13px;background:#fff}.recPic{width:112px;height:102px;border-radius:10px;object-fit:contain;background:#e8ddd5}.recFields{display:grid;grid-template-columns:minmax(0,1fr) 90px 64px;gap:6px}.recFields input[type="number"]{text-align:center}.cropNote{font-size:11px;color:var(--muted);margin-top:3px}.item h3{font-size:14px;margin:0 0 4px}.meta{font-size:12px;color:var(--muted)}.qty{font-size:19px;font-weight:800;color:#986650}.itemActions{display:flex;flex-direction:column;gap:5px;align-items:flex-end}.mini{border:0;border-radius:8px;padding:5px 7px;cursor:pointer;background:#eadbd0;color:#6b5145;font-size:11px}.mini.del{background:#f2dcda;color:#984f4b}.empty{padding:35px 8px;text-align:center;color:var(--muted)}#results{display:none;margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}.row{display:flex;justify-content:space-between;padding:7px 2px}.total{font-weight:800;color:#986650;margin-top:8px}dialog{width:min(430px,92vw);border:1px solid var(--line);border-radius:18px;background:var(--p);padding:20px;color:var(--text)}dialog::backdrop{background:#3c2c2866}.field{margin:10px 0}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.field input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px}.actions{display:flex;justify-content:flex-end;gap:7px;margin-top:15px}.note{font-size:12px;color:var(--muted);margin-top:15px}
+@media(max-width:900px){
+ .wrap{width:100%;max-width:none;padding:14px}
+ .main{grid-template-columns:minmax(220px,30vw) minmax(0,1fr);gap:10px}
+ .panel{padding:12px}
+ .stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+ .stat{padding:10px}.stat b{font-size:18px}
+ .items{grid-template-columns:1fr}
+}
+@media(max-width:620px){
+ body{font-size:14px}
+ .wrap{padding:9px}
+ h1{font-size:21px}
+ .box,.panel,.stat{border-radius:14px}
+ .box,.panel{padding:10px}
+ .search{gap:6px}.search input{min-width:0;padding:10px}.search .btn{padding:9px 10px}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr));margin:9px 0}
+ .main{grid-template-columns:1fr;gap:9px}
+ .accountTypeTab{font-size:11px;padding:7px 9px}
+ .accounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:220px;overflow:auto;gap:6px}
+ .acc{min-width:0;padding:8px;font-size:12px}
+ .toolbar .btn,.categoryTabs .btn,.genderTabs .btn{padding:8px 9px;font-size:12px}
+ .items{grid-template-columns:1fr;gap:7px}
+ .item{grid-template-columns:48px minmax(0,1fr) auto;padding:9px;gap:7px}
+ .thumb{width:48px;height:48px}
+ #resourceBox>div:nth-child(2){grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ .recCard{grid-template-columns:84px minmax(0,1fr) 36px}
+ .recPic{width:84px;height:78px}
+ .recFields{grid-template-columns:minmax(0,1fr) 64px}
+ .recFields input[data-k="name"]{grid-column:1/-1}
+ dialog{width:96vw;padding:14px}
+}
+#shotDlg{
+ width:min(1180px,94vw);
+ max-width:none;
+ height:min(860px,92vh);
+ max-height:92vh;
+ padding:22px;
+ overflow:auto;
+}
+#shotDlg #shotImg{max-height:420px!important}
+#shotDlg #recognized{max-height:none}
+@media(max-width:700px){
+ #shotDlg{width:96vw;height:94vh;max-height:94vh;padding:14px}
+ #shotDlg #shotImg{max-height:300px!important}
+}
+#authGate{position:fixed;inset:0;z-index:9999;background:linear-gradient(#f8f2ed,#eee1d7);display:grid;place-items:center;padding:20px}
+#authGate .loginCard{width:min(430px,92vw);background:var(--p);border:1px solid var(--line);border-radius:22px;padding:28px;text-align:center;box-shadow:0 18px 55px #6d514322}
+#authGate h2{margin:0 0 8px}#authGate p{color:var(--muted);margin:0 0 18px}.hidden{display:none!important}
+#app{visibility:hidden}
+.authbar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--muted)}
+
+#resourceBox{width:min(520px,100%);padding:10px 12px!important;margin-top:10px!important}
+#resourceBox>div:first-child{margin-bottom:6px!important;font-size:13px}
+#resourceBox .field{margin:0}
+#resourceBox .field label{font-size:11px;margin-bottom:3px}
+#resourceBox .field input,#resourceBox .field select{width:100%;padding:7px 8px;height:34px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}
+#resourceBox .actions{margin-top:6px!important}
+#resourceBox .actions .btn{padding:7px 11px;font-size:12px}
+
+.tempShotBox{margin:0;padding:14px;min-width:min(720px,82vw)} #tempShotDlg{max-width:92vw}
+.tempShotHead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tempShotGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px;margin-top:10px}
+.tempShotCard{position:relative;border:1px solid var(--line);border-radius:12px;background:#fff;padding:5px;overflow:hidden}
+.tempShotCard img{width:100%;height:105px;object-fit:cover;border-radius:8px;display:block;cursor:pointer}
+.tempShotDel{position:absolute;top:8px;right:8px;border:0;border-radius:999px;width:26px;height:26px;background:#fffdf1e8;color:#8d4e49;font-weight:900;cursor:pointer;box-shadow:0 1px 5px #0002}
+.tempShotEmpty{font-size:12px;color:var(--muted);padding:8px 2px 2px}
+.accTempDot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e54848;margin-left:6px;vertical-align:1px;box-shadow:0 0 0 2px #fff}
+
+#tempShotDlg{
+  width:min(1100px,94vw);
+  max-width:94vw;
+  max-height:none!important;
+  height:auto!important;
+  overflow:visible!important;
+}
+#tempShotDlg .tempShotBox{
+  width:100%;
+  min-width:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+  box-sizing:border-box;
+}
+#tempShotGrid{
+  overflow:visible!important;
+  max-height:none!important;
+  height:auto!important;
+  grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+}
+
+#tempShotDlg{
+  width:auto!important;
+  min-width:0!important;
+  max-width:min(620px,92vw)!important;
+  max-height:none!important;
+  height:auto!important;
+  overflow:visible!important;
+  padding:0!important;
+}
+#tempShotDlg .tempShotBox{
+  width:auto!important;
+  min-width:min(420px,86vw)!important;
+  max-width:min(600px,88vw)!important;
+  padding:12px!important;
+  margin:0!important;
+}
+#tempShotGrid{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fill,minmax(95px,1fr))!important;
+  gap:7px!important;
+  width:100%!important;
+  max-height:none!important;
+  overflow:visible!important;
+}
+#tempShotGrid .tempShotCard img{
+  height:95px!important;
+}
+
+/* 臨時截圖：改成短、橫向、固定小視窗 */
+#tempShotDlg{
+  width:min(540px,90vw)!important;
+  max-width:90vw!important;
+  height:auto!important;
+  max-height:78vh!important;
+  overflow:hidden!important;
+  padding:0!important;
+}
+#tempShotDlg .tempShotBox{
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  padding:12px!important;
+  box-sizing:border-box!important;
+}
+#tempShotDlg .tempShotHead{
+  align-items:center!important;
+  margin-bottom:8px!important;
+}
+#tempShotDlg .tempShotHead .meta{
+  display:none!important;
+}
+#tempShotGrid{
+  display:flex!important;
+  flex-wrap:nowrap!important;
+  gap:8px!important;
+  width:100%!important;
+  min-height:112px!important;
+  max-height:128px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  padding:2px 2px 7px!important;
+  box-sizing:border-box!important;
+}
+#tempShotGrid .tempShotCard{
+  flex:0 0 96px!important;
+  width:96px!important;
+  padding:4px!important;
+}
+#tempShotGrid .tempShotCard img{
+  width:100%!important;
+  height:72px!important;
+  object-fit:cover!important;
+}
+#tempShotGrid .tempShotCard .btn{
+  padding:5px 3px!important;
+  font-size:11px!important;
+}
+#tempShotGrid .tempShotEmpty{
+  min-height:70px!important;
+  display:flex!important;
+  align-items:center!important;
+}
+#tempShotDlg .actions{
+  margin-top:7px!important;
+}
+
+/* 臨時截圖：更短 + 開啟時固定置中 */
+#tempShotDlg{
+  width:min(460px,88vw)!important;
+  max-width:88vw!important;
+  max-height:62vh!important;
+  margin:auto!important;
+  inset:0!important;
+  position:fixed!important;
+}
+#tempShotDlg .tempShotBox{
+  padding:10px!important;
+}
+#tempShotGrid{
+  min-height:96px!important;
+  max-height:108px!important;
+  padding-bottom:5px!important;
+}
+#tempShotGrid .tempShotCard{
+  flex:0 0 86px!important;
+  width:86px!important;
+}
+#tempShotGrid .tempShotCard img{
+  height:60px!important;
+}
+#tempShotDlg .actions{
+  margin-top:4px!important;
+}
+
+/* 臨時截圖：框到內容為止，不留多餘空間 */
+#tempShotDlg{
+  width:auto!important;
+  min-width:0!important;
+  max-width:90vw!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  margin:auto!important;
+  inset:0!important;
+  position:fixed!important;
+  overflow:visible!important;
+}
+#tempShotDlg .tempShotBox{
+  width:auto!important;
+  min-width:0!important;
+  max-width:90vw!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:10px!important;
+  margin:0!important;
+}
+#tempShotDlg .tempShotHead{
+  margin:0 0 7px!important;
+}
+#tempShotGrid{
+  width:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  height:auto!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+}
+#tempShotGrid .tempShotEmpty{
+  min-height:0!important;
+  padding:5px 2px!important;
+}
+#tempShotDlg .actions{
+  margin:7px 0 0!important;
+  padding:0!important;
+}
+
+/* 臨時截圖：真正依內容自動長大，不保留下面的大空白 */
+#tempShotDlg{
+  display:none;
+  position:fixed!important;
+  inset:50% auto auto 50%!important;
+  transform:translate(-50%,-50%)!important;
+  width:auto!important;
+  min-width:260px!important;
+  max-width:90vw!important;
+  height:max-content!important;
+  min-height:0!important;
+  max-height:85vh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:auto!important;
+}
+#tempShotDlg[open]{
+  display:block!important;
+}
+#tempShotDlg .tempShotBox{
+  display:block!important;
+  width:max-content!important;
+  min-width:260px!important;
+  max-width:88vw!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:10px!important;
+  box-sizing:border-box!important;
+}
+#tempShotGrid{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,86px)!important;
+  justify-content:start!important;
+  width:auto!important;
+  max-width:520px!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  gap:8px!important;
+  overflow:visible!important;
+  padding:0!important;
+  margin:0!important;
+}
+#tempShotGrid .tempShotCard{
+  width:86px!important;
+  flex:none!important;
+}
+#tempShotGrid .tempShotEmpty{
+  width:230px!important;
+  min-height:0!important;
+  padding:5px 2px!important;
+}
+#tempShotDlg .actions{
+  margin:7px 0 0!important;
+  padding:0!important;
+}
+
+/* 臨時截圖：維持隨照片自動擴大，但整體放大一階 */
+#tempShotDlg{
+  min-width:330px!important;
+}
+#tempShotDlg .tempShotBox{
+  min-width:330px!important;
+  padding:14px!important;
+}
+#tempShotGrid{
+  grid-template-columns:repeat(auto-fit,110px)!important;
+  max-width:650px!important;
+  gap:10px!important;
+}
+#tempShotGrid .tempShotCard{
+  width:110px!important;
+}
+#tempShotGrid .tempShotCard img{
+  height:88px!important;
+}
+#tempShotGrid .tempShotEmpty{
+  width:290px!important;
+}
+
+#overviewDlg{width:min(1000px,94vw);max-width:94vw;max-height:90vh;padding:0}
+.overviewBox{padding:16px}
+.overviewTop{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.overviewCapture{background:#f5e9df;padding:18px;border-radius:14px;color:#4d3c33}
+.overviewTitle{text-align:center;font-size:22px;font-weight:900;margin-bottom:4px}
+.overviewSub{text-align:center;font-size:12px;opacity:.72;margin-bottom:16px}
+.overviewSection{margin-top:14px}
+.overviewSection h4{margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid #cdb6a6}
+.overviewGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.overviewItem{display:flex;align-items:center;gap:8px;background:#fffaf6;border:1px solid #d9c4b5;border-radius:10px;padding:7px}
+.overviewItem img{width:46px;height:46px;object-fit:cover;border-radius:7px;flex:none}
+.overviewItemText{min-width:0;flex:1}
+.overviewItemName{font-weight:800;font-size:12px;line-height:1.25;word-break:break-word}
+.overviewItemMeta{font-size:11px;opacity:.7;margin-top:2px}
+.overviewQty{font-size:15px;font-weight:900;white-space:nowrap}
+
+/* 帳號欄：分類與搜尋留在上方，只有帳號清單自己捲動 */
+.main>aside.panel{align-self:start;position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;overflow:hidden}
+.main>aside.panel>.head,.main>aside.panel>.accountTypeTabs,.main>aside.panel>.accountSearch,.main>aside.panel>#accountActions{flex:0 0 auto}
+#accounts{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:3px;scroll-behavior:smooth}
+@media(max-width:760px){.main>aside.panel{position:static;max-height:none}#accounts{max-height:42vh;overflow-y:auto}}
+
+.overviewSearch{display:flex;gap:7px;margin:0 0 10px}
+.overviewSearch input{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}
+#shotDlg select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)}
+
+.overviewItem{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
+.overviewItem:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(83,63,50,.12)}
+.ownerList{display:grid;gap:8px;max-height:52vh;overflow:auto;margin-top:12px;text-align:left}
+.ownerRow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:#fffaf6}
+.ownerId,.ownerQty{font-weight:900}.ownerQty{white-space:nowrap}
+
+.resourceTable{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.resourceTable th,.resourceTable td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center}
+.resourceTable th{position:sticky;top:0;background:#f5e9df;font-weight:900;z-index:1}
+.resourceTable th:first-child,.resourceTable td:first-child{text-align:left;font-weight:900}
+.resourceZero{opacity:.35}
+.resourceTableWrap{max-height:42vh;overflow:auto;border:1px solid var(--line);border-radius:11px;background:#fff}
+.envelopeSuggestions{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:7px;margin-top:7px}.envelopeChoice{border:1px solid var(--line);border-radius:10px;background:#fff;padding:5px;cursor:pointer;text-align:center}.envelopeChoice img{width:100%;height:64px;object-fit:contain;border-radius:7px;background:#f3ebe5}.envelopeChoice b{display:block;font-size:11px;margin-top:4px;word-break:break-word}.envelopePreview{display:flex;align-items:center;gap:8px;margin-top:7px}.envelopePreview img{width:74px;height:74px;object-fit:contain;border:1px solid var(--line);border-radius:10px;background:#fff}
+
+.fishingResourceTable{table-layout:fixed;width:100%}
+.fishingResourceTable th:nth-child(1),.fishingResourceTable td:nth-child(1){width:30%}
+.fishingResourceTable th:nth-child(2),.fishingResourceTable td:nth-child(2){width:45%;white-space:normal!important;overflow-wrap:anywhere;word-break:break-word}
+.fishingResourceTable th:nth-child(3),.fishingResourceTable td:nth-child(3){width:25%}
+
+
+/* 新增物品：最近新增／名稱搜尋快捷選擇 */
+.itemQuickTitle{font-size:12px;color:var(--muted);font-weight:800;margin:9px 0 6px}
+.envelopeSuggestions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;max-height:230px;overflow:auto}
+.envelopeChoice{border:1px solid var(--line);border-radius:11px;background:#fffaf6;padding:6px;cursor:pointer;color:var(--text);min-width:0;text-align:left}
+.envelopeChoice img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;background:#eadfd7;display:block;margin-bottom:5px}
+.envelopeChoice .noPic{width:100%;aspect-ratio:1/1;border-radius:8px;background:#eadfd7;display:grid;place-items:center;font-size:24px;margin-bottom:5px}
+.envelopeChoice b{display:block;font-size:11px;line-height:1.25;overflow-wrap:anywhere}
+.envelopeChoice small{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.envelopePreview{display:flex;align-items:center;gap:8px;margin-top:7px}
+.envelopePreview img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid var(--line);background:#fff}
+@media(max-width:620px){.envelopeSuggestions{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+</style></head><body>
+<div id="authGate"><div class="loginCard"><h2>🤎內內的小倉倉🤎</h2><p>請先使用你的 Google 帳號登入</p><button class="btn primary" id="googleLogin">使用 Google 登入</button><div id="loginMsg" class="note"></div></div></div>
+<div id="app"><div class="wrap">
+<div class="authbar"><span id="userLabel"></span><button class="mini" id="logout">登出</button></div><header><h1>🤎內內的小倉倉🤎</h1><p>庫存管理</p></header>
+<section class="box"><div class="search"><input id="q" placeholder="搜尋物品，例如：珊瑚、藤編、粉色…"><button class="btn primary" id="go">搜尋</button></div><div id="grandTotal" class="stat" style="display:none;margin-top:12px"></div><div id="results"></div></section>
+<div class="stats"><div class="stat"><small>帳號數</small><b id="sa">0</b></div><div class="stat"><small>物品種類</small><b id="sk">0</b></div><div class="stat"><small>庫存總數</small><b id="sq">0</b></div><div class="stat"><small>最近更新</small><b id="su" style="font-size:13px">尚未</b></div></div>
+<div class="main"><aside class="panel"><div class="head"><h3>帳號</h3><div style="display:flex;gap:6px"><button class="btn" id="swapAccountNumbers" type="button">交換編號</button><button class="btn" id="batchA">批次新增</button><button class="btn" id="newA">＋</button></div></div><div class="accountTypeTabs"><button class="accountTypeTab active" data-account-type="一次性">一次號</button><button class="accountTypeTab" data-account-type="永久">永久號</button><button class="accountTypeTab" data-account-type="主要培養">培養號</button></div><div class="accountSearch"><input id="accountSearch" placeholder="搜尋帳號／ID"><button class="btn" id="accountSearchBtn" type="button">搜尋</button></div><div style="margin:0 0 9px">
+  <div style="display:flex;gap:6px">
+  <button class="btn" id="backupAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">💾 完整備份</button>
+  <button class="btn" id="restoreAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">♻️ 還原備份</button>
+  <input id="restoreBackupFile" type="file" accept=".json,application/json" style="display:none">
+</div>
+</div>
+<div id="accountActions" style="display:none;gap:6px;margin:0 0 9px">
+  <button class="btn" id="editAccount" type="button" style="flex:1;padding:8px 9px;font-size:12px">✏️ 修改帳號</button>
+  <button class="btn danger" id="deleteAccount" type="button" style="flex:1;padding:8px 9px;font-size:12px">🗑 刪除帳號</button>
+</div><div class="accounts" id="accounts"></div></aside>
+<main class="panel"><div class="toolbar"><button class="btn primary" id="newI">＋ 新增物品</button><button class="btn" id="importShot">📷 匯入截圖</button><button class="btn" id="openTempShots">📌 臨時截圖</button><button class="btn" id="allOverview">🧾 全帳號總覽</button></div><div class="head"><h3 id="title">請先選擇帳號</h3></div>
+<div id="loginRecordBar" style="display:none;margin:4px 0 10px">
+  <div style="font-weight:800;font-size:13px;margin-bottom:5px">登入紀錄</div>
+  <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+    <input id="loginRecordInput" placeholder="請輸入日期 / 文字" style="width:150px;padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:#fff">
+    <button class="btn" id="saveLoginRecord" type="button" style="padding:7px 10px">記錄</button><button class="btn" id="batchLoginRecord" type="button" style="padding:7px 10px">批量登入</button>
+    <span class="meta">最後登入日</span><b id="lastLoginText" style="font-size:13px"></b>
+  </div>
+</div>
+<div class="categoryTabs">
+<button class="btn catTab active" data-cat="家具">家具</button>
+<button class="btn catTab" data-cat="玩偶">玩偶</button>
+<button class="btn catTab" data-cat="花盆">花盆</button>
+<button class="btn catTab" data-cat="戒指">戒指</button>
+<button class="btn catTab" data-cat="作物">作物</button>
+<button class="btn catTab" data-cat="寵物">寵物</button>
+</div>
+<div id="resourceBox" class="box" style="display:none;margin-top:12px;padding:14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+    <div style="font-weight:800">🍬 資源紀錄</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+    <div class="field" style="margin:0"><label>糖果</label><input id="resCandy" data-resource="candy" type="number" min="0" inputmode="numeric"></div>
+    <div class="field" style="margin:0"><label>活動糖果</label><input id="resEventCandy" data-resource="eventCandy" type="number" min="0" inputmode="numeric"></div>
+    <div class="field" style="margin:0"><label>施法糖果</label><input id="resMagicCandy" data-resource="magicCandy" type="number" min="0" inputmode="numeric"></div>
+    <div class="field" style="margin:0"><label>誕生</label><input id="resBirth" data-resource="birth" type="number" min="0" inputmode="numeric"></div>
+    <div class="field" style="margin:0"><label>卡牌</label><input id="resCard" data-resource="card" type="number" min="0" inputmode="numeric"></div>
+    <div class="field" style="margin:0"><label>幸運石</label><input id="resLuckyStone" data-resource="luckyStone" type="number" min="0" inputmode="numeric"></div>
+
+    <div class="field" style="margin:0"><label>碎片月份</label><select id="resFragmentMonth"><option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option><option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option><option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option></select></div>
+    <div class="field" style="margin:0"><label>碎片數量</label><input id="resFragmentQty" type="number" min="0" inputmode="numeric"></div>
+    <div class="field" style="margin:0;grid-column:1/-1">
+      <label>釣竿</label>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 90px auto;gap:6px">
+        <input id="rodNameInput" type="text" aria-label="釣竿名稱">
+        <input id="rodQtyInput" type="number" min="1" inputmode="numeric" aria-label="釣竿數量">
+        <button class="btn" id="addRodResource" type="button" style="padding:7px 10px">＋新增</button>
+      </div>
+      <div id="rodResourceList" style="margin-top:6px"></div>
+    </div>
+    <div class="field" style="margin:0"><label>魚餌（組）</label><input id="resFishingBait" data-resource="fishingBait" type="number" min="0" inputmode="numeric" aria-label="魚餌組數"></div>
+  </div>
+</div>
+
+<div class="genderTabs" id="genderTabs" style="display:none">
+
+<button class="btn genderTab" data-gender="限男">限男</button>
+<button class="btn genderTab" data-gender="限女">限女</button>
+</div>
+<div class="items" id="items"></div><div class="note">資料會儲存在你的 Firebase Firestore；只有指定的 Google 帳號可讀寫。</div></main></div></div></div>
+
+<dialog id="tempDeleteConfirmDlg">
+  <div style="text-align:center;padding:4px 2px">
+    <div style="font-weight:900;font-size:17px;margin-bottom:8px">已加入庫存</div>
+    <div class="meta" style="font-size:13px">要把這張臨時截圖刪掉嗎？</div>
+    <div class="actions" style="justify-content:center;margin-top:16px">
+      <button class="btn" id="keepTempShot" type="button">保留截圖</button>
+      <button class="btn danger" id="deleteTempShotConfirm" type="button">刪除截圖</button>
+    </div>
+  </div>
+</dialog>
+<dialog id="overviewDlg">
+  <div class="overviewBox">
+    <div class="overviewTop">
+      <div><b>🧾 全帳號庫存總覽</b><div class="meta">相同物品會自動合併數量</div></div>
+      <div class="actions" style="margin:0">
+        <button class="btn primary" id="saveOverviewJpg" type="button">儲存 JPG</button>
+        <button class="btn" id="closeOverview" type="button">關閉</button>
+      </div>
+    </div>
+    <div class="overviewSearch">
+      <input id="overviewSearch" type="search" placeholder="搜尋總覽道具名稱／款式…">
+      <button class="btn" id="clearOverviewSearch" type="button">清除</button>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:#fffaf6">
+      <b style="font-size:12px">新增日期</b>
+      <select id="overviewDatePreset" style="padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--text)">
+        <option value="all">全部</option>
+        <option value="today">今天</option>
+        <option value="7days">近 7 天</option>
+        <option value="custom">自訂日期</option>
+      </select>
+      <div id="overviewCustomDates" style="display:none;gap:6px;align-items:center;flex-wrap:wrap">
+        <input id="overviewDateFrom" type="date" style="padding:7px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--text)">
+        <span class="meta">～</span>
+        <input id="overviewDateTo" type="date" style="padding:7px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--text)">
+      </div>
+      <span id="overviewDateNote" class="meta"></span>
+    </div>
+    <div style="margin:10px 0 14px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fffaf6">
+  <div style="font-weight:900;margin-bottom:7px">資源 ID 查詢</div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+    <select id="overviewResourceType" style="padding:8px;border:1px solid var(--line);border-radius:9px">
+      <option value="core3">誕生・卡牌・幸運石</option><option value="fragments">碎片</option><option value="fishing">釣竿・魚餌</option><option value="candies">糖果</option>
+      
+      
+    </select>
+  </div>
+  <div id="overviewResourceResults" style="margin-top:9px"></div>
+</div>
+<div id="overviewCapture" class="overviewCapture"></div>
+  </div>
+</dialog>
+<dialog id="tempShotDlg"><div id="tempShotBox" class="box tempShotBox">
+  <div class="tempShotHead">
+    <div><b>📌 臨時截圖區</b><div class="meta">先丟這裡，之後有空再慢慢整理；不會算進庫存。</div></div>
+    <button class="btn" id="addTempShots" type="button">＋ 放截圖</button>
+  </div>
+  <input id="tempShotInput" type="file" accept="image/*" multiple hidden>
+  <div id="tempShotGrid" class="tempShotGrid"></div><div class="actions"><button class="btn" id="closeTempShots" type="button">關閉</button></div></div></dialog><dialog id="swapAccountDlg"><div class="modal">
+<h3>交換帳號編號</h3>
+<div class="note" style="margin-bottom:10px">只交換兩個帳號的編號；ID、道具、資源紀錄、臨時截圖等資料都不會移動。</div>
+<div class="field"><label>第一個帳號</label><input id="swapAccountSearchA" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountA" size="5" style="width:100%;margin-top:6px"></select></div>
+<div style="text-align:center;font-weight:900">⇅</div>
+<div class="field"><label>第二個帳號</label><input id="swapAccountSearchB" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountB" size="5" style="width:100%;margin-top:6px"></select></div>
+<div id="swapAccountPreview" class="note" style="margin-top:8px"></div>
+<div class="actions"><button class="btn" id="swapAccountCancel" type="button">取消</button><button class="btn primary" id="swapAccountConfirm" type="button">確認交換</button></div>
+</div></dialog><dialog id="batchAd"><h3>批次新增帳號</h3>
+<div class="field"><label>起始編號</label><input id="ban" inputmode="text" autocapitalize="characters" placeholder="例如：A1、A2、B1 或 457"></div>
+<div class="field"><label>ID 清單</label><textarea id="baids" rows="10" placeholder="一行一個 ID，例如：&#10;ABC123&#10;ABC456&#10;ABC789" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;resize:vertical;font:inherit;color:var(--text)"></textarea><div class="note" style="margin-top:5px">一行一個 ID，會從起始編號自動依序編號。空白行會自動忽略。</div></div>
+<div class="field"><label>帳號類型</label><select id="baat"><option value="主要培養">主要培養</option><option value="一次性">一次性</option><option value="永久">永久</option></select></div>
+<div class="field"><label>角色性別</label><select id="baag"><option value="男">男</option><option value="女">女</option></select></div>
+<div id="batchPreview" class="note"></div>
+<div class="actions"><button class="btn" id="batchCancel">取消</button><button class="btn primary" id="batchSave">全部新增</button></div></dialog><dialog id="editAd"><div class="modal"><h3>修改帳號</h3><div class="field"><label>編號</label><input id="ean" placeholder="例如：A1、A2、B1 或 457"></div><div class="field"><label>ID</label><input id="eid" placeholder="遊戲 ID"></div>
+<div class="field"><label>帳號類型</label><select id="eat"><option value="主要培養">主要培養</option><option value="一次性">一次性</option><option value="永久">永久</option></select></div>
+<div class="field"><label>角色性別</label><select id="eag"><option value="男">男</option><option value="女">女</option></select></div>
+<div class="actions"><button class="btn" onclick="editAd.close()">取消</button><button class="btn primary" id="eas">儲存</button></div></div></dialog><dialog id="ad"><h3>新增帳號</h3><div class="field"><label>編號</label><input id="an" placeholder="例如：A1、A2、B1 或 457"></div><div class="field"><label>ID</label><input id="agid" placeholder="遊戲 ID"></div>
+<div class="field"><label>帳號類型</label><select id="aat"><option value="主要培養">主要培養</option><option value="一次性">一次性</option><option value="永久">永久</option></select></div>
+<div class="field"><label>角色性別</label><select id="aag"><option value="男">男</option><option value="女">女</option></select></div>
+<div class="actions"><button class="btn" onclick="ad.close()">取消</button><button class="btn primary" id="as">新增</button></div></dialog>
+<dialog id="editItemDlg"><div class="modal">
+<h3>修改道具</h3>
+<div class="field"><label>名稱</label><input id="editItemName"></div>
+<div class="field"><label>分類</label><select id="editItemCat">
+<option value="家具">家具</option>
+<option value="玩偶">玩偶</option>
+<option value="花盆">花盆</option>
+<option value="戒指">戒指</option>
+<option value="作物">作物</option>
+<option value="寵物">寵物</option>
+</select></div>
+<div class="field" id="editItemGenderField"><label>限制</label><select id="editItemGender">
+<option value="限男">限男</option><option value="限女">限女</option>
+</select></div>
+<div class="field"><label>款式／顏色</label><input id="editItemVariant"></div>
+<div class="field"><label>數量</label><input id="editItemQty" type="number" min="1"></div>
+<div class="actions"><button class="btn" id="editItemCancel">取消</button><button class="btn primary" id="editItemSave">儲存修改</button></div>
+</div></dialog>
+<dialog id="transferItemDlg"><div class="modal">
+<h3>轉移道具</h3>
+<div id="transferItemInfo" class="note" style="margin-bottom:10px"></div>
+<div class="field"><label>轉移到帳號</label><input id="transferAccountSearch" placeholder="輸入編號或 ID 搜尋" autocomplete="off"></div>
+<div class="field"><label>選擇帳號</label><select id="transferAccountTarget" size="6" style="width:100%"></select></div>
+<div class="field"><label>轉移數量</label><input id="transferItemQty" type="number" min="1" value="1"></div>
+<div class="actions"><button class="btn" id="transferItemCancel" type="button">取消</button><button class="btn primary" id="transferItemConfirm" type="button">確認轉移</button></div>
+</div></dialog><dialog id="idg"><h3>新增物品</h3><div class="field"><label>物品名稱</label><input id="in" placeholder="例如：海底珊瑚拍照區"></div><div class="field"><label>分類</label><select id="ic">
+<option value="家具">家具</option>
+<option value="玩偶">玩偶</option>
+<option value="花盆">花盆</option>
+<option value="戒指">戒指</option>
+<option value="作物">作物</option>
+<option value="寵物">寵物</option>
+</select></div>
+<div class="field" id="genderField"><label>限制</label><select id="ig">
+<option value="限男">限男</option>
+<option value="限女">限女</option>
+</select></div><div class="field" id="itemVariantField"><label>款式</label><input id="iv" placeholder="例如：綠"></div><div id="envelopeImageField"><div class="field"><label>圖片（選填；之後其他帳號輸入同名／相近名稱時可直接選用）</label><input id="envelopeImageInput" type="file" accept="image/*"><div id="envelopeImagePreview" class="envelopePreview"></div></div><div id="itemQuickTitle" class="itemQuickTitle">最近新增</div><div id="envelopeSuggestions" class="envelopeSuggestions"></div></div><div class="field"><label>數量</label><input id="iq" type="number" min="1" value="1"></div><div class="actions"><button class="btn" onclick="idg.close()">取消</button><button class="btn primary" id="is">加入庫存</button></div></dialog>
+<dialog id="shotDlg"><h3>📷 匯入 MSTAR 庫存截圖</h3>
+<div class="field"><label>目前要加入哪個帳號</label><div id="shotAccount" style="font-weight:800;padding:8px 0"></div></div>
+<div class="field"><label>辨識後加入分類</label>
+<select id="shotCategory">
+<option value="家具">家具</option><option value="玩偶">玩偶</option><option value="花盆">花盆</option><option value="戒指">戒指</option><option value="作物">作物</option><option value="寵物">寵物</option></select></div>
+<div class="field" id="shotGenderWrap" style="display:none"><label>限制</label><select id="shotGender"><option value="限男">限男</option><option value="限女">限女</option></select></div>
+<div id="dropShot" style="border:2px dashed var(--line);border-radius:16px;padding:24px;text-align:center;background:#fff;cursor:pointer">把庫存截圖拖到這裡<br><span class="meta">或點一下選擇 JPG / PNG</span><input id="shotFile" type="file" accept="image/*" hidden></div>
+<div id="shotPreview" style="display:none;margin-top:12px"><img id="shotImg" style="width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#ddd"><div class="note">依 MSTAR 固定道具卡片版型辨識；只讀道具名稱區，不把「查看詳情」、NEW、頁碼等介面文字當成道具。少量或多量道具都可辨識。</div>
+<div style="margin-top:10px;font-weight:800">辨識確認</div><div class="meta">名稱、款式與數量都可在加入前手動修正。</div><div id="recognized" style="margin-top:8px"></div></div>
+<div class="actions"><button class="btn" onclick="shotDlg.close()">取消</button><button class="btn primary" id="mockRecognize">辨識這張截圖</button><button class="btn primary" id="confirmRecognized" style="display:none">確認加入庫存</button></div></dialog>
+<dialog id="overviewOwnersDlg" style="width:min(520px,92vw)">
+<div style="text-align:center"><div id="ownerItemName" style="font-size:18px;font-weight:900"></div><div id="ownerItemMeta" class="meta" style="margin-top:4px"></div><div id="ownerSummary" style="font-weight:800;margin-top:10px"></div><div id="ownerList" class="ownerList"></div><div class="actions" style="justify-content:center;margin-top:14px"><button class="btn" id="closeOwners" type="button">關閉</button></div></div>
+</dialog>
+
+<dialog id="batchLoginDlg" style="width:min(620px,94vw)">
+  <h3 style="margin-top:0">批量登入紀錄</h3>
+  <div class="field"><label>登入日期 / 文字</label><input id="batchLoginValue" type="text"></div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin:8px 0">
+    <button class="btn" id="batchLoginSelectVisible" type="button">全選目前分類</button>
+    <button class="btn" id="batchLoginClear" type="button">取消全選</button>
+    <span class="meta" id="batchLoginCount" style="align-self:center"></span>
+  </div>
+  <div id="batchLoginAccounts" style="max-height:48vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px;background:#fff"></div>
+  <div class="actions">
+    <button class="btn" id="batchLoginClose" type="button">取消</button>
+    <button class="btn primary" id="batchLoginSave" type="button">批量記錄</button>
+  </div>
+</dialog>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyAA2CR7TLIwJ4vBK-kS6qavj93g3LvgQdU",
+  authDomain:"nene-box.firebaseapp.com",
+  projectId:"nene-box",
+  storageBucket:"nene-box.firebasestorage.app",
+  messagingSenderId:"582362181502",
+  appId:"1:582362181502:web:17f4360f56a6f8a3a80d2f"
+};
+const ADMIN_UID="zzy1kG02vkft00TTdRtfG6iMbNL2";
+const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app);
+const provider=new GoogleAuthProvider(), $=s=>document.querySelector(s);
+const ad=$("#ad"), batchAd=$("#batchAd"), idg=$("#idg"), shotDlg=$("#shotDlg"), editItemDlg=$("#editItemDlg");
+let d={accounts:[]}, active=null, currentUser=null, saving=false, activeCategory="家具", activeGender="", activeCandy="";
+let accountTypeFilter="", accountGenderFilter="";
+const e=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const legacyRef=()=>doc(db,"users",ADMIN_UID,"inventory","main");
+const metaRef=()=>doc(db,"users",ADMIN_UID,"inventory","meta");
+const accountCol=()=>collection(db,"users",ADMIN_UID,"accounts");
+const accountRef=id=>doc(db,"users",ADMIN_UID,"accounts",id);
+const memoryCol=()=>collection(db,"users",ADMIN_UID,"itemMemory");
+const memoryRef=id=>doc(db,"users",ADMIN_UID,"itemMemory",id);
+const tempShotCol=accountId=>collection(db,"users",ADMIN_UID,"accounts",accountId,"tempShots");
+const tempShotRef=(accountId,shotId)=>doc(db,"users",ADMIN_UID,"accounts",accountId,"tempShots",shotId);
+const tempShotsCache=new Map();
+let tempShotsLoadingFor="";
+let pendingTempDelete=null;
+function askDeleteTempShot(tempSource){
+  pendingTempDelete=tempSource;
+  $("#tempDeleteConfirmDlg").showModal();
+}
+$("#keepTempShot").onclick=()=>{pendingTempDelete=null;$("#tempDeleteConfirmDlg").close()};
+$("#deleteTempShotConfirm").onclick=async()=>{
+  const tempSource=pendingTempDelete;
+  pendingTempDelete=null;
+  $("#tempDeleteConfirmDlg").close();
+  if(!tempSource)return;
+  try{
+    await deleteDoc(tempShotRef(tempSource.accountId,tempSource.shotId));
+    const shots=tempShotsCache.get(tempSource.accountId)||[];
+    const remaining=shots.filter(x=>x.id!==tempSource.shotId);
+    tempShotsCache.set(tempSource.accountId,remaining);
+    await syncTempShotCount(tempSource.accountId,remaining.length);
+    render();
+    if(active===tempSource.accountId)renderTempShots(tempSource.accountId);
+  }catch(err){
+    console.error(err);
+    alert("庫存已加入，但臨時截圖刪除失敗。");
+  }
+};
+const MIGRATION_VERSION=2;
+let migrationReady=false;
+
+function cur(){return d.accounts.find(a=>a.id===active)}
+function naturalAccountCompare(a,b){
+  const av=String(a?.number||a?.name||"").trim();
+  const bv=String(b?.number||b?.name||"").trim();
+  return av.localeCompare(bv,"zh-TW",{numeric:true,sensitivity:"base"});
+}
+function sortAccountsNaturally(){ d.accounts.sort(naturalAccountCompare); }
+
+function stableMemoryId(m,index=0){
+  const raw=JSON.stringify([m?.sig||[],m?.name||"",m?.variant||"",index]);
+  let h=2166136261;
+  for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
+  return "m"+(h>>>0).toString(36)+"_"+index;
+}
+async function readSplitCloud(){
+  const [metaSnap,accountSnap,memorySnap]=await Promise.all([
+    getDoc(metaRef()), getDocs(accountCol()), getDocs(memoryCol())
+  ]);
+  const meta=metaSnap.exists()?metaSnap.data():{};
+  return {
+    accounts:accountSnap.docs.map(x=>x.data()),
+    itemMemory:memorySnap.docs.map(x=>x.data()),
+    updated:meta.updated||""
+  };
+}
+async function migrateLegacyCloud(legacy){
+  const accounts=Array.isArray(legacy.accounts)?legacy.accounts:[];
+  const memories=Array.isArray(legacy.itemMemory)?legacy.itemMemory:[];
+  // Firestore batches are limited to 500 writes; use conservative chunks.
+  const writes=[];
+  accounts.forEach((a,i)=>{
+    const id=String(a.id||crypto.randomUUID());
+    a.id=id;
+    writes.push({ref:accountRef(id),data:a});
+  });
+  memories.forEach((m,i)=>writes.push({ref:memoryRef(stableMemoryId(m,i)),data:m}));
+  writes.push({ref:metaRef(),data:{
+    schemaVersion:MIGRATION_VERSION,
+    migratedFromLegacy:true,
+    migratedAt:new Date().toISOString(),
+    updated:legacy.updated||new Date().toLocaleString("zh-TW")
+  }});
+  for(let i=0;i<writes.length;i+=400){
+    const batch=writeBatch(db);
+    writes.slice(i,i+400).forEach(w=>batch.set(w.ref,w.data));
+    await batch.commit();
+  }
+  // Verify account count before switching the app to the new storage.
+  const verify=await getDocs(accountCol());
+  if(verify.size!==accounts.length) throw new Error(`資料搬家驗證失敗：原本 ${accounts.length} 個帳號，新資料 ${verify.size} 個帳號`);
+}
+async function loadCloud(){
+  const metaSnap=await getDoc(metaRef());
+  if(metaSnap.exists()&&Number(metaSnap.data()?.schemaVersion)>=MIGRATION_VERSION){
+    d=await readSplitCloud();
+    migrationReady=true;
+  }else{
+    const legacySnap=await getDoc(legacyRef());
+    const legacy=legacySnap.exists()?legacySnap.data():{accounts:[],itemMemory:[]};
+    if(!Array.isArray(legacy.accounts))legacy.accounts=[];
+    if(!Array.isArray(legacy.itemMemory))legacy.itemMemory=[];
+    // If no legacy data exists, simply initialize the new schema.
+    if(!legacy.accounts.length&&!legacy.itemMemory.length){
+      await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:false,updated:new Date().toLocaleString("zh-TW")});
+    }else{
+      await migrateLegacyCloud(legacy);
+    }
+    d=await readSplitCloud();
+    migrationReady=true;
+  }
+  if(!Array.isArray(d.accounts))d.accounts=[];
+  if(!Array.isArray(d.itemMemory))d.itemMemory=[];
+  // 百寶箱正式版：載入時不自動改分類或刪除既有庫存資料。
+
+  // cleanupRemovedMaterials() 函式保留，不自動執行。
+  active=d.accounts[0]?.id||null;
+  render();
+  setTimeout(()=>backfillInventoryMemory(),300);
+}
+
+async function cleanupRemovedMaterials(){
+  // 「材料」分類已從網站移除：把舊帳號文件內殘留的材料物品真正刪掉，避免總覽重新讀回。
+  const changed=[];
+  for(const a of (d.accounts||[])){
+    const items=Array.isArray(a.items)?a.items:[];
+    const kept=items.filter(x=>String(x?.category||"")!=="材料");
+    if(kept.length!==items.length){a.items=kept;changed.push(a)}
+  }
+  if(!changed.length)return;
+  for(let i=0;i<changed.length;i+=400){
+    const batch=writeBatch(db);
+    changed.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),a));
+    await batch.commit();
+  }
+  d.updated=new Date().toLocaleString("zh-TW");
+  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,materialsRemoved:true,materialsRemovedAt:new Date().toISOString(),updated:d.updated},{merge:true});
+}
+async function save(){
+  if(!currentUser||!migrationReady)return;
+  d.updated=new Date().toLocaleString("zh-TW");
+  saving=true;
+  try{
+    // Accounts are separate documents, so the old 1 MiB main-document limit is gone.
+    const remote=await getDocs(accountCol());
+    const localIds=new Set((d.accounts||[]).map(a=>String(a.id)));
+    const ops=[];
+    remote.docs.forEach(x=>{if(!localIds.has(x.id))ops.push({type:"delete",ref:x.ref})});
+    (d.accounts||[]).forEach(a=>ops.push({type:"set",ref:accountRef(String(a.id)),data:a}));
+    // Recognition memory is also split into separate documents.
+    const remoteMem=await getDocs(memoryCol());
+    remoteMem.docs.forEach(x=>ops.push({type:"delete",ref:x.ref}));
+    (d.itemMemory||[]).forEach((m,i)=>ops.push({type:"set",ref:memoryRef(stableMemoryId(m,i)),data:m}));
+    // meta 在批次完成後以 merge 更新，避免清掉補記憶版本標記。
+    for(let i=0;i<ops.length;i+=400){
+      const batch=writeBatch(db);
+      ops.slice(i,i+400).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));
+      await batch.commit();
+    }
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    render();
+  }catch(err){
+    console.error(err);
+    alert("雲端儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));
+  }finally{saving=false}
+}
+function migrateCategories(){
+  (d.accounts||[]).forEach(a=>{
+    a.items=Array.isArray(a.items)?a.items:[];
+    a.resources=a.resources||{};
+    a.resources={candy:0,eventCandy:0,magicCandy:0,birth:0,card:0,luckyStone:0,fishingBait:0,fishingRods:[],fragment1:0,fragment2:0,fragment3:0,fragment4:0,fragment5:0,fragment6:0,fragment7:0,fragment8:0,fragment9:0,fragment10:0,fragment11:0,fragment12:0,...a.resources};
+    const keep=[];
+    a.items.forEach(x=>{
+      if(x.category==="糖果數量")x.category="糖果";
+      if(x.category==="糖果"){
+        const t=x.candyType||x.name||"糖果", q=Math.max(0,Number(x.qty)||0);
+        if(t==="活動糖果") a.resources.eventCandy=Math.max(Number(a.resources.eventCandy)||0,q);
+        else if(t==="施法糖果") a.resources.magicCandy=Math.max(Number(a.resources.magicCandy)||0,q);
+        else a.resources.candy=Math.max(Number(a.resources.candy)||0,q);
+      }else keep.push(x);
+    });
+    a.items=keep;
+  });
+}
+function accountHasTempShots(a){
+  if(!a)return false;
+  if(tempShotsCache.has(String(a.id)))return (tempShotsCache.get(String(a.id))||[]).length>0;
+  return Number(a.tempShotCount||0)>0;
+}
+async function syncTempShotCount(accountId,count){
+  const a=d.accounts.find(x=>String(x.id)===String(accountId)),n=Math.max(0,Number(count)||0);
+  if(a)a.tempShotCount=n;
+  try{await setDoc(accountRef(String(accountId)),{tempShotCount:n},{merge:true})}catch(err){console.error("tempShotCount sync failed",err)}
+}
+function render(){
+  migrateCategories();
+  sortAccountsNaturally();
+  let a=cur();
+  const shownAccounts=d.accounts.filter(x=>(!accountTypeFilter||(x.accountType||"主要培養")===accountTypeFilter)&&(!accountGenderFilter||(x.accountGender||"")===accountGenderFilter));
+  document.querySelectorAll(".accountTypeTab").forEach(b=>b.classList.toggle("active",(b.dataset.accountType||"")===accountTypeFilter));
+  $("#accounts").innerHTML=shownAccounts.length?shownAccounts.map(x=>`<div class="acc ${x.id===active?"active":""}" data-id="${x.id}"><span>${e(x.number||x.name||"未命名")} ${x.gameId?`｜${e(x.gameId)}`:""}${accountHasTempShots(x)?`<i class="accTempDot" title="有臨時截圖"></i>`:""}<br><small>${e(x.accountType||"主要培養")}${x.accountGender?`｜${e(x.accountGender)}`:""}</small></span><span style="display:flex;align-items:center;gap:6px"><small>${(x.items||[]).filter(i=>!noQuantityCategories.has(i.category)).reduce((n,i)=>n+(Number(i.qty)||0),0)}件</small></span></div>`).join(""):'<div class="empty">這個分類目前沒有帳號</div>';
+  document.querySelectorAll(".acc").forEach(x=>x.onclick=()=>{
+    const oldAccount=cur();
+    if(oldAccount){captureResourceInputs(oldAccount);clearTimeout(resourceSaveTimer);persistResourceAccount(String(oldAccount.id));}
+    active=x.dataset.id;render();
+  });
+  $("#title").textContent=a?`帳號 ${a.number||a.name||""}${a.gameId?`｜${a.gameId}`:""}｜物品庫`:"請先選擇帳號";
+  $("#loginRecordBar").style.display=a?"block":"none";
+  $("#lastLoginText").textContent=a?.lastLogin||"尚未記錄";
+  $("#accountActions").style.display=a?"flex":"none";$("#deleteAccount").style.display=a?"inline-block":"none";$("#editAccount").style.display=a?"inline-block":"none";
+  $("#resourceBox").style.display=a?"block":"none";
+  $("#openTempShots").style.display=a?"inline-block":"none";
+  if(a){
+    if(tempShotsCache.has(a.id))renderTempShots(a.id);
+
+    a.resources=a.resources||{};
+    a.resources={candy:0,eventCandy:0,magicCandy:0,birth:0,card:0,luckyStone:0,fishingBait:0,fishingRods:[],fragment:0,fragmentMonth:"",...a.resources};
+    $("#resCandy").value=Number(a.resources.candy)||"";
+    $("#resEventCandy").value=Number(a.resources.eventCandy)||"";
+    $("#resMagicCandy").value=Number(a.resources.magicCandy)||"";
+    $("#resBirth").value=Number(a.resources.birth)||"";
+    $("#resCard").value=Number(a.resources.card)||"";
+    $("#resLuckyStone").value=Number(a.resources.luckyStone)||"";
+    $("#resFishingBait").value=Number(a.resources.fishingBait)||"";
+    renderRodResources();
+    const fm=Math.max(1,Math.min(12,Number($("#resFragmentMonth")?.value)||1));
+    $("#resFragmentMonth").value=String(fm);
+    $("#resFragmentQty").value=Number(a.resources[`fragment${fm}`])||"";
+  }
+  const visibleItems=a ? a.items.map((x,i)=>({...x,_index:i})).filter(x=>
+    (!activeCategory || x.category===activeCategory) &&
+    (!activeGender || x.gender===activeGender) &&
+    (!activeCandy || x.candyType===activeCandy)
+  ) : [];
+  if(!a){
+    $("#items").innerHTML='<div class="empty">先新增／選擇帳號</div>';
+  }else{
+    $("#items").innerHTML=visibleItems.length?visibleItems.map(x=>`<div class="item"><div class="thumb">${x.image?`<img src="${x.image}" alt="">`:"🎁"}</div><div><h3>${e(x.name)}</h3><div class="meta">${e(x.category||"未分類")}${x.gender?"｜"+e(x.gender):""}｜${x.variant?"款式："+e(x.variant):"無款式"}</div></div><div class="itemActions"><div class="qty">× ${x.qty}</div><button class="mini transferItem" data-i="${x._index}">轉移</button><button class="mini editItem" data-i="${x._index}">修改</button><button class="mini del deleteItem" data-i="${x._index}">刪除</button></div></div>`).join(""):'<div class="empty">這個分類目前沒有物品</div>';
+  }
+  document.querySelectorAll(".transferItem").forEach(b=>b.onclick=()=>{
+    const a=cur(),i=+b.dataset.i,x=a?.items?.[i]; if(!a||!x)return;
+    transferItemDlg.dataset.sourceAccount=String(a.id);
+    transferItemDlg.dataset.index=String(i);
+    $("#transferItemInfo").textContent=`${x.name}${x.variant?"－"+x.variant:""}｜目前 ×${Number(x.qty)||1}`;
+    $("#transferItemQty").value=1;
+    $("#transferItemQty").max=Math.max(1,Number(x.qty)||1);
+    $("#transferAccountSearch").value="";
+    renderTransferTargets("");
+    transferItemDlg.showModal();
+    setTimeout(()=>$("#transferAccountSearch").focus(),30);
+  });
+  document.querySelectorAll(".editItem").forEach(b=>b.onclick=()=>{
+    const a=cur(), i=+b.dataset.i, x=a.items[i];
+    editItemDlg.dataset.index=i;
+    $("#editItemName").value=x.name||"";
+    $("#editItemCat").value=x.category||"家具";
+    $("#editItemGender").value=x.gender||"限男";
+    $("#editItemVariant").value=x.variant||"";
+    $("#editItemQty").value=x.qty||1;
+    $("#editItemGenderField").style.display=(x.category==="戒指"||x.category==="作物")?"block":"none";
+    editItemDlg.showModal();
+  });
+  document.querySelectorAll(".deleteItem").forEach(b=>b.onclick=async()=>{
+    const a=cur(),i=+b.dataset.i,x=a?.items?.[i]; if(!a||!x)return;
+    if(!confirm(`確定刪除「${x.name}${x.variant?"－"+x.variant:""}」？`))return;
+    const removed=a.items.splice(i,1)[0];
+    render();
+    try{
+      await setDoc(accountRef(String(a.id)),a);
+      d.updated=new Date().toLocaleString("zh-TW");
+      await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+      $("#su").textContent=d.updated;
+    }catch(err){
+      a.items.splice(i,0,removed);
+      render();
+      console.error(err);
+      alert("刪除失敗，已還原物品。\n"+(err?.message||String(err)));
+    }
+  });
+  let all=d.accounts.flatMap(a=>(a.items||[]).filter(x=>x.category!=="糖果"&&x.category!=="糖果數量"));
+  const inventoryTotals=all.filter(x=>!noQuantityCategories.has(x.category));
+  $("#sa").textContent=d.accounts.length;
+  $("#sk").textContent=new Set(inventoryTotals.map(x=>x.name+"|"+x.variant)).size;
+  $("#sq").textContent=inventoryTotals.reduce((n,x)=>n+(Number(x.qty)||0),0);
+  $("#su").textContent=d.updated||"尚未";
+}
+
+function renderTransferTargets(q=""){
+  const sourceId=String(transferItemDlg.dataset.sourceAccount||"");
+  q=String(q||"").trim().toLowerCase();
+  const list=d.accounts.filter(a=>String(a.id)!==sourceId).filter(a=>{
+    if(!q)return true;
+    return [a.number,a.name,a.gameId].some(v=>String(v||"").toLowerCase().includes(q));
+  });
+  $("#transferAccountTarget").innerHTML=list.slice(0,100).map(a=>`<option value="${e(String(a.id))}">${e(a.number||a.name||"未命名")}${a.gameId?`｜${e(a.gameId)}`:""}</option>`).join("");
+}
+$("#transferAccountSearch").oninput=()=>renderTransferTargets($("#transferAccountSearch").value);
+$("#transferItemCancel").onclick=()=>transferItemDlg.close();
+$("#transferItemConfirm").onclick=async()=>{
+  const sourceId=String(transferItemDlg.dataset.sourceAccount||"");
+  const source=d.accounts.find(a=>String(a.id)===sourceId);
+  const i=Number(transferItemDlg.dataset.index);
+  const item=source?.items?.[i];
+  const targetId=$("#transferAccountTarget").value;
+  const target=d.accounts.find(a=>String(a.id)===String(targetId));
+  if(!source||!item)return alert("找不到原本道具，請重新操作");
+  if(!target)return alert("請先選擇要轉入的帳號");
+  if(String(target.id)===String(source.id))return alert("不能轉移到同一個帳號");
+  const available=Math.max(1,Number(item.qty)||1);
+  const qty=Math.floor(Number($("#transferItemQty").value)||0);
+  if(qty<1||qty>available)return alert(`轉移數量請輸入 1～${available}`);
+
+  const sourceBefore=structuredClone(source.items||[]);
+  const targetBefore=structuredClone(target.items||[]);
+  const moved={...structuredClone(item),qty};
+  const same=(target.items||[]).find(x=>
+    String(x.name||"")===String(item.name||"") &&
+    String(x.category||"")===String(item.category||"") &&
+    String(x.variant||"")===String(item.variant||"") &&
+    String(x.gender||"")===String(item.gender||"") &&
+    String(x.candyType||"")===String(item.candyType||"")
+  );
+  if(same){
+    same.qty=(Number(same.qty)||0)+qty;
+    if(!same.image&&moved.image)same.image=moved.image;
+    same.lastUsedAt=Date.now();
+  }else{
+    target.items=target.items||[];
+    moved.lastUsedAt=Date.now();
+    target.items.push(moved);
+  }
+  if(qty>=available)source.items.splice(i,1);
+  else source.items[i].qty=available-qty;
+
+  render();
+  try{
+    const batch=writeBatch(db);
+    batch.set(accountRef(String(source.id)),source);
+    batch.set(accountRef(String(target.id)),target);
+    await batch.commit();
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    $("#su").textContent=d.updated;
+    transferItemDlg.close();
+  }catch(err){
+    source.items=sourceBefore;
+    target.items=targetBefore;
+    render();
+    console.error(err);
+    alert("轉移失敗，原本兩個帳號的庫存已還原。\n"+(err?.message||String(err)));
+  }
+};
+$("#editItemCat").onchange=()=>{const c=$("#editItemCat").value;$("#editItemGenderField").style.display=(c==="戒指"||c==="作物")?"block":"none"};
+$("#editItemCancel").onclick=()=>editItemDlg.close();
+$("#editItemSave").onclick=async()=>{
+  const a=cur(),i=+editItemDlg.dataset.index,x=a?.items?.[i];
+  if(!x)return;
+  const name=$("#editItemName").value.trim();
+  if(!name)return alert("請輸入道具名稱");
+  const cat=$("#editItemCat").value;
+  x.name=name;
+  x.category=cat;
+  x.gender=(cat==="戒指"||cat==="作物")?$("#editItemGender").value:"";x.candyType="";
+  x.variant=$("#editItemVariant").value.trim();
+  x.qty=Math.max(1,+$("#editItemQty").value||1);
+  await rememberItemName(x.image,x.name,x.variant);
+  editItemDlg.close();
+  await save();
+};
+document.querySelectorAll(".catTab").forEach(btn=>btn.onclick=()=>{
+  activeCategory=btn.dataset.cat||"家具";
+  activeGender=(activeCategory==="戒指"||activeCategory==="作物")?"限男":"";
+  activeCandy="";
+  document.querySelectorAll(".catTab").forEach(x=>x.classList.toggle("active",x===btn));
+  $("#genderTabs").style.display=(activeCategory==="戒指"||activeCategory==="作物")?"flex":"none";
+  
+  document.querySelectorAll(".genderTab").forEach(x=>x.classList.toggle("active",x.dataset.gender===activeGender));
+  
+  render();
+});
+$("#genderTabs").onclick=e=>{
+  const btn=e.target.closest(".genderTab"); if(!btn)return;
+  activeGender=btn.dataset.gender||"";
+  document.querySelectorAll(".genderTab").forEach(x=>x.classList.toggle("active",x===btn));
+  render();
+};
+
+document.querySelectorAll(".accountTypeTab").forEach(b=>b.addEventListener("click",()=>{
+  accountTypeFilter=b.dataset.accountType||"";
+  const visible=d.accounts.filter(x=>!accountTypeFilter||(x.accountType||"主要培養")===accountTypeFilter);
+  if(visible.length && !visible.some(x=>x.id===active)) active=visible[0].id;
+  render();
+}));
+function jumpToAccount(){
+  const input=$("#accountSearch");
+  const q=String(input?.value||"").trim().toLowerCase();
+  if(!q)return;
+  const accounts=d.accounts||[];
+  let a=accounts.find(x=>String(x.number||x.name||"").trim().toLowerCase()===q)
+    || accounts.find(x=>String(x.gameId||"").trim().toLowerCase()===q)
+    || accounts.find(x=>String(x.id||"").trim().toLowerCase()===q)
+    || accounts.find(x=>String(x.number||x.name||"").trim().toLowerCase().startsWith(q))
+    || accounts.find(x=>String(x.gameId||"").trim().toLowerCase().startsWith(q))
+    || accounts.find(x=>(String(x.number||x.name||"")+" "+String(x.gameId||"")+" "+String(x.id||"")).toLowerCase().includes(q));
+  if(!a)return alert(`找不到帳號「${input.value.trim()}」`);
+  accountTypeFilter=a.accountType||"主要培養";
+  accountGenderFilter="";
+  active=a.id;
+  render();
+  requestAnimationFrame(()=>{
+    const el=document.querySelector(`.acc[data-id="${a.id}"]`);
+    if(el)el.scrollIntoView({behavior:"smooth",block:"center"});
+  });
+}
+$("#accountSearchBtn").addEventListener("click",jumpToAccount);
+$("#accountSearch").addEventListener("keydown",ev=>{
+  if(ev.key==="Enter"){ev.preventDefault();jumpToAccount()}
+});
+let selectedEnvelopeImage="";
+function itemRecentStamp(x){
+  return Number(x?.lastUsedAt||x?.createdAt||x?.updatedAt||0)||0;
+}
+function envelopeLibrary(){
+  const map=new Map();
+  let fallbackOrder=0;
+  for(const a of (d.accounts||[]))for(const x of (a.items||[])){
+    const name=String(x.name||"").trim();
+    if(!name)continue;
+    const variant=String(x.variant||"").trim();
+    const category=String(x.category||"").trim();
+    const gender=String(x.gender||"").trim();
+    const image=String(x.image||"");
+    // 同一個道具存在很多帳號時，快捷選擇只顯示一次。
+    const key=[name,variant,category,gender].join("||");
+    const stamp=itemRecentStamp(x);
+    const old=map.get(key);
+    const row={name,variant,category,gender,image,stamp,_order:fallbackOrder++};
+    if(!old){
+      map.set(key,row);
+    }else if(stamp>old.stamp){
+      row.image=image||old.image||"";
+      map.set(key,row);
+    }else if(!old.image && image){
+      old.image=image;
+    }
+  }
+  return [...map.values()].sort((a,b)=>(b.stamp-a.stamp)||(b._order-a._order));
+}
+function applyQuickItem(x){
+  if(!x)return;
+  $("#in").value=x.name||"";
+  if(x.category && [...$("#ic").options].some(o=>o.value===x.category))$("#ic").value=x.category;
+  syncAddItemFields();
+  if(x.gender && [...$("#ig").options].some(o=>o.value===x.gender))$("#ig").value=x.gender;
+  $("#iv").value=x.variant||"";
+  selectedEnvelopeImage=x.image||"";
+  $("#envelopeImagePreview").innerHTML=x.image?`<img src="${x.image}" alt=""><span class="meta">已選用既有圖片</span>`:"<span class=\"meta\">此紀錄沒有圖片</span>";
+  renderEnvelopeSuggestions();
+}
+function renderEnvelopeSuggestions(){
+  const box=$("#envelopeSuggestions"), title=$("#itemQuickTitle"); if(!box)return;
+  const q=String($("#in").value||"").trim().toLocaleLowerCase("zh-TW");
+  const lib=envelopeLibrary();
+  let list;
+  if(q){
+    list=lib.filter(x=>
+      x.name.toLocaleLowerCase("zh-TW").includes(q) ||
+      String(x.variant||"").toLocaleLowerCase("zh-TW").includes(q)
+    ).slice(0,24);
+    if(title)title.textContent=list.length?"符合的既有物品":"沒有找到既有物品";
+  }else{
+    // Old items may not yet have timestamps, so preserve a useful fallback ordering.
+    list=lib.slice(0,12);
+    if(title)title.textContent="最近新增";
+  }
+  box.innerHTML=list.map((x,i)=>`<button type="button" class="envelopeChoice" data-env-i="${i}">${x.image?`<img src="${x.image}" alt="">`:`<span class="noPic">🎁</span>`}<b>${e(x.name)}${x.variant?`－${e(x.variant)}`:""}</b>${x.category?`<small>${e(x.category)}</small>`:""}</button>`).join("");
+  box.querySelectorAll("[data-env-i]").forEach(b=>b.onclick=()=>applyQuickItem(list[+b.dataset.envI]));
+}
+function syncAddItemFields(){
+  const c=$("#ic").value;
+  $("#genderField").style.display=(c==="作物"||c==="戒指")?"block":"none";
+  $("#envelopeImageField").style.display="block";
+  renderEnvelopeSuggestions();
+}
+$("#ic").onchange=syncAddItemFields;
+$("#in").addEventListener("input",()=>{
+  const name=$("#in").value.trim();
+  const exact=envelopeLibrary().filter(x=>x.name===name);
+  if(exact.length===1){
+    selectedEnvelopeImage=exact[0].image||"";
+    if(exact[0].variant&&!$("#iv").value.trim())$("#iv").value=exact[0].variant;
+    $("#envelopeImagePreview").innerHTML=exact[0].image?`<img src="${exact[0].image}" alt=""><span class="meta">找到同名圖片</span>`:"";
+  }else if(!name){
+    selectedEnvelopeImage="";
+    $("#envelopeImagePreview").innerHTML="";
+  }
+  renderEnvelopeSuggestions();
+});
+$("#envelopeImageInput").onchange=async e=>{
+  const f=e.target.files?.[0];if(!f)return;
+  try{
+    selectedEnvelopeImage=await compressTempShot(f);
+    $("#envelopeImagePreview").innerHTML=`<img src="${selectedEnvelopeImage}" alt=""><span class="meta">新圖片</span>`;
+  }catch(err){
+    alert("圖片處理失敗｜"+(err?.message||String(err)));
+  }
+};
+function batchIds(){return $("#baids").value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
+function parseAccountNumber(value){
+  const raw=String(value||"").trim();
+  const m=raw.match(/^([^0-9]*)([0-9]+)$/);
+  if(!m)return null;
+  return {prefix:m[1],number:Number(m[2]),width:m[2].length};
+}
+function accountNumberAt(startValue,offset=0){
+  const p=parseAccountNumber(startValue); if(!p)return null;
+  const n=p.number+offset;
+  return p.prefix+(p.width>1?String(n).padStart(p.width,"0"):String(n));
+}
+function updateBatchPreview(){
+  const raw=$("#ban").value.trim(),ids=batchIds(),start=accountNumberAt(raw,0);
+  if(!start||!ids.length){$("#batchPreview").textContent="";return}
+  const end=accountNumberAt(raw,ids.length-1);
+  $("#batchPreview").textContent=`將新增 ${ids.length} 個帳號：${start}${ids.length>1?` ～ ${end}`:""}`;
+}
+
+function swapAccountLabel(a){
+  return `${a.number||a.name||"未命名"}${a.gameId?"｜"+a.gameId:""}`;
+}
+function renderSwapAccountOptions(which,q=""){
+  q=String(q||"").trim().toLowerCase();
+  const sel=$(which==="A"?"#swapAccountA":"#swapAccountB");
+  const list=d.accounts.filter(a=>!q||[a.number,a.name,a.gameId].some(v=>String(v||"").toLowerCase().includes(q)));
+  sel.innerHTML=list.slice(0,120).map(a=>`<option value="${e(String(a.id))}">${e(swapAccountLabel(a))}</option>`).join("");
+  renderSwapAccountPreview();
+}
+function renderSwapAccountPreview(){
+  const a=d.accounts.find(x=>String(x.id)===String($("#swapAccountA")?.value||""));
+  const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB")?.value||""));
+  $("#swapAccountPreview").textContent=(a&&b&&a.id!==b.id)
+    ? `交換後：${b.number||b.name||"未命名"} → ${a.gameId||a.name||"原帳號"}　｜　${a.number||a.name||"未命名"} → ${b.gameId||b.name||"原帳號"}`
+    : "請選擇兩個不同帳號";
+}
+$("#swapAccountNumbers").onclick=()=>{
+  $("#swapAccountSearchA").value="";$("#swapAccountSearchB").value="";
+  renderSwapAccountOptions("A");renderSwapAccountOptions("B");
+  swapAccountDlg.showModal();
+};
+$("#swapAccountSearchA").oninput=()=>renderSwapAccountOptions("A",$("#swapAccountSearchA").value);
+$("#swapAccountSearchB").oninput=()=>renderSwapAccountOptions("B",$("#swapAccountSearchB").value);
+$("#swapAccountA").onchange=renderSwapAccountPreview;
+$("#swapAccountB").onchange=renderSwapAccountPreview;
+$("#swapAccountCancel").onclick=()=>swapAccountDlg.close();
+$("#swapAccountConfirm").onclick=async()=>{
+  const a=d.accounts.find(x=>String(x.id)===String($("#swapAccountA").value));
+  const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB").value));
+  if(!a||!b)return alert("請選擇兩個帳號");
+  if(String(a.id)===String(b.id))return alert("請選擇兩個不同帳號");
+  const an=a.number,bn=b.number;
+  if(!confirm(`確定交換帳號編號？\n\n${swapAccountLabel(a)}\n⇅\n${swapAccountLabel(b)}\n\n只會交換編號，其他資料完全不變。`))return;
+  a.number=bn;b.number=an;
+  render();
+  try{
+    const batch=writeBatch(db);
+    batch.set(accountRef(String(a.id)),{number:a.number},{merge:true});
+    batch.set(accountRef(String(b.id)),{number:b.number},{merge:true});
+    batch.commit && await batch.commit();
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    $("#su").textContent=d.updated;
+    swapAccountDlg.close();
+  }catch(err){
+    a.number=an;b.number=bn;render();
+    console.error(err);
+    alert("交換失敗，編號已恢復原狀。\n"+(err?.message||String(err)));
+  }
+};
+$("#batchA").onclick=()=>{
+  $("#ban").value="";
+  $("#baids").value="";$("#batchPreview").textContent="";batchAd.showModal();
+};
+$("#ban").oninput=updateBatchPreview;$("#baids").oninput=updateBatchPreview;
+$("#batchCancel").onclick=()=>batchAd.close();
+$("#batchSave").onclick=async()=>{
+  const rawStart=$("#ban").value.trim(),ids=batchIds();
+  if(!parseAccountNumber(rawStart))return alert("請輸入起始編號，例如 A1、B1 或 457");
+  if(!ids.length)return alert("請貼上至少一個 ID");
+  const newNumbers=ids.map((_,i)=>accountNumberAt(rawStart,i));
+  const existingNumbers=new Set((d.accounts||[]).map(a=>String(a.number||a.name||"")));
+  const existingIds=new Set((d.accounts||[]).map(a=>String(a.gameId||"").trim()).filter(Boolean));
+  const dupNumber=newNumbers.find(n=>existingNumbers.has(n));
+  if(dupNumber)return alert(`編號 ${dupNumber} 已經存在，請確認起始編號。`);
+  const dupInput=ids.find((id,i)=>ids.indexOf(id)!==i);
+  if(dupInput)return alert(`ID「${dupInput}」在這次貼上的清單中重複了。`);
+  const dupExisting=ids.find(id=>existingIds.has(id));
+  if(dupExisting)return alert(`ID「${dupExisting}」已經存在倉庫中。`);
+  const type=$("#baat").value,gender=$("#baag").value;
+  ids.forEach((gid,i)=>{const n=newNumbers[i];d.accounts.push({id:crypto.randomUUID(),name:n,number:n,gameId:gid,accountType:type,accountGender:gender,resources:{candy:0,eventCandy:0,magicCandy:0,birth:0,card:0,luckyStone:0,fragment1:0,fragment2:0,fragment3:0,fragment4:0,fragment5:0,fragment6:0,fragment7:0,fragment8:0,fragment9:0,fragment10:0,fragment11:0,fragment12:0},lastLogin:"",items:[]})});
+  active=d.accounts[d.accounts.length-ids.length].id;
+  batchAd.close();await save();
+};
+$("#newA").onclick=()=>ad.showModal();
+$("#as").onclick=async()=>{let n=$("#an").value.trim(),gid=$("#agid").value.trim();if(!n)return alert("請輸入編號");let id=crypto.randomUUID();d.accounts.push({id,name:n,number:n,gameId:gid,accountType:$("#aat").value,accountGender:$("#aag").value,resources:{candy:0,eventCandy:0,magicCandy:0,birth:0,card:0,luckyStone:0,fragment1:0,fragment2:0,fragment3:0,fragment4:0,fragment5:0,fragment6:0,fragment7:0,fragment8:0,fragment9:0,fragment10:0,fragment11:0,fragment12:0},lastLogin:"",items:[]});active=id;$("#an").value="";$("#agid").value="";ad.close();await save()};
+$("#newI").onclick=()=>{if(!cur())return alert("先新增或選擇帳號");selectedEnvelopeImage="";$("#envelopeImageInput").value="";$("#envelopeImagePreview").innerHTML="";syncAddItemFields();idg.showModal()};
+$("#is").onclick=async()=>{
+  let a=cur(),cat=$("#ic").value||"家具",candyType="";
+  let n=$("#in").value.trim(),v=$("#iv").value.trim();
+  let gender=(cat==="作物"||cat==="戒指")?($("#ig").value||"限男"):"",q=Math.max(1,+$("#iq").value||1);
+  if(!n)return;
+  let same=a.items.find(x=>x.name===n&&x.variant===v&&x.category===cat&&(x.gender||"")===gender&&(x.candyType||"")===candyType);
+  const itemImage=selectedEnvelopeImage||envelopeLibrary().find(x=>x.name===n&&(!v||x.variant===v))?.image||envelopeLibrary().find(x=>x.name===n)?.image||"";
+  const nowStamp=Date.now();
+  if(same && cat==="糖果"){ same.qty=q; same.lastUsedAt=nowStamp; }
+  else if(same){same.qty+=q;same.lastUsedAt=nowStamp;if(itemImage&&!same.image)same.image=itemImage}
+  else a.items.push({name:n,category:cat,gender,candyType,variant:v,qty:q,createdAt:nowStamp,lastUsedAt:nowStamp,...(itemImage?{image:itemImage}:{})});
+  $("#in").value="";$("#iv").value="";$("#iq").value=1;selectedEnvelopeImage="";$("#envelopeImageInput").value="";$("#envelopeImagePreview").innerHTML="";
+  idg.close();
+  // 先更新畫面，不等待 Firebase，新增後立即看得到。
+  render();
+  // 只儲存目前帳號，避免每新增一件物品都重寫數百個帳號與整份圖片記憶。
+  try{
+    await setDoc(accountRef(String(a.id)),a);
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    $("#su").textContent=d.updated||"尚未";
+  }catch(err){
+    console.error(err);
+    alert("物品已顯示在畫面，但雲端儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));
+  }
+};
+$("#saveLoginRecord").onclick=async()=>{
+  const a=cur(); if(!a)return;
+  const v=$("#loginRecordInput").value.trim();
+  if(!v)return alert("請輸入登入日期或文字");
+  a.lastLogin=v; $("#loginRecordInput").value="";
+  await setDoc(accountRef(String(a.id)),a);
+  d.updated=new Date().toLocaleString("zh-TW");
+  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+  render();
+};
+
+$("#loginRecordInput").onkeydown=e=>{if(e.key==="Enter")$("#saveLoginRecord").click()};
+
+const batchLoginDlg=$("#batchLoginDlg");
+function batchLoginVisibleAccounts(){
+  return d.accounts.filter(x=>(!accountTypeFilter||(x.accountType||"主要培養")===accountTypeFilter)&&(!accountGenderFilter||(x.accountGender||"")===accountGenderFilter));
+}
+function updateBatchLoginCount(){
+  const n=document.querySelectorAll('#batchLoginAccounts input[type="checkbox"]:checked').length;
+  $("#batchLoginCount").textContent=`已選 ${n} 個帳號`;
+}
+function renderBatchLoginAccounts(selectAll=false){
+  const rows=batchLoginVisibleAccounts();
+  $("#batchLoginAccounts").innerHTML=rows.length?rows.map(a=>`
+    <label style="display:flex;align-items:center;gap:9px;padding:8px 7px;border-bottom:1px solid #eee5df;cursor:pointer">
+      <input type="checkbox" class="batchLoginCheck" value="${e(a.id)}" ${selectAll?"checked":""}>
+      <span><b>${e(a.number||a.name||"未命名")}</b>${a.gameId?`｜${e(a.gameId)}`:""}<br><small class="meta">最後登入：${e(a.lastLogin||"尚未記錄")}</small></span>
+    </label>`).join(""):'<div class="empty">目前分類沒有帳號</div>';
+  document.querySelectorAll(".batchLoginCheck").forEach(x=>x.onchange=updateBatchLoginCount);
+  updateBatchLoginCount();
+}
+$("#batchLoginRecord").onclick=()=>{
+  const v=$("#loginRecordInput").value.trim();
+  $("#batchLoginValue").value=v || new Date().toLocaleDateString("zh-TW");
+  renderBatchLoginAccounts(false);
+  batchLoginDlg.showModal();
+};
+$("#batchLoginClose").onclick=()=>batchLoginDlg.close();
+$("#batchLoginSelectVisible").onclick=()=>{
+  document.querySelectorAll(".batchLoginCheck").forEach(x=>x.checked=true);
+  updateBatchLoginCount();
+};
+$("#batchLoginClear").onclick=()=>{
+  document.querySelectorAll(".batchLoginCheck").forEach(x=>x.checked=false);
+  updateBatchLoginCount();
+};
+$("#batchLoginSave").onclick=async()=>{
+  const value=$("#batchLoginValue").value.trim();
+  const ids=[...document.querySelectorAll(".batchLoginCheck:checked")].map(x=>x.value);
+  if(!value)return alert("請輸入登入日期或文字");
+  if(!ids.length)return alert("請至少選擇一個帳號");
+  const btn=$("#batchLoginSave"); btn.disabled=true; btn.textContent="儲存中…";
+  try{
+    const chosen=d.accounts.filter(a=>ids.includes(String(a.id)));
+    chosen.forEach(a=>a.lastLogin=value);
+    for(let i=0;i<chosen.length;i+=400){
+      const batch=writeBatch(db);
+      chosen.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),a));
+      await batch.commit();
+    }
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    batchLoginDlg.close();
+    render();
+  }catch(err){
+    console.error(err);
+    alert("批量登入紀錄失敗｜"+(err?.message||String(err)));
+  }finally{
+    btn.disabled=false; btn.textContent="批量記錄";
+  }
+};
+
+
+function ensureRodResources(a){
+  a.resources=a.resources||{};
+  if(!Array.isArray(a.resources.fishingRods))a.resources.fishingRods=[];
+  return a.resources.fishingRods;
+}
+function renderRodResources(){
+  const box=$("#rodResourceList"),a=cur();
+  if(!box)return;
+  if(!a){box.innerHTML="";return}
+  const rods=ensureRodResources(a);
+  box.innerHTML=rods.length?rods.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:7px;padding:5px 7px;margin-top:5px;border:1px solid var(--line);border-radius:9px;background:#fff">
+      <span style="flex:1;font-weight:800">${e(r.name||"")}</span>
+      <span>×${Math.max(0,Number(r.qty)||0)}</span>
+      <button class="mini del rodDelete" data-i="${i}" type="button">刪除</button>
+    </div>`).join(""):'<div class="meta">尚未新增釣竿</div>';
+  box.querySelectorAll(".rodDelete").forEach(btn=>btn.onclick=async()=>{
+    const a=cur(); if(!a)return;
+    ensureRodResources(a).splice(Number(btn.dataset.i),1);
+    renderRodResources();
+    await setDoc(accountRef(String(a.id)),a);
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    $("#su").textContent=d.updated;
+  });
+}
+$("#addRodResource").onclick=async()=>{
+  const a=cur(); if(!a)return;
+  const name=String($("#rodNameInput").value||"").trim();
+  const qty=Math.max(1,Math.floor(Number($("#rodQtyInput").value)||1));
+  if(!name)return alert("請輸入釣竿名稱");
+  const rods=ensureRodResources(a);
+  const found=rods.find(r=>String(r.name||"").trim().toLocaleLowerCase("zh-TW")===name.toLocaleLowerCase("zh-TW"));
+  if(found)found.qty=Math.max(0,Number(found.qty)||0)+qty;
+  else rods.push({name,qty});
+  $("#rodNameInput").value=""; $("#rodQtyInput").value="";
+  renderRodResources();
+  await setDoc(accountRef(String(a.id)),a);
+  d.updated=new Date().toLocaleString("zh-TW");
+  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+  $("#su").textContent=d.updated;
+};
+$("#rodNameInput").addEventListener("keydown",ev=>{if(ev.key==="Enter")$("#addRodResource").click()});
+$("#rodQtyInput").addEventListener("keydown",ev=>{if(ev.key==="Enter")$("#addRodResource").click()});
+
+let resourceSaveTimer=null,resourceSaveSeq=0,resourcePendingAccountId=null;
+function captureResourceInputs(a){
+  if(!a)return;
+  a.resources=a.resources||{};
+  document.querySelectorAll("#resourceBox input[data-resource]").forEach(inp=>{
+    a.resources[inp.dataset.resource]=Math.max(0,Math.floor(Number(inp.value)||0));
+  });
+  const month=Math.max(1,Math.min(12,Number($("#resFragmentMonth").value)||1));
+  a.resources[`fragment${month}`]=Math.max(0,Math.floor(Number($("#resFragmentQty").value)||0));
+}
+async function persistResourceAccount(accountId){
+  const a=d.accounts.find(x=>String(x.id)===String(accountId));
+  if(!a)return;
+  const seq=++resourceSaveSeq;
+  try{
+    await setDoc(accountRef(String(a.id)),a);
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    if(seq===resourceSaveSeq)$("#su").textContent=d.updated;
+  }catch(err){
+    console.error(err);
+    alert("資源儲存失敗｜"+(err?.message||String(err)));
+  }
+}
+function queueResourceSave(){
+  const a=cur(); if(!a)return;
+  captureResourceInputs(a);
+  const id=String(a.id);
+  resourcePendingAccountId=id;
+  clearTimeout(resourceSaveTimer);
+  resourceSaveTimer=setTimeout(()=>{resourcePendingAccountId=null;persistResourceAccount(id)},180);
+}
+function flushResourceSave(){
+  const a=cur(); if(!a)return;
+  captureResourceInputs(a);
+  const id=String(a.id);
+  clearTimeout(resourceSaveTimer);
+  resourcePendingAccountId=null;
+  persistResourceAccount(id);
+}
+document.querySelectorAll("#resourceBox input[data-resource]").forEach(inp=>{
+  inp.addEventListener("input",queueResourceSave);
+  inp.addEventListener("change",flushResourceSave);
+});
+$("#resFragmentQty").addEventListener("input",queueResourceSave);
+$("#resFragmentQty").addEventListener("change",flushResourceSave);
+$("#resFragmentMonth").addEventListener("change",()=>{
+  const a=cur(); if(!a)return;
+  captureResourceInputs(a);
+  const month=Math.max(1,Math.min(12,Number($("#resFragmentMonth").value)||1));
+  $("#resFragmentMonth").dataset.previousMonth=String(month);
+  $("#resFragmentQty").value=Number(a.resources?.[`fragment${month}`])||"";
+  persistResourceAccount(String(a.id));
+});
+
+function search(){
+  // 每次搜尋都重新讀取目前輸入值與最新庫存，不沿用上一次結果。
+  const input=$("#q");
+  const results=$("#results");
+  const grandTotal=$("#grandTotal");
+  const raw=String(input?.value||"").trim();
+  const q=raw.toLocaleLowerCase("zh-TW");
+
+  // 先清掉上一輪搜尋畫面，確保可連續搜尋任意次。
+  results.innerHTML="";
+  results.style.display="none";
+  grandTotal.innerHTML="";
+  grandTotal.style.display="none";
+
+  if(!q)return;
+  const r=[];
+  d.accounts.forEach(a=>(a.items||[]).forEach(x=>{
+    const hay=[x.name,x.variant,x.category,x.gender,x.candyType].filter(Boolean).join(" ").toLowerCase();
+    if(hay.includes(q)) r.push({account:a.name||a.number||"",gameId:a.gameId||"",...x});
+  }));
+  const totalable=r.filter(x=>!noQuantityCategories.has(x.category));
+  const total=totalable.reduce((n,x)=>n+(Number(x.qty)||0),0);
+  const maleTotal=totalable.filter(x=>x.gender==="限男").reduce((n,x)=>n+(Number(x.qty)||0),0);
+  const femaleTotal=totalable.filter(x=>x.gender==="限女").reduce((n,x)=>n+(Number(x.qty)||0),0);
+  const hasOnlySeparateQty=r.length>0&&!totalable.length;
+
+  const groups=new Map();
+  r.forEach(x=>{
+    const key=[x.name||"",x.variant||"",x.category||"",x.gender||""].join("|");
+    const g=groups.get(key)||{...x,qty:0};
+    g.qty+=(Number(x.qty)||0);
+    groups.set(key,g);
+  });
+
+  $("#grandTotal").innerHTML=`<b>🔎「${e(raw)}」搜尋結果</b>
+    <div class="total" style="font-size:18px;margin-top:8px">共 ${r.length} 筆紀錄${hasOnlySeparateQty?"":"｜總數量 "+total+" 個"}</div>
+    ${(maleTotal||femaleTotal)?`<div class="meta" style="margin-top:5px">限男：${maleTotal} 個　｜　限女：${femaleTotal} 個</div>`:""}`;
+  $("#grandTotal").style.display="block";
+
+  if(!r.length){
+    $("#results").innerHTML='<div class="empty">找不到符合的道具</div>';
+  }else{
+    const summary=[...groups.values()].map(x=>`<div class="row"><span>${e(x.name||"未命名")}${x.variant?"－"+e(x.variant):""}｜${e(x.category||"未分類")}${x.gender?"／"+e(x.gender):""}</span><b>共 × ${x.qty}</b></div>`).join("");
+    const details=r.map(x=>`<div class="row"><span>${e(x.account)}${x.gameId?"｜"+e(x.gameId):""}｜${e(x.name||"未命名")}${x.variant?"－"+e(x.variant):""}</span><b>× ${Number(x.qty)||0}</b></div>`).join("");
+    $("#results").innerHTML=`<b>道具總計</b>${summary}<div style="border-top:1px dashed var(--line);margin:10px 0"></div><b>各 ID 庫存</b>${details}`;
+  }
+  $("#results").style.display="block";
+}
+// 搜尋事件只綁定一次；每次點擊／Enter 都可重新執行，不會被前一次搜尋卡住。
+const searchButton=$("#go");
+const searchInput=$("#q");
+searchButton.type="button";
+searchButton.addEventListener("click",()=>search());
+searchInput.addEventListener("keydown",ev=>{
+  if(ev.key==="Enter"){
+    ev.preventDefault();
+    search();
+  }
+});
+// 改完關鍵字後可直接再按搜尋；清空時同步收起舊結果。
+searchInput.addEventListener("input",()=>{
+  if(!searchInput.value.trim()){
+    $("#results").innerHTML="";
+    $("#results").style.display="none";
+    $("#grandTotal").innerHTML="";
+    $("#grandTotal").style.display="none";
+  }
+});
+$("#editAccount").onclick=()=>{
+  const a=cur();
+  if(!a)return;
+  $("#ean").value=a.number||a.name||"";
+  $("#eid").value=a.gameId||"";
+  $("#eat").value=a.accountType||"主要培養";
+  $("#eag").value=a.accountGender||"男";
+  editAd.showModal();
+};
+$("#eas").onclick=async()=>{
+  const a=cur();
+  if(!a)return;
+  const n=$("#ean").value.trim(), gid=$("#eid").value.trim();
+  if(!n)return alert("請輸入編號");
+  a.number=n;
+  a.name=n;
+  a.gameId=gid;
+  a.accountType=$("#eat").value;
+  a.accountGender=$("#eag").value;
+  editAd.close();
+
+  // 先立即更新畫面，不必等 Firebase 寫入完成才看到新名稱／ID。
+  render();
+
+  // 修改帳號只儲存目前這一個帳號，避免 save() 重寫全部帳號造成延遲。
+  try{
+    await setDoc(accountRef(String(a.id)),a);
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    $("#su").textContent=d.updated;
+  }catch(err){
+    console.error(err);
+    alert("修改帳號儲存失敗｜"+(err?.message||String(err)));
+  }
+};
+
+$("#deleteAccount").onclick=async()=>{let a=cur();if(!a)return;if(confirm(`確定刪除帳號「${a.name}」？\n這會一起刪除這個帳號的庫存與臨時截圖，其他帳號不受影響。`)){try{await deleteTempShotsForAccount(a.id)}catch(err){console.error(err);return alert("刪除臨時截圖失敗，帳號尚未刪除。")}d.accounts=d.accounts.filter(x=>x.id!==a.id);active=d.accounts[0]?.id||null;await save()}};
+
+
+function renderTempShots(accountId){
+  const grid=$("#tempShotGrid");
+  if(!grid)return;
+  if(!accountId){grid.innerHTML="";return}
+  if(!tempShotsCache.has(accountId)){
+    grid.innerHTML='<div class="tempShotEmpty">讀取中…</div>';
+    return;
+  }
+  const shots=tempShotsCache.get(accountId)||[];
+  grid.innerHTML=shots.length?shots.map(x=>`<div class="tempShotCard">
+    <img src="${x.image}" alt="臨時截圖" data-shot-view="${e(x.id)}">${x._uploading?`<div class="meta" style="padding:3px 0">上傳中…</div>`:""}
+    <div style="display:flex;gap:5px;margin-top:5px"><button class="btn" type="button" data-shot-recognize="${e(x.id)}" style="flex:1;padding:6px 4px">辨識</button></div>
+    <button class="tempShotDel" type="button" data-shot-del="${e(x.id)}" title="刪除">×</button>
+  </div>`).join(""):'<div class="tempShotEmpty">還沒有臨時截圖，可以先把來不及整理的截圖丟進來。</div>';
+  grid.querySelectorAll("[data-shot-view]").forEach(img=>img.onclick=()=>{
+    const shot=shots.find(x=>x.id===img.dataset.shotView);
+    if(!shot)return;
+    const w=window.open();
+    if(w){w.document.write(`<title>臨時截圖</title><body style="margin:0;background:#211b18;display:grid;place-items:center;min-height:100vh"><img src="${shot.image}" style="max-width:100%;max-height:100vh;object-fit:contain"></body>`);w.document.close()}
+  });
+  grid.querySelectorAll("[data-shot-recognize]").forEach(btn=>btn.onclick=()=>{
+    const shot=shots.find(x=>x.id===btn.dataset.shotRecognize);
+    if(shot)openTempShotForRecognition(accountId,shot);
+  });
+  grid.querySelectorAll("[data-shot-del]").forEach(btn=>btn.onclick=async()=>{
+    const shotId=btn.dataset.shotDel;
+    if(!confirm("確定刪除這張臨時截圖？"))return;
+    try{
+      await deleteDoc(tempShotRef(accountId,shotId));
+      const remaining=shots.filter(x=>x.id!==shotId);
+      tempShotsCache.set(accountId,remaining);
+      await syncTempShotCount(accountId,remaining.length);
+      render();
+      renderTempShots(accountId);
+    }catch(err){
+      console.error(err);
+      alert("刪除臨時截圖失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));
+    }
+  });
+}
+async function loadTempShots(accountId){
+  if(!accountId)return;
+  tempShotsLoadingFor=accountId;
+  try{
+    const snap=await getDocs(tempShotCol(accountId));
+    const remote=snap.docs.map(x=>({id:x.id,...x.data()}));
+    const local=tempShotsCache.get(accountId)||[];
+    const merged=new Map();
+    [...remote,...local].forEach(x=>merged.set(String(x.id),x));
+    const shots=[...merged.values()].sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+    tempShotsCache.set(accountId,shots);
+    await syncTempShotCount(accountId,shots.length);
+    render();
+    if(active===accountId)renderTempShots(accountId);
+  }catch(err){
+    console.error(err);
+    if(active===accountId)$("#tempShotGrid").innerHTML='<div class="tempShotEmpty">臨時截圖讀取失敗，請確認 Firestore Rules 已更新。</div>';
+  }finally{
+    if(tempShotsLoadingFor===accountId)tempShotsLoadingFor="";
+  }
+}
+async function compressTempShot(file){
+  let img=null,objectUrl="";
+  try{
+    if(window.createImageBitmap) img=await createImageBitmap(file);
+  }catch(_){}
+  if(!img){
+    objectUrl=URL.createObjectURL(file);
+    img=await new Promise((resolve,reject)=>{
+      const im=new Image();
+      const timer=setTimeout(()=>reject(new Error("圖片讀取逾時")),10000);
+      im.onload=()=>{clearTimeout(timer);resolve(im)};
+      im.onerror=()=>{clearTimeout(timer);reject(new Error("圖片讀取失敗"))};
+      im.src=objectUrl;
+    });
+  }
+  const iw=img.width||img.naturalWidth,ih=img.height||img.naturalHeight;
+  const maxSide=760,scale=Math.min(1,maxSide/Math.max(iw,ih));
+  const w=Math.max(1,Math.round(iw*scale)),h=Math.max(1,Math.round(ih*scale));
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  c.getContext("2d",{alpha:false}).drawImage(img,0,0,w,h);
+  if(img.close)img.close();
+  if(objectUrl)URL.revokeObjectURL(objectUrl);
+  const blob=await new Promise(resolve=>c.toBlob(resolve,"image/jpeg",.58));
+  if(!blob)throw new Error("圖片壓縮失敗");
+  if(blob.size>430000)throw new Error("圖片壓縮後仍太大");
+  return await new Promise((resolve,reject)=>{
+    const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob);
+  });
+}
+const tempShotDlg=$("#tempShotDlg");
+$("#openTempShots").onclick=()=>{
+  const a=cur(); if(!a)return alert("先選擇帳號");
+  renderTempShots(a.id);
+  if(!tempShotsCache.has(a.id) && tempShotsLoadingFor!==a.id)loadTempShots(a.id);
+  tempShotDlg.showModal();
+};
+$("#closeTempShots").onclick=()=>tempShotDlg.close();
+$("#addTempShots").onclick=()=>{if(!cur())return alert("先選擇帳號");$("#tempShotInput").click()};
+$("#tempShotInput").onchange=ev=>{
+  const a=cur(),files=[...(ev.target.files||[])];ev.target.value="";
+  if(!a||!files.length)return;
+  const accountId=String(a.id);
+  const btn=$("#addTempShots");
+  btn.disabled=true;btn.textContent="處理中…";
+  (async()=>{
+    try{
+      let shots=[...(tempShotsCache.get(accountId)||[])];
+      for(const file of files){
+        const image=await compressTempShot(file);
+        const id=crypto.randomUUID(),createdAt=new Date().toISOString();
+        const shot={id,image,createdAt,_uploading:true};
+        shots.unshift(shot);
+        tempShotsCache.set(accountId,[...shots]);
+        const localAccount=d.accounts.find(x=>String(x.id)===accountId);
+        if(localAccount)localAccount.tempShotCount=shots.length;
+        render();
+        if(active===accountId)renderTempShots(accountId); // 先立刻看得到
+        try{
+          await setDoc(tempShotRef(accountId,id),{image,createdAt});
+          delete shot._uploading;
+          tempShotsCache.set(accountId,[...shots]);
+          await syncTempShotCount(accountId,shots.length);
+          render();
+          if(active===accountId)renderTempShots(accountId);
+        }catch(err){
+          shots=shots.filter(x=>x.id!==id);
+          tempShotsCache.set(accountId,[...shots]);
+          const localAccount=d.accounts.find(x=>String(x.id)===accountId);
+          if(localAccount)localAccount.tempShotCount=shots.length;
+          render();
+          if(active===accountId)renderTempShots(accountId);
+          throw err;
+        }
+      }
+    }catch(err){
+      console.error("temp shot upload failed",err);
+      alert("臨時截圖沒有存進 Firebase｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));
+    }finally{
+      btn.disabled=false;btn.textContent="＋ 放截圖";
+    }
+  })();
+};
+async function deleteTempShotsForAccount(accountId){
+  const snap=await getDocs(tempShotCol(accountId));
+  for(let i=0;i<snap.docs.length;i+=400){
+    const batch=writeBatch(db);
+    snap.docs.slice(i,i+400).forEach(x=>batch.delete(x.ref));
+    await batch.commit();
+  }
+  tempShotsCache.delete(accountId);
+}
+
+const noQuantityCategories=new Set(["作物","寵物"]);
+function quantityEnabled(category=activeCategory){return !noQuantityCategories.has(category)}
+let recognizedRows=[];
+function syncShotCategory(){
+  const cat=(activeCategory==="糖果"?"家具":activeCategory)||"家具";
+  $("#shotCategory").value=["家具","玩偶","花盆","戒指","作物","寵物"].includes(cat)?cat:"家具";
+  $("#shotGender").value=activeGender||"限男";
+  $("#shotGenderWrap").style.display=(["戒指","作物"].includes($("#shotCategory").value))?"block":"none";
+}
+$("#shotCategory").onchange=()=>{
+  $("#shotGenderWrap").style.display=(["戒指","作物"].includes($("#shotCategory").value))?"block":"none";
+};
+$("#importShot").onclick=()=>{if(!cur())return alert("先選擇要匯入的帳號");recognizingTempShot=null;syncShotCategory();$("#shotAccount").textContent="帳號 "+cur().name;$("#shotPreview").style.display="none";$("#confirmRecognized").style.display="none";recognizedRows=[];shotDlg.showModal()};
+$("#dropShot").onclick=()=>$("#shotFile").click();
+$("#dropShot").ondragover=e=>{e.preventDefault()};
+$("#dropShot").ondrop=e=>{e.preventDefault();if(e.dataTransfer.files[0])loadShot(e.dataTransfer.files[0])};
+$("#shotFile").onchange=e=>{if(e.target.files[0])loadShot(e.target.files[0])};
+let sourceImage=null;
+let recognizingTempShot=null;
+function setShotSource(u){
+  const img=new Image();
+  img.onload=()=>{sourceImage=img;$("#shotImg").src=u;$("#shotPreview").style.display="block";recognizedRows=[];$("#recognized").innerHTML="";$("#confirmRecognized").style.display="none"};
+  img.onerror=()=>alert("截圖讀取失敗");
+  img.src=u;
+}
+function loadShot(f){
+  recognizingTempShot=null;
+  setShotSource(URL.createObjectURL(f));
+}
+function openTempShotForRecognition(accountId,shot){
+  if(!shot?.image)return;
+  if(active!==accountId){
+    active=accountId;
+    render();
+  }
+  recognizingTempShot={accountId,shotId:shot.id};
+  syncShotCategory();
+  $("#shotAccount").textContent="帳號 "+(cur()?.name||"");
+  sourceImage=null;
+  recognizedRows=[];
+  $("#recognized").innerHTML="";
+  $("#confirmRecognized").style.display="none";
+  $("#shotPreview").style.display="none";
+  shotDlg.showModal();
+  setShotSource(shot.image);
+}
+function cropGridImage(img,index,cols=4){
+  if(!img)return "";
+  const rows=Math.ceil(16/cols), col=index%cols, row=Math.floor(index/cols);
+  const cw=img.naturalWidth/cols, ch=img.naturalHeight/rows;
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.round(cw); canvas.height=Math.round(ch);
+  const ctx=canvas.getContext("2d");
+  ctx.drawImage(img,col*cw,row*ch,cw,ch,0,0,canvas.width,canvas.height);
+  return canvas.toDataURL("image/jpeg",.88);
+}
+function drawRecognized(){
+ $("#recognized").innerHTML=recognizedRows.map((x,i)=>`<div class="recCard">
+   ${x.image?`<img class="recPic" src="${x.image}" alt="">`:`<div class="recPic" style="display:grid;place-items:center">🎁</div>`}
+   <div><div class="recFields"><input data-k="name" data-i="${i}" value="${e(x.name)}" placeholder="道具名稱" style="padding:8px;border:1px solid var(--line);border-radius:9px"><input data-k="variant" data-i="${i}" value="${e(x.variant)}" placeholder="款式" style="padding:8px;border:1px solid var(--line);border-radius:9px"><input type="number" min="1" step="1" inputmode="numeric" data-k="qty" data-i="${i}" value="${Math.max(1,Number(x.qty)||1)}" title="數量" aria-label="數量" style="padding:8px;border:1px solid var(--line);border-radius:9px"></div></div>
+   <button class="btn danger removeRec" data-i="${i}" style="padding:7px">×</button>
+ </div>`).join("");
+ document.querySelectorAll("#recognized input").forEach(el=>el.oninput=()=>{
+   const row=recognizedRows[+el.dataset.i];
+   if(el.dataset.k==="qty") row.qty=Math.max(1,Math.floor(Number(el.value)||1));
+   else row[el.dataset.k]=el.value;
+ });
+ document.querySelectorAll(".removeRec").forEach(b=>b.onclick=()=>{recognizedRows.splice(+b.dataset.i,1);drawRecognized()});
+}
+function gridLineScore(ctx,pos,vertical,W,H){
+  // Measure how much a candidate boundary behaves like a full card separator.
+  // Real separators continue through most of the screenshot; artwork edges do not.
+  const band=2, samples=72;
+  let edge=0, smooth=0;
+  for(let i=0;i<samples;i++){
+    const t=(i+.5)/samples;
+    const x=vertical?Math.max(2,Math.min(W-3,Math.round(pos))):Math.max(2,Math.min(W-3,Math.round(t*W)));
+    const y=vertical?Math.max(2,Math.min(H-3,Math.round(t*H))):Math.max(2,Math.min(H-3,Math.round(pos)));
+    const a=ctx.getImageData(vertical?x-band:x,vertical?y:y-band,1,1).data;
+    const b=ctx.getImageData(vertical?x+band:x,vertical?y:y+band,1,1).data;
+    edge+=(Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])+Math.abs(a[2]-b[2]))/3;
+    const c=ctx.getImageData(x,y,1,1).data;
+    smooth+=(c[0]+c[1]+c[2])/3;
+  }
+  return edge/samples + smooth/samples*.025;
+}
+
+function inferCardGrid(img){
+  // MSTAR 卡片本身尺寸固定，只是截圖可能是 1x / 1.25x / 1.5x / 2x 顯示縮放。
+  // 不能只看整張圖比例：4x2 與 2x1 的外框比例幾乎一樣，之前戒指因此被四格併成一格。
+  // 現在同時用「單一卡片實際尺寸、卡片比例、格線」判斷。
+  const W=img.naturalWidth,H=img.naturalHeight;
+  const probe=document.createElement("canvas"); probe.width=W;probe.height=H;
+  const ctx=probe.getContext("2d",{willReadFrequently:true});ctx.drawImage(img,0,0);
+  const baseW=123, baseH=144;
+  const scales=[.75,1,1.25,1.5,1.75,2,2.25,2.5,3];
+  let best=null;
+  for(let cols=1;cols<=4;cols++){
+    for(let rows=1;rows<=10;rows++){
+      const cw=W/cols,ch=H/rows,ratio=cw/ch;
+      if(ratio<.72||ratio>1.02)continue;
+      let sizeErr=Infinity,chosenScale=1;
+      for(const sc of scales){
+        const err=Math.abs(cw-baseW*sc)/(baseW*sc)+Math.abs(ch-baseH*sc)/(baseH*sc);
+        if(err<sizeErr){sizeErr=err;chosenScale=sc}
+      }
+      // 尺寸是主判斷。這可直接分開 984x552 的 4x2 戒指與小張 2x1 截圖。
+      let score=sizeErr*8 + Math.abs(ratio-(baseW/baseH))*2;
+      // 格線必須逐條計分，不能只取「平均」。
+      // 4x2 與 2x1 在 1x/2x 截圖時，單格尺寸會剛好成倍而產生歧義；
+      // 若只看平均分隔線，2x1 反而可能因中央那條線特別明顯而勝出。
+      // 現在改成：每一條可信的完整格線都提供獨立證據，因此 4x2 會有
+      // 3 條直線 + 1 條橫線，不會再被合併成兩個 2x2 大區塊。
+      let sep=0,n=0,boundaryEvidence=0,weakBoundaries=0;
+      const addBoundary=(v)=>{
+        sep+=v;n++;
+        if(v>=15) boundaryEvidence+=Math.min(1,(v-15)/35);
+        else weakBoundaries++;
+      };
+      for(let c=1;c<cols;c++) addBoundary(gridLineScore(ctx,c*cw,true,W,H));
+      for(let r=1;r<rows;r++) addBoundary(gridLineScore(ctx,r*ch,false,W,H));
+      if(n){
+        score-=boundaryEvidence*.34;       // 每條真的格線都加分
+        score+=weakBoundaries*.16;         // 沒有格線卻硬切，直接扣分
+      }
+      // 若兩個方案尺寸近似，讓「有更多真實格線支持」的方案勝出。
+      if(!best||score<best.score)best={cols,rows,cw,ch,score,scale:chosenScale};
+    }
+  }
+  if(best)return best;
+  const sc=W>650?2:1;
+  const cols=Math.max(1,Math.min(4,Math.round(W/(baseW*sc))));
+  const rows=Math.max(1,Math.round(H/(baseH*sc)));
+  return {cols,rows,cw:W/cols,ch:H/rows,score:99,scale:sc};
+}
+function cardLayout(){
+  const recognitionCategory=$("#shotCategory")?.value||activeCategory;
+  // Keep the complete visual card artwork. Recognition/memory later ignores UI-heavy edges,
+  // so there is no reason to crop away artwork just to avoid labels.
+  // 小圖要保留「道具圖 + 遊戲內名稱」，但不要吃到最下面的「查看詳情／刪除鍵」。
+  // 戒指/卡牌同樣保留名稱與數量條，方便光看縮圖就知道是什麼。
+  return recognitionCategory==="戒指"
+    ? {picX:.015,picY:.015,picW:.97,picH:.84,nameY:.705,nameH:.125,restrictY:0,restrictH:0}
+    : {picX:.015,picY:.015,picW:.97,picH:.835,nameY:.665,nameH:.12,restrictY:.515,restrictH:.15};
+}
+
+function cellLooksEmpty(img,col,row,g){
+  // 最後一排可能只有 1~3 個。直接檢查道具展示區的像素變化，避免把右側空白當成「待確認」。
+  const L=cardLayout(), x=col*g.cw+g.cw*L.picX, y=row*g.ch+g.ch*L.picY;
+  const sw=g.cw*L.picW, sh=g.ch*Math.min(L.picH,.62);
+  const c=document.createElement("canvas"); c.width=32;c.height=32;
+  const ctx=c.getContext("2d"); ctx.drawImage(img,x,y,sw,sh,0,0,32,32);
+  const p=ctx.getImageData(0,0,32,32).data;
+  let sum=0,sum2=0,n=0;
+  for(let i=0;i<p.length;i+=16){const v=.299*p[i]+.587*p[i+1]+.114*p[i+2];sum+=v;sum2+=v*v;n++}
+  const mean=sum/n, variance=sum2/n-mean*mean;
+  // 空格通常是低亮度、低細節背景；寧可保留可疑格，也不要漏掉真的道具。
+  return mean<55 && variance<520;
+}
+function cropRect(img,sx,sy,sw,sh,quality=.9){
+  const c=document.createElement("canvas");
+  c.width=Math.max(1,Math.round(sw)); c.height=Math.max(1,Math.round(sh));
+  c.getContext("2d").drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",quality);
+}
+function cardCrop(img,col,row,g){
+  // 縮圖保留完整道具展示區與遊戲內名稱，讓庫存小圖本身也看得出道具名稱。
+  // 最下面的「查看詳情」/刪除按鈕仍排除；圖片比對會在 imageSignature() 內只取 artwork 區，不受名稱影響。
+  const L=cardLayout(),x=col*g.cw,y=row*g.ch;
+  return cropRect(img,x+g.cw*L.picX,y+g.ch*L.picY,g.cw*L.picW,g.ch*L.picH,.98);
+}
+function cardNameCrop(img,col,row,g){
+  const L=cardLayout(),x=col*g.cw,y=row*g.ch;
+  return cropRect(img,x+g.cw*.025,y+g.ch*L.nameY,g.cw*.95,g.ch*L.nameH,1);
+}
+function cardRestrictionCrop(img,col,row,g){
+  const L=cardLayout(),x=col*g.cw,y=row*g.ch;
+  if(!L.restrictH)return cropRect(img,x,y,1,1,1);
+  return cropRect(img,x+g.cw*.18,y+g.ch*L.restrictY,g.cw*.64,g.ch*L.restrictH,1);
+}
+function quantityCropVariants(img,col,row,g){
+  const x=col*g.cw,y=row*g.ch;
+  // 數量通常位於道具卡右下區；做幾個相近裁切，讓不同分類/縮放都能讀。
+  const rects=[
+    [.62,.50,.36,.24],
+    [.66,.56,.31,.20],
+    [.58,.58,.40,.18],
+    [.70,.46,.27,.30]
+  ];
+  return rects.map(([rx,ry,rw,rh])=>{
+    const sx=x+g.cw*rx,sy=y+g.ch*ry,sw=g.cw*rw,sh=g.ch*rh;
+    const scale=7,c=document.createElement("canvas");
+    c.width=Math.max(1,Math.round(sw*scale));c.height=Math.max(1,Math.round(sh*scale));
+    const ctx=c.getContext("2d");
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+    const im=ctx.getImageData(0,0,c.width,c.height),p=im.data;
+    // 高對比灰階，保留亮字/描邊。
+    for(let i=0;i<p.length;i+=4){
+      const lum=.299*p[i]+.587*p[i+1]+.114*p[i+2];
+      const v=lum>125?255:0;
+      p[i]=p[i+1]=p[i+2]=v;
+    }
+    ctx.putImageData(im,0,0);
+    return c.toDataURL("image/png");
+  });
+}
+async function recognizeQuantity(worker,img,col,row,g){
+  const votes=[];
+  for(const crop of quantityCropVariants(img,col,row,g)){
+    try{
+      const r=await worker.recognize(crop,{tessedit_char_whitelist:"0123456789xX×"});
+      const raw=String(r?.data?.text||"").replace(/[oO]/g,"0").trim();
+      const confidence=Number(r?.data?.confidence||0);
+
+      // 數量辨識採保守策略：
+      // 沒有很明確的數字就視為 1，避免圖案/邊框被誤認成 4、7 等數字。
+      const nums=[...raw.matchAll(/\d{1,4}/g)]
+        .map(m=>Number(m[0]))
+        .filter(n=>Number.isInteger(n)&&n>=2&&n<=9999);
+      if(!nums.length||confidence<55)continue;
+
+      // 一個裁切若冒出多個互不相干數字，不採用。
+      const unique=[...new Set(nums)];
+      if(unique.length!==1)continue;
+      votes.push({qty:unique[0],confidence});
+    }catch(_){}
+  }
+
+  if(!votes.length)return 1;
+
+  // 至少兩個不同裁切都讀到同一個 >1 數量，才自動採用。
+  // 單次 OCR 猜到 4/7/1x 等，不再污染庫存。
+  const grouped=new Map();
+  for(const v of votes){
+    const a=grouped.get(v.qty)||[];
+    a.push(v.confidence); grouped.set(v.qty,a);
+  }
+  let best=null;
+  for(const [qty,conf] of grouped){
+    if(conf.length<2)continue;
+    const avg=conf.reduce((a,b)=>a+b,0)/conf.length;
+    if(avg<62)continue;
+    if(!best||conf.length>best.count||(conf.length===best.count&&avg>best.avg))
+      best={qty,count:conf.length,avg};
+  }
+  return best?best.qty:1;
+}
+function preprocessNameForOCR(img,col,row,g){
+  const L=cardLayout(),x=col*g.cw,y=row*g.ch;
+  const sx=x+g.cw*.015, sy=y+g.ch*(L.nameY-.015), sw=g.cw*.97, sh=g.ch*(L.nameH+.03);
+  const scale=6,c=document.createElement("canvas");
+  c.width=Math.max(1,Math.round(sw*scale));c.height=Math.max(1,Math.round(sh*scale));
+  const ctx=c.getContext("2d");ctx.imageSmoothingEnabled=false;ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+  const im=ctx.getImageData(0,0,c.width,c.height),p=im.data;
+  for(let i=0;i<p.length;i+=4){const lum=.299*p[i]+.587*p[i+1]+.114*p[i+2];const v=lum>145?255:0;p[i]=p[i+1]=p[i+2]=v}
+  ctx.putImageData(im,0,0);return c.toDataURL("image/png");
+}
+function ocrLooksBroken(text,confidence){
+  const t=String(text||"").trim();
+  if(!t) return true;
+  // MSTAR item names are expected to contain CJK characters. Do not present
+  // low-confidence Latin gibberish as an item name.
+  const hasCJK=/[\u3400-\u9FFF]/.test(t);
+  return !hasCJK || cjkCount(t)<2 || Number(confidence||0)<42;
+}
+function cjkCount(t){return (String(t||"").match(/[\u3400-\u9FFF]/g)||[]).length}
+async function recognizeBestName(worker,img,col,row,g){
+  const variants=[];
+  const base=preprocessNameForOCR(img,col,row,g);
+  variants.push(base);
+
+  // Second variant: enlarged original color crop. Sometimes antialiasing survives
+  // better than hard thresholding for thin Traditional Chinese strokes.
+  const x=col*g.cw, y=row*g.ch, sw=g.cw*.98, sh=g.ch*.18;
+  const raw=cropRect(img,x+g.cw*.01,y+g.ch*.675,sw,sh,1);
+  const temp=new Image();
+  await new Promise((ok,bad)=>{temp.onload=ok;temp.onerror=bad;temp.src=raw});
+  const c=document.createElement("canvas"),scale=6;
+  c.width=Math.round(temp.width*scale);c.height=Math.round(temp.height*scale);
+  const cx=c.getContext("2d");cx.imageSmoothingEnabled=false;
+  cx.drawImage(temp,0,0,c.width,c.height);
+  variants.push(c.toDataURL("image/png"));
+
+  let best={text:"",confidence:0,score:-1};
+  for(const v of variants){
+    const res=await worker.recognize(v);
+    const text=cleanItemName(res?.data?.text||"");
+    const confidence=Number(res?.data?.confidence||0);
+    const score=cjkCount(text)*18 + confidence - Math.max(0,text.length-24)*2;
+    if(score>best.score) best={text,confidence,score};
+  }
+  return best;
+}
+async function loadMemoryImage(dataUrl){
+  const img=new Image();
+  await new Promise((ok,bad)=>{img.onload=ok;img.onerror=bad;img.src=dataUrl});
+  return img;
+}
+function normalizedArtworkCanvas(img,size=32){
+  const c=document.createElement("canvas"); c.width=size;c.height=size;
+  const ctx=c.getContext("2d",{willReadFrequently:true});
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  ctx.drawImage(img,img.naturalWidth*.09,img.naturalHeight*.07,img.naturalWidth*.82,img.naturalHeight*.59,0,0,size,size);
+  return c;
+}
+async function imageSignature(dataUrl){
+  const img=await loadMemoryImage(dataUrl),c=normalizedArtworkCanvas(img,24);
+  const p=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,24,24).data,sig=[];
+  for(let i=0;i<p.length;i+=4)sig.push(Math.round(p[i]/16),Math.round(p[i+1]/16),Math.round(p[i+2]/16));
+  return sig;
+}
+async function imageMemoryFeatures(dataUrl){
+  const img=await loadMemoryImage(dataUrl),c=normalizedArtworkCanvas(img,32);
+  const p=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,32,32).data;
+  const gray=[],rgb=[];let mean=0;
+  for(let i=0;i<p.length;i+=4){const g=.299*p[i]+.587*p[i+1]+.114*p[i+2];gray.push(g);mean+=g;rgb.push(p[i],p[i+1],p[i+2])}
+  mean/=gray.length;
+  const sd=Math.sqrt(gray.reduce((n,v)=>n+(v-mean)*(v-mean),0)/gray.length)||1;
+  const shapeSig=[];
+  for(let y=1;y<31;y+=2)for(let x=1;x<31;x+=2){
+    const at=(xx,yy)=>(gray[yy*32+xx]-mean)/sd;
+    const gx=at(x+1,y)-at(x-1,y),gy=at(x,y+1)-at(x,y-1);
+    shapeSig.push(Math.round(Math.min(4,Math.sqrt(gx*gx+gy*gy))*32));
+  }
+  const hist=new Array(14).fill(0);let coloured=0,satSum=0,valSum=0;
+  for(let i=0;i<rgb.length;i+=3){
+    const r=rgb[i]/255,g=rgb[i+1]/255,b=rgb[i+2]/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,sat=mx?d/mx:0,val=mx;
+    if(sat>.10&&val>.12){
+      let h=0;
+      if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h=(h*60+360)%360}
+      hist[Math.min(11,Math.floor(h/30))]+=sat*(.35+val);coloured++;satSum+=sat;valSum+=val;
+    }
+  }
+  const total=hist.slice(0,12).reduce((a,b)=>a+b,0)||1;
+  for(let i=0;i<12;i++)hist[i]=Math.round(hist[i]/total*100);
+  hist[12]=Math.round(satSum/(coloured||1)*100);hist[13]=Math.round(valSum/(coloured||1)*100);
+  for(const [x0,y0] of [[0,0],[16,0],[0,16],[16,16]]){
+    let rs=0,gs=0,bs=0,n=0;
+    for(let y=y0;y<y0+16;y+=2)for(let x=x0;x<x0+16;x+=2){const k=(y*32+x)*3;rs+=rgb[k];gs+=rgb[k+1];bs+=rgb[k+2];n++}
+    hist.push(Math.round(rs/n/8),Math.round(gs/n/8),Math.round(bs/n/8));
+  }
+  return {shapeSig,colorSig:hist};
+}
+function vectorRmse(a,b,scale=1){
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return 999;
+  let sum=0;for(let i=0;i<a.length;i++){const d=(Number(a[i])||0)-(Number(b[i])||0);sum+=d*d}
+  return Math.sqrt(sum/a.length)/scale;
+}
+function shapeDistance(a,b){return vectorRmse(a,b,32)}
+function colorDistance(a,b){return vectorRmse(a,b,25)}
+function signatureColorProfile(sig){
+  if(!Array.isArray(sig)||sig.length<3)return null;
+  let rs=0,gs=0,bs=0,w=0;
+  for(let i=0;i+2<sig.length;i+=3){const r=+sig[i]||0,g=+sig[i+1]||0,b=+sig[i+2]||0,mx=Math.max(r,g,b),mn=Math.min(r,g,b),chroma=mx-mn;if(chroma<1.5||mx<2)continue;rs+=r*chroma;gs+=g*chroma;bs+=b*chroma;w+=chroma}
+  return w?[rs/w,gs/w,bs/w]:null;
+}
+function signatureDistance(a,b){
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return 999;
+  let sum=0;for(let i=0;i<a.length;i++){const d=a[i]-b[i];sum+=d*d}
+  const pixel=Math.sqrt(sum/a.length),ca=signatureColorProfile(a),cb=signatureColorProfile(b);
+  let colour=0;if(ca&&cb)colour=Math.sqrt(((ca[0]-cb[0])**2+(ca[1]-cb[1])**2+(ca[2]-cb[2])**2)/3);
+  return pixel+colour*.95;
+}
+async function learnedNameFor(image){
+  const [features,legacySig]=await Promise.all([imageMemoryFeatures(image),imageSignature(image)]);
+  const candidates=[];
+  for(const m of (d.itemMemory||[])){
+    let sd=999,cd=999,legacy=999;
+    if(Array.isArray(m.shapeSig))sd=shapeDistance(features.shapeSig,m.shapeSig);
+    if(Array.isArray(m.colorSig))cd=colorDistance(features.colorSig,m.colorSig);
+    if(sd===999&&Array.isArray(m.sig))legacy=signatureDistance(legacySig,m.sig);
+    if(sd<999)candidates.push({...m,shapeDist:sd,colorDist:cd,score:sd+(cd<999?cd*.38:.45)});
+    else if(legacy<999)candidates.push({...m,shapeDist:legacy/2,colorDist:legacy,score:legacy/2});
+  }
+  if(!candidates.length)return null;
+  candidates.sort((a,b)=>a.score-b.score);
+  const best=candidates[0];
+  if(best.shapeDist<=.72&&best.colorDist<=.82)return {...best,matchLevel:"exact"};
+  const shapeOnly=candidates.filter(x=>x.shapeDist<=.62).sort((a,b)=>a.shapeDist-b.shapeDist);
+  if(shapeOnly.length){
+    const first=shapeOnly[0],second=shapeOnly[1],sameNameCount=shapeOnly.filter(x=>x.name===first.name).length;
+    const margin=second?second.shapeDist-first.shapeDist:.5;
+    if(sameNameCount>=2||margin>=.16)return {...first,variant:"",matchLevel:"shape"};
+  }
+  const old=candidates.find(x=>!Array.isArray(x.shapeSig)&&x.score<=.90);
+  return old?{...old,matchLevel:"legacy"}:null;
+}
+async function rememberItemName(image,name,variant=""){
+  if(!image||!name||name==="待確認")return;
+  d.itemMemory=d.itemMemory||[];
+  const [sig,features]=await Promise.all([imageSignature(image),imageMemoryFeatures(image)]);
+  const rec={sig,shapeSig:features.shapeSig,colorSig:features.colorSig,name,variant,memoryVersion:2};
+  let duplicate=-1;
+  for(let i=0;i<d.itemMemory.length;i++){
+    const m=d.itemMemory[i];
+    if(m.name!==name||String(m.variant||"")!==String(variant||""))continue;
+    if(Array.isArray(m.shapeSig)&&Array.isArray(m.colorSig)){
+      if(shapeDistance(features.shapeSig,m.shapeSig)<=.16&&colorDistance(features.colorSig,m.colorSig)<=.18){duplicate=i;break}
+    }else if(Array.isArray(m.sig)&&signatureDistance(sig,m.sig)<=.55){duplicate=i;break}
+  }
+  if(duplicate>=0)d.itemMemory[duplicate]=rec;else d.itemMemory.push(rec);
+}
+const INVENTORY_MEMORY_BACKFILL_VERSION=2;
+let inventoryMemoryBackfillRunning=false;
+async function backfillInventoryMemory(){
+  if(inventoryMemoryBackfillRunning||!currentUser||!migrationReady)return;
+  inventoryMemoryBackfillRunning=true;
+  try{
+    const metaSnap=await getDoc(metaRef()),meta=metaSnap.exists()?metaSnap.data():{};
+    if(Number(meta.inventoryMemoryBackfillVersion||0)>=INVENTORY_MEMORY_BACKFILL_VERSION)return;
+    const candidates=[];
+    for(const a of (d.accounts||[]))for(const item of (a.items||[])){
+      if(item?.image&&String(item?.name||"").trim()&&item.name!=="待確認")candidates.push({image:item.image,name:String(item.name).trim(),variant:String(item.variant||"").trim()});
+    }
+    const newMem=[];
+    for(let i=0;i<candidates.length;i++){
+      const x=candidates[i];let sig,features;
+      try{[sig,features]=await Promise.all([imageSignature(x.image),imageMemoryFeatures(x.image)])}catch(_){continue}
+      let dup=false;
+      for(const m of [...(d.itemMemory||[]),...newMem]){
+        if(m.name!==x.name||String(m.variant||"")!==x.variant)continue;
+        if(Array.isArray(m.shapeSig)&&Array.isArray(m.colorSig)&&shapeDistance(features.shapeSig,m.shapeSig)<=.16&&colorDistance(features.colorSig,m.colorSig)<=.18){dup=true;break}
+      }
+      if(!dup)newMem.push({sig,shapeSig:features.shapeSig,colorSig:features.colorSig,name:x.name,variant:x.variant,memoryVersion:2});
+      if(i%12===11)await new Promise(r=>setTimeout(r,0));
+    }
+    if(newMem.length){
+      const base=(d.itemMemory||[]).length;
+      for(let i=0;i<newMem.length;i+=300){
+        const batch=writeBatch(db);
+        newMem.slice(i,i+300).forEach((m,j)=>batch.set(memoryRef(stableMemoryId(m,base+i+j)),m));
+        await batch.commit();
+      }
+      d.itemMemory.push(...newMem);
+    }
+    await setDoc(metaRef(),{inventoryMemoryBackfillVersion:INVENTORY_MEMORY_BACKFILL_VERSION,inventoryMemoryBackfilledAt:new Date().toISOString(),recognitionEngineVersion:2},{merge:true});
+  }catch(err){console.error("精準辨識記憶補建失敗",err)}
+  finally{inventoryMemoryBackfillRunning=false}
+}
+function cleanItemName(text){
+  let t=String(text||"")
+    .replace(/查看詳情|NEW|新品|無限制|限男|限女/gi," ")
+    .replace(/[|¦]/g," ")
+    .replace(/[—–－]+/g,"-")
+    .replace(/\s+/g," ")
+    .trim();
+  // Tesseract often inserts spaces between Chinese glyphs in tiny game text.
+  // Remove only whitespace whose neighbours are both CJK, preserving useful spaces elsewhere.
+  let prev;
+  do{
+    prev=t;
+    t=t.replace(/([\u3400-\u9FFF])\s+([\u3400-\u9FFF])/g,"$1$2");
+  }while(t!==prev);
+  return t.trim();
+}
+function looksLikeItem(text){
+  const t=cleanItemName(text).replace(/[\s\-_=~·•.，。,:：/\\()[\]{}]+/g,"");
+  return t.length>=2 && !/^(查看詳情|下一頁|上一頁|NEXT|PREV|\d+)$/.test(t);
+}
+$("#mockRecognize").onclick=async()=>{
+  if(!sourceImage)return alert("先放一張截圖");
+  const btn=$("#mockRecognize");
+  btn.disabled=true; btn.textContent="辨識中…";
+  recognizedRows=[];
+  $("#recognized").innerHTML='<div class="meta">正在依 MSTAR 實際道具格版型定位辨識…</div>';
+  $("#confirmRecognized").style.display="none";
+
+  let createWorker,worker=null;
+  try{
+    const mod=await import("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js");
+    createWorker=mod.createWorker||mod.default?.createWorker;
+    if(typeof createWorker!=="function") throw new Error("OCR 工具載入異常");
+    worker=await createWorker("chi_tra+eng",1);
+
+    const g=inferCardGrid(sourceImage);
+    const found=[];
+    for(let row=0;row<g.rows;row++){
+      for(let col=0;col<g.cols;col++){
+        if(cellLooksEmpty(sourceImage,col,row,g)) continue;
+        const bestName=await recognizeBestName(worker,sourceImage,col,row,g);
+        let name=bestName.text;
+        const confidence=bestName.confidence;
+        if(ocrLooksBroken(name,confidence)) name="";
+        if(name && !looksLikeItem(name)) name="";
+
+        // A valid card must have a plausible item-name line. This prevents
+        // buttons/page text elsewhere on the screenshot from becoming items.
+        const restrictionImg=cardRestrictionCrop(sourceImage,col,row,g);
+        let restriction="";
+        try{
+          const rr=await worker.recognize(restrictionImg);
+          const rt=String(rr?.data?.text||"");
+          if(/限男/.test(rt)) restriction="限男";
+          else if(/限女/.test(rt)) restriction="限女";
+          else if(/無限制/.test(rt)) restriction="無限制";
+        }catch(_){}
+
+        // Split the common "道具名稱-顏色" format.
+        let itemName=name,variant="";
+        const m=name.match(/^(.*?)[\-－—]\s*([^\-－—]+)$/);
+        if(m){itemName=m[1].trim();variant=m[2].trim()}
+
+        const cardImage=cardCrop(sourceImage,col,row,g);
+        const learned=await learnedNameFor(cardImage);
+        if(learned){
+          itemName=learned.name;
+          if(learned.matchLevel!=="shape"&&learned.variant)variant=learned.variant;
+          if(learned.matchLevel==="shape")variant="";
+        }
+
+        // 名稱可用記憶，但數量一定以「這一次截圖」重新辨識。
+        const detectedQty=await recognizeQuantity(worker,sourceImage,col,row,g);
+        found.push({
+          name:itemName,
+          variant,
+          restriction,
+          qty:detectedQty,
+          image:cardImage,
+          learned:!!learned
+        });
+      }
+    }
+    recognizedRows=found;
+    if(!found.length){
+      $("#recognized").innerHTML='<div class="meta">沒有辨識到道具卡片。請確認截圖包含完整的 MSTAR 道具格。</div>';
+      return;
+    }
+    drawRecognized();
+    $("#confirmRecognized").style.display="inline-block";
+  }catch(err){
+    console.error(err);
+    $("#recognized").innerHTML=`<div class="meta">OCR 辨識失敗：${e(err?.message||String(err))}</div>`;
+  }finally{
+    if(worker){try{await worker.terminate()}catch(_){}}
+    btn.disabled=false; btn.textContent="辨識這張截圖";
+  }
+};
+
+$("#confirmRecognized").onclick=async()=>{
+  const a=cur(); if(!a||!recognizedRows.length)return;
+  const btn=$("#confirmRecognized");
+  if(btn.disabled)return;
+  const oldText=btn.textContent;
+  btn.disabled=true; btn.textContent="加入中…";
+  try{
+    const cat=$("#shotCategory").value||"家具";
+    const gen=(cat==="戒指"||cat==="作物")?($("#shotGender").value||recognizedRows[0]?.restriction||"限男"):"";
+    for(const x of recognizedRows){
+      const item={name:x.name,variant:x.variant||"",category:cat,gender:gen,candyType:"",qty:Number(x.qty)||1,image:x.image||""};
+      await rememberItemName(item.image,item.name,item.variant);
+      const same=a.items.find(y=>y.name===item.name&&(y.variant||"")===item.variant&&(y.category||"")===cat&&(y.gender||"")===gen);
+      if(same){same.qty+=item.qty;if(item.image)same.image=item.image}
+      else a.items.push(item);
+    }
+    activeCategory=cat; activeGender=gen; activeCandy="";
+    const tempSource=recognizingTempShot;
+
+    // 這裡只寫目前帳號，不再因為一張截圖重寫全部 600 個帳號。
+    d.updated=new Date().toLocaleString("zh-TW");
+    await setDoc(accountRef(String(a.id)),a);
+    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+
+    // 只補上雲端缺少的辨識記憶，不刪掉整包重建。
+    const remoteMemSnap=await getDocs(memoryCol());
+    const remoteKeys=new Set(remoteMemSnap.docs.map(ds=>{
+      const m=ds.data()||{};
+      return JSON.stringify([m.sig||[],m.shapeSig||[],m.colorSig||[],m.name||"",m.variant||""]);
+    }));
+    const missing=(d.itemMemory||[]).filter(m=>!remoteKeys.has(JSON.stringify([m.sig||[],m.shapeSig||[],m.colorSig||[],m.name||"",m.variant||""])));
+    for(let i=0;i<missing.length;i+=350){
+      const batch=writeBatch(db);
+      missing.slice(i,i+350).forEach((m,j)=>{
+        const idx=(d.itemMemory||[]).indexOf(m);
+        batch.set(memoryRef(stableMemoryId(m,idx<0?i+j:idx)),m);
+      });
+      await batch.commit();
+    }
+
+    render();
+    shotDlg.close();
+
+    if(tempSource){
+      recognizingTempShot=null;
+      askDeleteTempShot(tempSource);
+    }
+  }catch(err){
+    console.error(err);
+    alert("加入庫存失敗｜"+(err?.code||"unknown")+"\\n"+(err?.message||String(err)));
+  }finally{
+    btn.disabled=false; btn.textContent=oldText;
+  }
+};
+
+$("#googleLogin").onclick=async()=>{
+  const msg=$("#loginMsg"), btn=$("#googleLogin");
+  msg.textContent="正在開啟 Google 登入…";
+  btn.disabled=true;
+  try{
+    const result=await signInWithPopup(auth,provider);
+    if(result.user.uid!==ADMIN_UID){
+      await signOut(auth);
+      msg.textContent="這個 Google 帳號沒有使用權限。";
+      return;
+    }
+    msg.textContent="登入成功，正在讀取庫存…";
+  }catch(err){
+    console.error("Google login error:",err);
+    const code=err?.code||"unknown";
+    const detail=err?.message||String(err);
+    if(code==="auth/popup-blocked"){
+      msg.textContent="登入視窗被瀏覽器擋住，正在改用頁面登入…";
+      try{
+        const {signInWithRedirect}=await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js");
+        await signInWithRedirect(auth,provider);
+        return;
+      }catch(e2){
+        console.error(e2);
+        msg.textContent="登入失敗｜"+(e2?.code||"unknown")+"｜"+(e2?.message||String(e2));
+      }
+    }else if(code==="auth/popup-closed-by-user"){
+      msg.textContent="登入視窗被關閉。請再按一次。錯誤碼："+code;
+    }else if(code==="auth/cancelled-popup-request"){
+      msg.textContent="登入要求被取消，請再按一次。錯誤碼："+code;
+    }else{
+      msg.textContent="登入失敗｜"+code+"｜"+detail;
+    }
+  }finally{
+    btn.disabled=false;
+  }
+};
+
+async function exportFullBackup(){
+  try{
+    // d contains the live warehouse state. Keep the whole state instead of
+    // hand-picking fields so future account/item/resource fields are portable too.
+    const state=JSON.parse(JSON.stringify(d||{}));
+    const payload={
+      format:"nene-items-portable-backup",
+      version:2,
+      app:"🤎內內的小倉倉🤎",
+      exportedAt:new Date().toISOString(),
+      state
+    };
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    const now=new Date(),pad=n=>String(n).padStart(2,"0");
+    const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+    a.href=url;
+    a.download=`內內的小倉倉_完整備份_${stamp}.json`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(err){
+    console.error(err);
+    alert("備份失敗，請再試一次。");
+  }
+}
+
+async function restorePortableBackup(file){
+  if(!file)return;
+  try{
+    const raw=await file.text();
+    const backup=JSON.parse(raw);
+    let state=null;
+
+    if(backup && backup.format==="nene-items-portable-backup" && backup.state){
+      state=backup.state;
+    }else if(backup && backup.format==="nene-items-backup"){
+      // Compatible with the first backup format already issued.
+      state={
+        accounts:Array.isArray(backup.accounts)?backup.accounts:[],
+        itemMemory:Array.isArray(backup.itemMemory)?backup.itemMemory:[]
+      };
+    }else{
+      throw new Error("不支援的備份格式");
+    }
+
+    if(!Array.isArray(state.accounts))throw new Error("備份中沒有帳號資料");
+
+    const ok=confirm(
+      `⚠️ 即將還原完整備份\n\n帳號：${state.accounts.length} 個\n\n`+
+      `還原會以備份內容覆蓋目前倉庫資料。\n請先確認你選的是正確的備份檔。\n\n確定要繼續嗎？`
+    );
+    if(!ok)return;
+
+    const okAgain=confirm(
+      `⚠️ 最後確認\n\n這個動作會改動 Firebase 目前的倉庫資料，並以備份檔內容進行還原。\n\n真的確定要還原嗎？`
+    );
+    if(!okAgain)return;
+
+    // Replace local state first. Preserve unknown top-level fields from the backup.
+    d=JSON.parse(JSON.stringify(state));
+    if(!Array.isArray(d.accounts))d.accounts=[];
+    if(!Array.isArray(d.itemMemory))d.itemMemory=[];
+
+    // Write accounts directly in chunks to avoid one huge batch.
+    const existingSnap=await getDocs(accountsCol());
+    const incomingIds=new Set(d.accounts.map(a=>String(a.id)));
+
+    // Delete account docs not present in the backup.
+    let ops=[];
+    for(const docSnap of existingSnap.docs){
+      if(!incomingIds.has(String(docSnap.id))){
+        ops.push({type:"delete",ref:docSnap.ref});
+      }
+    }
+    for(const a of d.accounts){
+      ops.push({type:"set",ref:accountRef(String(a.id)),data:a});
+    }
+
+    for(let i=0;i<ops.length;i+=350){
+      const batch=writeBatch(db);
+      for(const op of ops.slice(i,i+350)){
+        if(op.type==="delete")batch.delete(op.ref);
+        else batch.set(op.ref,op.data);
+      }
+      await batch.commit();
+    }
+
+    // Restore recognition memory as a replace operation when the collection helpers exist.
+    if(typeof itemMemoryCol==="function"){
+      const oldMem=await getDocs(itemMemoryCol());
+      let memOps=[];
+      for(const docSnap of oldMem.docs)memOps.push({type:"delete",ref:docSnap.ref});
+      for(const m of (d.itemMemory||[])){
+        const mid=String(m.id||m.memoryId||crypto.randomUUID());
+        memOps.push({type:"set",ref:doc(itemMemoryCol(),mid),data:{...m,id:mid}});
+      }
+      for(let i=0;i<memOps.length;i+=350){
+        const batch=writeBatch(db);
+        for(const op of memOps.slice(i,i+350)){
+          if(op.type==="delete")batch.delete(op.ref);
+          else batch.set(op.ref,op.data);
+        }
+        await batch.commit();
+      }
+    }
+
+    // Refresh metadata without relying on the old monolithic save().
+    if(typeof metaRef==="function"){
+      await setDoc(metaRef(),{
+        updated:new Date().toISOString(),
+        backupRestoreVersion:2,
+        backupRestoredAt:new Date().toISOString()
+      },{merge:true});
+    }
+
+    active=d.accounts[0]?.id||null;
+    render();
+    alert("完整備份已還原完成。");
+  }catch(err){
+    console.error(err);
+    alert("還原失敗：備份檔可能不完整或格式不相容。原檔不會被修改。");
+  }finally{
+    const input=$("#restoreBackupFile");
+    if(input)input.value="";
+  }
+}
+
+$("#backupAllData").onclick=exportFullBackup;
+$("#restoreAllData").onclick=()=>$("#restoreBackupFile").click();
+$("#restoreBackupFile").onchange=e=>restorePortableBackup(e.target.files?.[0]);
+$("#logout").onclick=()=>signOut(auth);
+getRedirectResult(auth).catch(err=>{
+  if(err) console.error("Google redirect login error:",err);
+});
+
+const overviewDlg=$("#overviewDlg");
+function overviewDateRange(){
+  const preset=$("#overviewDatePreset")?.value||"all";
+  if(preset==="all")return null;
+  const now=new Date();
+  let from=null,to=null;
+  if(preset==="today"){
+    from=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    to=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  }else if(preset==="7days"){
+    from=new Date(now.getFullYear(),now.getMonth(),now.getDate()-6);
+    to=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  }else{
+    const fv=$("#overviewDateFrom")?.value||"",tv=$("#overviewDateTo")?.value||"";
+    if(fv)from=new Date(fv+"T00:00:00");
+    if(tv){to=new Date(tv+"T00:00:00");to.setDate(to.getDate()+1)}
+    if(!from&&!to)return null;
+  }
+  return {from:from?.getTime()||null,to:to?.getTime()||null};
+}
+function overviewItemMatchesDate(item){
+  const range=overviewDateRange();
+  if(!range)return true;
+  const stamp=Number(item?.createdAt)||0;
+  if(!stamp)return false;
+  if(range.from&&stamp<range.from)return false;
+  if(range.to&&stamp>=range.to)return false;
+  return true;
+}
+function buildAllOverview(){
+  const merged=new Map();
+  for(const a of (d.accounts||[])){
+    for(const item of (a.items||[])){
+      if(!overviewItemMatchesDate(item))continue;
+      if(String(item?.category||"")==="材料")continue;
+      const name=String(item.name||"").trim();
+      if(!name)continue;
+      const category=String(item.category||"未分類");
+      const variant=String(item.variant||"").trim();
+      const gender=String(item.gender||item.restriction||"").trim();
+      const candyType=String(item.candyType||"").trim();
+      const key=[category,name,variant,gender,candyType].join("||");
+      const qty=Math.max(0,Number(item.qty)||0);
+      if(!merged.has(key))merged.set(key,{key,category,name,variant,gender,candyType,qty:0,image:item.image||"",owners:[]});
+      const rec=merged.get(key);
+      rec.qty+=qty;
+      const ownerNumber=String(a.number||a.name||"").trim();
+      const ownerGameId=String(a.gameId||"").trim();
+      const ownerKey=String(a.id||ownerNumber||ownerGameId);
+      const owner=rec.owners.find(o=>o.key===ownerKey);
+      if(owner)owner.qty+=qty;
+      else rec.owners.push({key:ownerKey,number:ownerNumber,gameId:ownerGameId,qty});
+      if(!rec.image&&item.image)rec.image=item.image;
+    }
+  }
+  const order=["家具","玩偶","花盆","戒指","作物","寵物","糖果"];
+  for(const rec of merged.values())rec.owners.sort((a,b)=>String(a.number||a.gameId||"").localeCompare(String(b.number||b.gameId||""),"zh-TW",{numeric:true,sensitivity:"base"}));
+  const rows=[...merged.values()].sort((a,b)=>{
+    const ai=order.indexOf(a.category),bi=order.indexOf(b.category);
+    if(ai!==bi)return (ai<0?999:ai)-(bi<0?999:bi);
+    return a.name.localeCompare(b.name,"zh-TW",{numeric:true});
+  });
+  return {rows,order};
+}
+function renderAllOverview(){
+  const built=buildAllOverview(),order=built.order;
+  const q=String($("#overviewSearch")?.value||"").trim().toLocaleLowerCase("zh-TW");
+  const rows=!q?built.rows:built.rows.filter(x=>
+    [x.name,x.variant,x.category,x.gender,x.candyType].some(v=>String(v||"").toLocaleLowerCase("zh-TW").includes(q))
+  );
+  const cats=[...new Set([...order,...rows.map(x=>x.category)])].filter(cat=>rows.some(x=>x.category===cat));
+  $("#overviewCapture").innerHTML=`<div class="overviewTitle">🤎 內內的小倉倉｜全帳號總覽 🤎</div>
+    <div class="overviewSub">${d.accounts.length} 個帳號｜重複物品已合併加總${q?`｜搜尋結果 ${rows.length} 種`:""}</div>`+
+    (cats.length?cats.map(cat=>{
+      const list=rows.filter(x=>x.category===cat);
+      return `<section class="overviewSection"><h4>${e(cat)}｜${list.length} 種</h4><div class="overviewGrid">${
+        list.map(x=>`<div class="overviewItem" data-overview-key="${e(x.key)}" title="點一下查看哪些 ID 有">${x.image?`<img src="${x.image}">`:""}<div class="overviewItemText"><div class="overviewItemName">${e(x.name)}</div><div class="overviewItemMeta">${[x.variant,x.gender,x.candyType].filter(Boolean).map(e).join("｜")}</div></div><div class="overviewQty">×${x.qty}</div></div>`).join("")
+      }</div></section>`;
+    }).join(""):'<div class="empty">目前沒有庫存資料</div>');
+  document.querySelectorAll("#overviewCapture .overviewItem[data-overview-key]").forEach(el=>{
+    el.onclick=()=>{const item=buildAllOverview().rows.find(x=>x.key===el.dataset.overviewKey);if(item)showOverviewOwners(item)};
+  });
+}
+function showOverviewOwners(item){
+  const owners=[...(item.owners||[])].sort((a,b)=>String(a.number||a.gameId||"").localeCompare(String(b.number||b.gameId||""),"zh-TW",{numeric:true,sensitivity:"base"}));
+  $("#ownerItemName").textContent=item.name||"";
+  $("#ownerItemMeta").textContent=[item.variant,item.category,item.gender,item.candyType].filter(Boolean).join("｜");
+  $("#ownerSummary").textContent=`${owners.length} 個 ID｜合計 ×${Number(item.qty)||0}`;
+  $("#ownerList").innerHTML=owners.length?owners.map(o=>{
+    // 直接從目前帳號資料再抓一次 ID，避免舊的總覽 owners 快取只有編號。
+    const ownerNumber=String(o.number||o.id||"").trim();
+    const exact=(d.accounts||[]).find(a=>String(a.id||"")===String(o.key||""));
+    // 若舊庫存掛在同編號的舊帳號文件（沒有 gameId），再用「編號」找目前有 ID 的帳號。
+    const byNumber=(d.accounts||[]).find(a=>
+      String(a.number||a.name||"").trim()===ownerNumber && String(a.gameId||"").trim()
+    );
+    const account=(exact&&String(exact.gameId||"").trim())?exact:(byNumber||exact);
+    const number=String(account?.number||account?.name||ownerNumber).trim();
+    const gameId=String(account?.gameId||o.gameId||"").trim();
+    const label=[number,gameId].filter(Boolean).join(" / ")||"—";
+    return `<div class="ownerRow"><span class="ownerId">${e(label)}</span><span class="ownerQty">×${Number(o.qty)||0}</span></div>`;
+  }).join(""):'<div class="empty">沒有持有帳號</div>';
+  $("#overviewOwnersDlg").showModal();
+}
+$("#closeOwners").onclick=()=>$("#overviewOwnersDlg").close();
+function renderResourceOverview(){
+  const type=$("#overviewResourceType").value;
+  const baseRows=d.accounts.map(a=>({
+    number:String(a.number||a.name||"").trim(),
+    gameId:String(a.gameId||"").trim(),
+    accountId:String(a.id||""),
+    resources:a.resources||{}
+  })).sort((a,b)=>naturalAccountCompare({number:a.number},{number:b.number}));
+  const idCells=x=>`<td>${e([x.number,x.gameId].filter(Boolean).join(" / ")||"—")}</td>`;
+
+  if(type==="core3"){
+    const rows=baseRows.map(x=>({
+      ...x,
+      birth:Math.max(0,Number(x.resources.birth)||0),
+      card:Math.max(0,Number(x.resources.card)||0),
+      luckyStone:Math.max(0,Number(x.resources.luckyStone)||0)
+    })).filter(x=>x.birth||x.card||x.luckyStone);
+    const sums=rows.reduce((o,x)=>(o.birth+=x.birth,o.card+=x.card,o.luckyStone+=x.luckyStone,o),{birth:0,card:0,luckyStone:0});
+    $("#overviewResourceResults").innerHTML=`<div class="meta" style="margin-bottom:7px">${rows.length} 個帳號｜誕生 ×${sums.birth}｜卡牌 ×${sums.card}｜幸運石 ×${sums.luckyStone}</div>`+
+      (rows.length?`<div class="resourceTableWrap"><table class="resourceTable"><thead><tr><th>編號/ID</th><th>誕生</th><th>卡牌</th><th>幸運石</th></tr></thead><tbody>${rows.map(x=>`<tr>${idCells(x)}<td class="${x.birth?"":"resourceZero"}">${x.birth}</td><td class="${x.card?"":"resourceZero"}">${x.card}</td><td class="${x.luckyStone?"":"resourceZero"}">${x.luckyStone}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">目前沒有帳號持有</div>');
+    return;
+  }
+
+  if(type==="fragments"){
+    const rows=baseRows.map(x=>({
+      ...x,
+      fragments:Array.from({length:12},(_,i)=>Math.max(0,Number(x.resources[`fragment${i+1}`])||0))
+    })).filter(x=>x.fragments.some(Boolean));
+    const total=rows.reduce((n,x)=>n+x.fragments.reduce((m,q)=>m+q,0),0);
+    $("#overviewResourceResults").innerHTML=`<div class="meta" style="margin-bottom:7px">${rows.length} 個帳號有碎片｜合計 ×${total}</div>`+
+      (rows.length?`<div class="resourceTableWrap"><table class="resourceTable"><thead><tr><th>編號/ID</th><th>碎片</th></tr></thead><tbody>${rows.map(x=>{const frag=x.fragments.map((q,i)=>q?`${i+1}月 ×${q}`:"").filter(Boolean).join("・");return `<tr>${idCells(x)}<td style="text-align:left;white-space:normal">${e(frag)}</td></tr>`}).join("")}</tbody></table></div>`:'<div class="empty">目前沒有帳號持有碎片</div>');
+    return;
+  }
+
+  if(type==="fishing"){
+    const rows=baseRows.map(x=>{
+      const rods=Array.isArray(x.resources.fishingRods)?x.resources.fishingRods:[];
+      return {...x,
+        rodText:rods.filter(r=>String(r?.name||"").trim()&&Number(r?.qty)>0).map(r=>`${String(r.name).trim()} ×${Math.max(0,Number(r.qty)||0)}`).join("・"),
+        bait:Math.max(0,Number(x.resources.fishingBait)||0)
+      };
+    }).filter(x=>x.rodText||x.bait);
+    $("#overviewResourceResults").innerHTML=`<div class="meta" style="margin-bottom:7px">${rows.length} 個帳號有釣竿／魚餌</div>`+
+      (rows.length?`<div class="resourceTableWrap"><table class="resourceTable"><thead><tr><th>編號/ID</th><th>釣竿</th><th>魚餌（組）</th></tr></thead><tbody>${rows.map(x=>`<tr>${idCells(x)}<td style="text-align:left;white-space:normal">${x.rodText?e(x.rodText):'<span class="resourceZero">—</span>'}</td><td class="${x.bait?"":"resourceZero"}">${x.bait?`${x.bait} 組`:"—"}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">目前沒有帳號持有釣竿或魚餌</div>');
+    return;
+  }
+
+  const rows=baseRows.map(x=>({...x,
+    candy:Math.max(0,Number(x.resources.candy)||0),
+    eventCandy:Math.max(0,Number(x.resources.eventCandy)||0),
+    magicCandy:Math.max(0,Number(x.resources.magicCandy)||0)
+  })).filter(x=>x.candy||x.eventCandy||x.magicCandy);
+  $("#overviewResourceResults").innerHTML=`<div class="meta" style="margin-bottom:7px">${rows.length} 個帳號有糖果資源</div>`+
+    (rows.length?`<div class="resourceTableWrap"><table class="resourceTable"><thead><tr><th>編號/ID</th><th>糖果</th><th>活動糖果</th><th>施法糖果</th></tr></thead><tbody>${rows.map(x=>`<tr>${idCells(x)}<td class="${x.candy?"":"resourceZero"}">${x.candy||"—"}</td><td class="${x.eventCandy?"":"resourceZero"}">${x.eventCandy||"—"}</td><td class="${x.magicCandy?"":"resourceZero"}">${x.magicCandy||"—"}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">目前沒有帳號持有糖果</div>');
+}
+$("#overviewResourceType").onchange=renderResourceOverview;
+$("#allOverview").onclick=()=>{$("#overviewSearch").value="";$("#overviewDatePreset").value="all";$("#overviewCustomDates").style.display="none";$("#overviewDateNote").textContent="";renderResourceOverview();renderAllOverview();overviewDlg.showModal();setTimeout(()=>$("#overviewSearch").focus(),50)};
+$("#overviewSearch").oninput=()=>renderAllOverview();
+$("#clearOverviewSearch").onclick=()=>{$("#overviewSearch").value="";renderAllOverview();$("#overviewSearch").focus()};
+$("#overviewDatePreset").onchange=()=>{
+  const custom=$("#overviewDatePreset").value==="custom";
+  $("#overviewCustomDates").style.display=custom?"flex":"none";
+  $("#overviewDateNote").textContent=$("#overviewDatePreset").value==="all"?"":"舊庫存沒有新增日期的項目不會列入";
+  renderAllOverview();
+};
+$("#overviewDateFrom").onchange=()=>renderAllOverview();
+$("#overviewDateTo").onchange=()=>renderAllOverview();
+$("#closeOverview").onclick=()=>overviewDlg.close();
+
+async function overviewImageMap(rows){
+  const map=new Map();
+  await Promise.all(rows.filter(x=>x.image).map(x=>new Promise(resolve=>{
+    const im=new Image();
+    im.onload=()=>{map.set(x.image,im);resolve()};
+    im.onerror=resolve;
+    im.src=x.image;
+  })));
+  return map;
+}
+function wrapCanvasText(ctx,text,maxWidth){
+  const chars=[...String(text||"")],lines=[];let line="";
+  for(const ch of chars){
+    const test=line+ch;
+    if(line&&ctx.measureText(test).width>maxWidth){lines.push(line);line=ch}else line=test;
+  }
+  if(line)lines.push(line);
+  return lines.length?lines:[""];
+}
+$("#saveOverviewJpg").onclick=async()=>{
+  const btn=$("#saveOverviewJpg");btn.disabled=true;btn.textContent="製作中…";
+  try{
+    const built=buildAllOverview(),order=built.order;
+    const q=String($("#overviewSearch")?.value||"").trim().toLocaleLowerCase("zh-TW");
+    const rows=!q?built.rows:built.rows.filter(x=>
+      [x.name,x.variant,x.category,x.gender,x.candyType].some(v=>String(v||"").toLocaleLowerCase("zh-TW").includes(q))
+    );
+    if(!rows.length)return alert(q?"目前搜尋不到符合的庫存":"目前沒有庫存資料");
+    const cats=[...new Set([...order,...rows.map(x=>x.category)])].filter(cat=>rows.some(x=>x.category===cat));
+    const W=1400,pad=50,cols=5,gap=12,cardW=(W-pad*2-gap*(cols-1))/cols,cardH=92;
+    let H=125;
+    for(const cat of cats){const n=rows.filter(x=>x.category===cat).length;H+=54+Math.ceil(n/cols)*(cardH+gap)+18}
+    H+=35;
+    const c=document.createElement("canvas");c.width=W;c.height=H;
+    const ctx=c.getContext("2d");
+    ctx.fillStyle="#f5e9df";ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#4d3c33";ctx.textAlign="center";ctx.font="900 30px sans-serif";
+    ctx.fillText("內內的小倉倉｜全帳號總覽",W/2,48);
+    ctx.font="16px sans-serif";ctx.globalAlpha=.72;
+    ctx.fillText(`${d.accounts.length} 個帳號｜重複物品已合併加總${q?`｜搜尋結果 ${rows.length} 種`:""}`,W/2,78);ctx.globalAlpha=1;
+    ctx.textAlign="left";
+    const images=await overviewImageMap(rows);
+    let y=112;
+    for(const cat of cats){
+      const list=rows.filter(x=>x.category===cat);
+      ctx.fillStyle="#4d3c33";ctx.font="800 21px sans-serif";ctx.fillText(`${cat}｜${list.length} 種`,pad,y+25);
+      ctx.strokeStyle="#cdb6a6";ctx.beginPath();ctx.moveTo(pad,y+37);ctx.lineTo(W-pad,y+37);ctx.stroke();y+=54;
+      for(let i=0;i<list.length;i++){
+        const x0=pad+(i%cols)*(cardW+gap),y0=y+Math.floor(i/cols)*(cardH+gap),it=list[i];
+        ctx.fillStyle="#fffaf6";ctx.strokeStyle="#d9c4b5";
+        ctx.beginPath();ctx.roundRect(x0,y0,cardW,cardH,12);ctx.fill();ctx.stroke();
+        let tx=x0+12;
+        const im=images.get(it.image);
+        if(im){ctx.drawImage(im,x0+9,y0+9,74,74);tx=x0+94}
+        ctx.fillStyle="#4d3c33";ctx.font="800 15px sans-serif";
+        const nameLines=wrapCanvasText(ctx,it.name,cardW-(tx-x0)-55).slice(0,2);
+        nameLines.forEach((line,j)=>ctx.fillText(line,tx,y0+27+j*19));
+        const meta=[it.variant,it.gender,it.candyType].filter(Boolean).join("｜");
+        if(meta){ctx.font="12px sans-serif";ctx.globalAlpha=.7;ctx.fillText(meta,tx,y0+72);ctx.globalAlpha=1}
+        ctx.textAlign="right";ctx.font="900 18px sans-serif";ctx.fillText(`×${it.qty}`,x0+cardW-10,y0+27);ctx.textAlign="left";
+      }
+      y+=Math.ceil(list.length/cols)*(cardH+gap)+18;
+    }
+    const a=document.createElement("a");a.download=`全帳號庫存總覽_${new Date().toISOString().slice(0,10)}.jpg`;a.href=c.toDataURL("image/jpeg",.92);a.click();
+  }catch(err){console.error(err);alert("總覽 JPG 製作失敗："+(err?.message||err))}
+  finally{btn.disabled=false;btn.textContent="儲存 JPG"}
+};
+onAuthStateChanged(auth,async user=>{
+  currentUser=user&&user.uid===ADMIN_UID?user:null;
+  if(!currentUser){
+    $("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();return;
+  }
+  $("#userLabel").textContent=currentUser.email||"已登入";
+  $("#authGate").classList.add("hidden");$("#app").style.visibility="visible";
+  try{await loadCloud()}catch(err){console.error(err);alert("讀取／搬移雲端庫存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err))+"\n\n舊 main 資料沒有刪除。")}
+});
+
+</script></body></html>
