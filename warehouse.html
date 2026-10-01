@@ -523,7 +523,7 @@
   <input id="tempShotInput" type="file" accept="image/*" multiple hidden>
   <div id="tempShotGrid" class="tempShotGrid"></div><div class="actions"><button class="btn" id="closeTempShots" type="button">關閉</button></div></div></dialog><dialog id="swapAccountDlg"><div class="modal">
 <h3>交換帳號資料</h3>
-<div class="note" style="margin-bottom:10px">兩個編號保持不變，整個帳號資料一起交換位置：遊戲 ID、道具、資源紀錄、臨時截圖及帳號設定都跟著搬家。</div>
+<div class="note" style="margin-bottom:10px">編號保持原位，只交換編號底下的完整帳號資料。例如 C10／Drevo 與 A31／OPх17 交換後，會變成 C10／OPх17、A31／Drevo；各自的道具、資源、臨時截圖也全部跟著原遊戲 ID 搬家。</div>
 <div class="field"><label>第一個帳號</label><input id="swapAccountSearchA" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountA" size="5" style="width:100%;margin-top:6px"></select></div>
 <div style="text-align:center;font-weight:900">⇅</div>
 <div class="field"><label>第二個帳號</label><input id="swapAccountSearchB" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountB" size="5" style="width:100%;margin-top:6px"></select></div>
@@ -1232,7 +1232,7 @@ function renderSwapAccountPreview(){
   const a=d.accounts.find(x=>String(x.id)===String($("#swapAccountA")?.value||""));
   const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB")?.value||""));
   $("#swapAccountPreview").textContent=(a&&b&&a.id!==b.id)
-    ? `編號固定不變：${a.number||a.name||"未命名"} 接收 ${b.gameId||"無遊戲 ID"} 的整份資料（含臨時截圖）；${b.number||b.name||"未命名"} 接收 ${a.gameId||"無遊戲 ID"} 的整份資料（含臨時截圖）。`
+    ? `交換後：\n${a.number||a.name||"未命名"}／${b.gameId||"無遊戲 ID"}（原 ${b.number||b.name||"未命名"} 的道具、資源、截圖）\n${b.number||b.name||"未命名"}／${a.gameId||"無遊戲 ID"}（原 ${a.number||a.name||"未命名"} 的道具、資源、截圖）\n兩個編號固定不變。`
     : "請選擇兩個不同帳號";
 }
 $("#swapAccountNumbers").onclick=()=>{
@@ -1276,7 +1276,7 @@ $("#swapAccountConfirm").onclick=async()=>{
     // Firestore 每筆 batch 最多 500 次寫入。所有文件必須一次成功，絕不分批交換一半。
     const operations=2+2*(aShots.length+bShots.length);
     if(operations>450){alert(`這兩個帳號共有 ${aShots.length+bShots.length} 張臨時截圖，超過安全交換上限。請先備份並整理截圖，這次沒有修改任何資料。`);return;}
-    if(!confirm(`確定讓兩個帳號完整交換編號位置？\n\n${swapAccountLabel(a)}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖）\n⇅\n${swapAccountLabel(b)}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖）\n\n編號固定；遊戲 ID、道具、資源、帳號設定及臨時截圖全部跟著帳號交換。`))return;
+    if(!confirm(`確認交換兩個編號底下的帳號資料？\n\n交換前：\n${swapAccountLabel(a)}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖）\n${swapAccountLabel(b)}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖）\n\n交換後：\n${a.number||a.name}／${b.gameId||"無遊戲 ID"}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖及全部資源）\n${b.number||b.name}／${a.gameId||"無遊戲 ID"}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖及全部資源）\n\n編號不變；遊戲 ID、所有物品、資源和臨時截圖對換。`))return;
     // 同一筆原子 batch：交換帳號資料、刪除舊截圖並在對方編號下重建。
     const batch=writeBatch(db);
     batch.update(accountRef(String(a.id)),{...bData,tempShotCount:bShots.length});
