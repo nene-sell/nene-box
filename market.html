@@ -2284,10 +2284,11 @@ onSnapshot(doc(db,"publicSettings","warehouseStock"),snap=>{
 // Admin-side projection: keep public product stock in sync even when the
 // warehouse page is closed. Publish only aggregate quantities, never accounts.
 let marketStockStops=[],marketStockLinks=[],marketStockAccounts=[],marketStockTimer=null;
+let marketLinksReady=false,marketAccountsReady=false;
 function publishMarketStock(){
   clearTimeout(marketStockTimer);
   marketStockTimer=setTimeout(async()=>{
-    if(auth.currentUser?.uid!==ADMIN_UID)return;
+    if(auth.currentUser?.uid!==ADMIN_UID||!marketLinksReady||!marketAccountsReady)return;
     const totals=new Map();
     const key=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
     for(const a of marketStockAccounts)for(const item of (a.items||[])){
@@ -2311,12 +2312,13 @@ function publishMarketStock(){
 }
 onAuthStateChanged(auth,user=>{
   marketStockStops.forEach(stop=>stop());marketStockStops=[];
+  marketLinksReady=false;marketAccountsReady=false;
   if(user?.uid!==ADMIN_UID)return;
   marketStockStops.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
-    marketStockLinks=snap.docs.map(d=>({id:d.id,data:d.data()}));publishMarketStock();
+    marketStockLinks=snap.docs.map(d=>({id:d.id,data:d.data()}));marketLinksReady=true;publishMarketStock();
   },e=>console.error("賣場連結同步失敗",e)));
   marketStockStops.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),snap=>{
-    marketStockAccounts=snap.docs.map(d=>d.data());publishMarketStock();
+    marketStockAccounts=snap.docs.map(d=>d.data());marketAccountsReady=true;publishMarketStock();
   },e=>console.error("賣場庫存同步失敗",e)));
 });
 function getVariants(p){
