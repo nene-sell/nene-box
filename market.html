@@ -4830,11 +4830,38 @@ async function cancelOrder(orderId,btn){
 async function deleteOrder(orderId,btn){
   if(!isAdmin()||!orderId)return;
   const order=adminOrders.find(o=>o.id===orderId);
-  if(order?.warehouseFulfilled){alert("這筆訂單已扣除小倉倉庫存，為保留配貨紀錄，暫不開放直接刪除。");return;}
-  if(!confirm(`確定要永久刪除訂單 ${order?.orderNumber||orderId} 嗎？\n刪除後無法復原。`))return;
+  const number=order?.orderNumber||orderId;
+  const fulfilled=Boolean(order?.warehouseFulfilled);
+  if(fulfilled){
+    if(!confirm(`訂單 ${number} 已完成並扣除小倉倉庫存。\n\n刪除只會移除訂單畫面，庫存不會退回；配貨紀錄會保留。\n\n確定繼續嗎？`))return;
+    if(!confirm(`最後確認：永久刪除訂單 ${number}？\n此動作無法復原，已扣除的庫存不會改變。`))return;
+  }else if(!confirm(`確定要永久刪除訂單 ${number} 嗎？\n刪除後無法復原，已扣除的庫存不會自動退回。`))return;
   btn.disabled=true;
-  try{await deleteDoc(doc(db,"orders",orderId));toast("訂單已刪除");}
-  catch(e){console.error(e);alert(e?.message||"刪除訂單失敗");}
+  try{
+    if(fulfilled){
+      // 保留既有配貨紀錄，連同原訂單快照一起留存，刪除只影響訂單清單。
+      // 同筆交易確保備份紀錄成功寫入後，才刪除訂單。
+      await runTransaction(db,async tx=>{
+        const oref=doc(db,"orders",orderId);
+        const fref=doc(db,"orderFulfillments",orderId);
+        const osnap=await tx.get(oref);
+        const fsnap=await tx.get(fref);
+        if(!osnap.exists())throw new Error("訂單已不存在，請重新整理");
+        if(!osnap.data().warehouseFulfilled)throw new Error("訂單狀態已變更，請重新整理後再操作");
+        if(!fsnap.exists())throw new Error("找不到配貨紀錄，為避免紀錄遺失，已取消刪除");
+        tx.set(fref,{
+          archivedOrder:{...osnap.data(),id:orderId},
+          orderNumber:osnap.data().orderNumber||orderId,
+          orderDeletedAt:serverTimestamp(),
+          orderDeleted:true
+        },{merge:true});
+        tx.delete(oref);
+      });
+    }else{
+      await deleteDoc(doc(db,"orders",orderId));
+    }
+    toast(fulfilled?"訂單已刪除，配貨紀錄與實際庫存均已保留":"訂單已刪除");
+  }catch(e){console.error(e);alert(e?.message||"刪除訂單失敗");}
   finally{btn.disabled=false;}
 }
 
