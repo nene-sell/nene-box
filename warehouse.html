@@ -2390,9 +2390,9 @@ async function restorePortableBackup(file){
       ops.push({type:"set",ref:accountRef(String(a.id)),data:a});
     }
 
-    for(let i=0;i<ops.length;i+=350){
+    for(let i=0;i<ops.length;i+=20){
       const batch=writeBatch(db);
-      for(const op of ops.slice(i,i+350)){
+      for(const op of ops.slice(i,i+20)){
         if(op.type==="delete")batch.delete(op.ref);
         else batch.set(op.ref,op.data);
       }
@@ -2400,17 +2400,17 @@ async function restorePortableBackup(file){
     }
 
     // Restore recognition memory as a replace operation when the collection helpers exist.
-    if(typeof itemMemoryCol==="function"){
-      const oldMem=await getDocs(itemMemoryCol());
+    if(typeof memoryCol==="function"){
+      const oldMem=await getDocs(memoryCol());
       let memOps=[];
       for(const docSnap of oldMem.docs)memOps.push({type:"delete",ref:docSnap.ref});
       for(const m of (d.itemMemory||[])){
         const mid=String(m.id||m.memoryId||crypto.randomUUID());
         memOps.push({type:"set",ref:doc(itemMemoryCol(),mid),data:{...m,id:mid}});
       }
-      for(let i=0;i<memOps.length;i+=350){
+      for(let i=0;i<memOps.length;i+=20){
         const batch=writeBatch(db);
-        for(const op of memOps.slice(i,i+350)){
+        for(const op of memOps.slice(i,i+20)){
           if(op.type==="delete")batch.delete(op.ref);
           else batch.set(op.ref,op.data);
         }
@@ -2432,7 +2432,7 @@ async function restorePortableBackup(file){
     alert("完整備份已還原完成。");
   }catch(err){
     console.error(err);
-    alert("還原失敗：備份檔可能不完整或格式不相容。原檔不會被修改。");
+    alert("還原失敗："+(err?.message||String(err))+"\n\n原本的小倉倉不會被修改。");
   }finally{
     const input=$("#restoreBackupFile");
     if(input)input.value="";
