@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🤎內內的百寶箱🤎</title>
+<style>
+:root{--bg:#f8f1eb;--card:#fffaf6;--text:#4f4037;--muted:#8d7a6d;--line:#e7d8cc;--brown:#8b6752;--brown2:#6f5040}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif}
+body{min-height:100vh;display:grid;place-items:center;padding:22px}.card{width:min(520px,100%);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 28px;box-shadow:0 12px 36px rgba(83,63,50,.10)}
+h1{margin:0 0 8px;text-align:center;font-size:28px}.sub{text-align:center;color:var(--muted);margin:0 0 28px}
+button{width:100%;border:0;border-radius:14px;padding:13px 16px;font-size:16px;font-weight:800;cursor:pointer}.primary{background:var(--brown);color:#fff}.primary:hover{background:var(--brown2)}
+.secondary{margin-top:10px;background:#efe3da;color:var(--text)}#status{margin-top:18px;text-align:center;color:var(--muted);line-height:1.7}
+.uidbox{display:none;margin-top:22px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff}.uidbox.show{display:block}
+.label{font-size:13px;color:var(--muted);margin-bottom:6px}#uid{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all;font-weight:800}
+.note{font-size:13px;color:var(--muted);margin-top:14px;line-height:1.6}
+</style></head>
+<body><main class="card">
+<h1>🤎內內的百寶箱🤎</h1><p class="sub">新整合網站・管理員設定</p>
+<button id="login" class="primary">使用 Google 登入</button><button id="logout" class="secondary" hidden>登出</button>
+<div id="status">先登入一次，我們要取得這個新 Firebase 專案的管理員 UID。</div>
+<section id="uidbox" class="uidbox"><div class="label">這個帳號在 nene-box 的 UID</div><div id="uid"></div>
+<button id="copy" class="secondary">複製 UID</button>
+<div class="note">把這串 UID 貼回來給我，我就能替「內內的百寶箱」寫正式 Firestore 權限，之後再接入賣場＋小倉倉。</div></section>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+const firebaseConfig={apiKey:"AIzaSyAA2CR7TLIwJ4vBK-kS6qavj93g3LvgQdU",authDomain:"nene-box.firebaseapp.com",projectId:"nene-box",storageBucket:"nene-box.firebasestorage.app",messagingSenderId:"582362181502",appId:"1:582362181502:web:17f4360f56a6f8a3a80d2f"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),provider=new GoogleAuthProvider(),$=s=>document.querySelector(s);
+$("#login").onclick=async()=>{try{$("#status").textContent="正在開啟 Google 登入…";await signInWithPopup(auth,provider)}catch(err){if(["auth/popup-blocked","auth/operation-not-supported-in-this-environment"].includes(err?.code)){await signInWithRedirect(auth,provider);return}$("#status").textContent=err?.code==="auth/popup-closed-by-user"?"登入視窗已關閉，再按一次登入即可。":"登入失敗："+(err?.code||err?.message||String(err))}};
+$("#logout").onclick=()=>signOut(auth);
+$("#copy").onclick=async()=>{await navigator.clipboard.writeText($("#uid").textContent);$("#copy").textContent="已複製 ✓";setTimeout(()=>$("#copy").textContent="複製 UID",1200)};
+getRedirectResult(auth).catch(err=>$("#status").textContent="登入失敗："+(err?.code||err?.message||String(err)));
+onAuthStateChanged(auth,user=>{if(user){$("#login").hidden=true;$("#logout").hidden=false;$("#uidbox").classList.add("show");$("#uid").textContent=user.uid;$("#status").textContent="登入成功。這一步不會建立或修改任何 Firestore 資料。"}else{$("#login").hidden=false;$("#logout").hidden=true;$("#uidbox").classList.remove("show");$("#uid").textContent="";$("#status").textContent="先登入一次，我們要取得這個新 Firebase 專案的管理員 UID。"}});
+</script></body></html>
