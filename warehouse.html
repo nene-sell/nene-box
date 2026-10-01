@@ -389,6 +389,12 @@
 .envelopePreview img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid var(--line);background:#fff}
 @media(max-width:620px){.envelopeSuggestions{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
+/* 0 庫存保留資料與修改功能，僅淡化卡片並禁止轉移。 */
+.item.zero-stock-item{background:#eae4df;border-color:#d7ccc5;opacity:.58}
+.item.zero-stock-item .thumb img{filter:grayscale(1)}
+.item.zero-stock-item .qty{color:#85776d}
+.item.zero-stock-item .transferItem:disabled{opacity:.45;cursor:not-allowed}
+.item.zero-stock-item .editItem,.item.zero-stock-item .deleteItem{opacity:1}
 </style></head><body>
 <div id="authGate"><div class="loginCard"><h2>🤎內內的小倉倉🤎</h2><p>請先使用你的 Google 帳號登入</p><button class="btn primary" id="googleLogin">使用 Google 登入</button><div id="loginMsg" class="note"></div></div></div>
 <div id="app"><div class="wrap">
@@ -893,7 +899,7 @@ function render(){
   if(!a){
     $("#items").innerHTML='<div class="empty">先新增／選擇帳號</div>';
   }else{
-    $("#items").innerHTML=visibleItems.length?visibleItems.map(x=>`<div class="item"><div class="thumb">${x.image?`<img src="${x.image}" alt="">`:"🎁"}</div><div><h3>${e(x.name)}</h3><div class="meta">${e(x.category||"未分類")}${x.gender?"｜"+e(x.gender):""}｜${x.variant?"款式："+e(x.variant):"無款式"}</div></div><div class="itemActions"><div class="qty">× ${x.qty}</div><button class="mini transferItem" data-i="${x._index}">轉移</button><button class="mini editItem" data-i="${x._index}">修改</button><button class="mini del deleteItem" data-i="${x._index}">刪除</button></div></div>`).join(""):'<div class="empty">這個分類目前沒有物品</div>';
+    $("#items").innerHTML=visibleItems.length?visibleItems.map(x=>`<div class="item ${Number(x.qty)<=0?"zero-stock-item":""}"><div class="thumb">${x.image?`<img src="${x.image}" alt="">`:"🎁"}</div><div><h3>${e(x.name)}</h3><div class="meta">${e(x.category||"未分類")}${x.gender?"｜"+e(x.gender):""}｜${x.variant?"款式："+e(x.variant):"無款式"}</div></div><div class="itemActions"><div class="qty">× ${x.qty}</div><button class="mini transferItem" data-i="${x._index}" ${Number(x.qty)<=0?"disabled":""}>轉移</button><button class="mini editItem" data-i="${x._index}">修改</button><button class="mini del deleteItem" data-i="${x._index}">刪除</button></div></div>`).join(""):'<div class="empty">這個分類目前沒有物品</div>';
   }
   document.querySelectorAll(".transferItem").forEach(b=>b.onclick=()=>{
     const a=cur(),i=+b.dataset.i,x=a?.items?.[i]; if(!a||!x)return;
@@ -1507,7 +1513,7 @@ function search(){
   const r=[];
   d.accounts.forEach(a=>(a.items||[]).forEach(x=>{
     const hay=[x.name,x.variant,x.category,x.gender,x.candyType].filter(Boolean).join(" ").toLowerCase();
-    if(hay.includes(q)) r.push({account:a.name||a.number||"",gameId:a.gameId||"",...x});
+    if(hay.includes(q) && Number(x.qty)>0) r.push({account:a.name||a.number||"",gameId:a.gameId||"",...x});
   }));
   const totalable=r.filter(x=>!noQuantityCategories.has(x.category));
   const total=totalable.reduce((n,x)=>n+(Number(x.qty)||0),0);
