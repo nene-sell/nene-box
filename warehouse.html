@@ -2376,7 +2376,7 @@ async function restorePortableBackup(file){
     if(!Array.isArray(d.itemMemory))d.itemMemory=[];
 
     // Write accounts directly in chunks to avoid one huge batch.
-    const existingSnap=await getDocs(accountsCol());
+    const existingSnap=await getDocs(accountCol());
     const incomingIds=new Set(d.accounts.map(a=>String(a.id)));
 
     // Delete account docs not present in the backup.
