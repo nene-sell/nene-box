@@ -455,7 +455,7 @@
 <button class="btn genderTab" data-gender="限男">限男</button>
 <button class="btn genderTab" data-gender="限女">限女</button>
 </div>
-<div class="items" id="items"></div><div class="note">資料會儲存在你的 Firebase Firestore；只有指定的 Google 帳號可讀寫。</div></main></div></div></div>
+<div class="items" id="items"></div><div id="newDbHint" class="note" style="display:none;margin-top:8px;font-weight:700">目前 nene-box 是空資料庫；原本小倉倉功能都保留，舊資料需用「還原備份」搬入。</div><div class="note">資料會儲存在你的 Firebase Firestore；只有指定的 Google 帳號可讀寫。</div></main></div></div></div>
 
 <dialog id="tempDeleteConfirmDlg">
   <div style="text-align:center;padding:4px 2px">
@@ -730,7 +730,7 @@ async function loadCloud(){
   }
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
-  // 百寶箱：載入時保留原始庫存，不自動改分類或刪除資料。
+  // 百寶箱：保留原始資料，不在載入時自動改分類或刪除庫存。
 
   active=d.accounts[0]?.id||null;
   render();
@@ -813,6 +813,7 @@ async function syncTempShotCount(accountId,count){
 function render(){
   migrateCategories();
   sortAccountsNaturally();
+  const _newDbHint=$("#newDbHint"); if(_newDbHint)_newDbHint.style.display=d.accounts.length?"none":"block";
   let a=cur();
   const shownAccounts=d.accounts.filter(x=>(!accountTypeFilter||(x.accountType||"主要培養")===accountTypeFilter)&&(!accountGenderFilter||(x.accountGender||"")===accountGenderFilter));
   document.querySelectorAll(".accountTypeTab").forEach(b=>b.classList.toggle("active",(b.dataset.accountType||"")===accountTypeFilter));
