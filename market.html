@@ -4620,6 +4620,7 @@ function updateOrdersBadge(){
   const count=adminOrders.filter(o=>o.status==="待交易").length;
   badge.textContent=String(count);
   badge.classList.toggle("hidden",count===0);
+  try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:"nene-orders-pending",count},"*"); }catch(_){}
 }
 function startOrdersListener(){
   if(stopOrdersListener){stopOrdersListener();stopOrdersListener=null;}
@@ -4702,23 +4703,12 @@ async function planWarehouseFulfillment(order){
   }
   if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
 
-  // 只查這張訂單實際需要的道具名稱，不再掃 616 個帳號與每個 items 子集合。
-  // collectionGroup(items) 先用 name 篩選，再在瀏覽器端核對完整 identity。
-  const keys=[...new Set(linkedRows.map(r=>r.key))];
-  const itemsByKey=new Map(keys.map(k=>[k,[]]));
-  const names=[...new Set(keys.map(k=>warehouseParseKey(k)[1]).filter(Boolean))];
-  for(const name of names){
-    const qs=await getDocs(query(collectionGroup(db,"items"),where("name","==",name)));
-    for(const ds of qs.docs){
-      const key=warehouseIdentity(ds.data());
-      if(!itemsByKey.has(key))continue;
-      const accountRef=ds.ref.parent.parent;
-      if(!accountRef)continue;
-      itemsByKey.get(key).push({accountId:accountRef.id,itemId:ds.id,qty:Math.max(0,Math.floor(Number(ds.data().qty)||0))});
-    }
-  }
-
-  const candidateAccountIds=[...new Set([...itemsByKey.values()].flat().map(x=>x.accountId))];
+  // 只讀一份管理員配貨索引，不使用 collectionGroup，也不掃 616 個帳號。
+  const indexSnap=await getDoc(doc(db,"adminSettings","warehouseInventoryIndex"));
+  if(!indexSnap.exists())throw new Error("小倉倉配貨索引尚未建立，請先開啟一次小倉倉後再試");
+  const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
+  const ownersByKey=new Map(indexRows.map(r=>[String(r?.key||""),Array.isArray(r?.owners)?r.owners:[]]));
+  const candidateAccountIds=[...new Set(linkedRows.flatMap(r=>(ownersByKey.get(r.key)||[]).map(x=>String(x.accountId||"")).filter(Boolean)))];
   const accountSnaps=await Promise.all(candidateAccountIds.map(id=>getDoc(doc(db,"users",ADMIN_UID,"accounts",id))));
   const accountMeta=new Map(candidateAccountIds.map((id,i)=>{
     const a=accountSnaps[i].exists()?accountSnaps[i].data():{};
@@ -4729,9 +4719,10 @@ async function planWarehouseFulfillment(order){
   const used=new Map();
   for(const row of linkedRows){
     const grouped=new Map();
-    for(const hit of (itemsByKey.get(row.key)||[])){
-      if(!grouped.has(hit.accountId))grouped.set(hit.accountId,0);
-      grouped.set(hit.accountId,grouped.get(hit.accountId)+hit.qty);
+    for(const hit of (ownersByKey.get(row.key)||[])){
+      const accountId=String(hit.accountId||"");
+      if(!accountId)continue;
+      grouped.set(accountId,(grouped.get(accountId)||0)+Math.max(0,Math.floor(Number(hit.qty)||0)));
     }
     const candidates=[];
     for(const [accountId,available] of grouped){
@@ -4746,7 +4737,7 @@ async function planWarehouseFulfillment(order){
     for(const x of parsed){
       const k=x.accountId+"\u001f"+x.key;
       used.set(k,(used.get(k)||0)+x.qty);
-      const total=(itemsByKey.get(x.key)||[]).filter(v=>v.accountId===x.accountId).reduce((n,v)=>n+v.qty,0);
+      const total=grouped.get(x.accountId)||0;
       if(used.get(k)>total)throw new Error(`帳號 ${x.label||""} 配貨超過現有數量`);
       allocations.push(x);
     }
