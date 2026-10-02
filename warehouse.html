@@ -697,11 +697,14 @@ onAuthStateChanged(auth,user=>{
   stopPublicSync.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
     linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));linkedItemsReady=true;queueStockPublish();
   },err=>console.error("讀取商品連結失敗",err)));
-  stopPublicSync.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),async snap=>{
-    try{stockAccounts=await Promise.all(snap.docs.map(async d=>({id:d.id,...d.data(),items:await loadAccountItems(d.id)})));stockAccountsReady=true;queueStockPublish();}
-    catch(err){console.error("讀取庫存同步資料失敗",err)}
-  },err=>console.error("讀取庫存同步資料失敗",err)));
+  // 帳號庫存直接使用小倉倉已載入的本機狀態，不再每次帳號異動就重新掃描所有 items 子集合。
+  // 這可避免大量重複讀取把 Firestore 每日免費額度迅速耗盡。
 });
+function refreshStockFromLocal(){
+  stockAccounts=Array.isArray(d?.accounts)?d.accounts:[];
+  stockAccountsReady=true;
+  queueStockPublish();
+}
 const itemCol=accountId=>collection(db,"users",ADMIN_UID,"accounts",String(accountId),"items");
 const itemRef=(accountId,itemId)=>doc(db,"users",ADMIN_UID,"accounts",String(accountId),"items",String(itemId));
 const ensureItemId=item=>{ if(!item._itemId)item._itemId=crypto.randomUUID(); return String(item._itemId); };
@@ -716,14 +719,23 @@ async function persistAccount(a){
   items.forEach(ensureItemId);
   const old=await getDocs(itemCol(accountId));
   const localIds=new Set(items.map(ensureItemId));
-  const ops=[{type:"set",ref:accountRef(accountId),data:accountMetaData(a)}];
-  old.docs.forEach(x=>{if(!localIds.has(x.id))ops.push({type:"delete",ref:x.ref})});
-  items.forEach(item=>ops.push({type:"set",ref:itemRef(accountId,ensureItemId(item)),data:{...item,_itemId:ensureItemId(item)}}));
-  for(let i=0;i<ops.length;i+=350){
+
+  // 安全順序：先把全部道具文件寫好，再更新帳號主文件，最後才清除已不存在的舊道具文件。
+  // 中途若失敗，帳號主文件的舊 items[] 仍會保留，不會因半套搬遷而失去救援來源。
+  for(let i=0;i<items.length;i+=300){
     const batch=writeBatch(db);
-    ops.slice(i,i+350).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));
+    items.slice(i,i+300).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
     await batch.commit();
   }
+  await setDoc(accountRef(accountId),accountMetaData(a),{merge:false});
+
+  const stale=old.docs.filter(x=>!localIds.has(x.id));
+  for(let i=0;i<stale.length;i+=300){
+    const batch=writeBatch(db);
+    stale.slice(i,i+300).forEach(x=>batch.delete(x.ref));
+    await batch.commit();
+  }
+  refreshStockFromLocal();
 }
 async function persistAccounts(accounts){ for(const a of accounts)await persistAccount(a); }
 async function deleteAccountDeep(accountId){
@@ -748,98 +760,27 @@ function stableMemoryId(m,index=0){
   for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
   return "m"+(h>>>0).toString(36)+"_"+index;
 }
-async function readSplitCloud(){
+async function readHybridCloud(){
   const [metaSnap,accountSnap,memorySnap]=await Promise.all([getDoc(metaRef()),getDocs(accountCol()),getDocs(memoryCol())]);
   const meta=metaSnap.exists()?metaSnap.data():{};
   const accounts=await Promise.all(accountSnap.docs.map(async x=>{
-    const a={id:x.id,...x.data()};
-    a.items=await loadAccountItems(x.id);
-    return a;
+    const raw={id:x.id,...x.data()};
+    const splitItems=await loadAccountItems(x.id);
+    // 已有新 items 子集合就讀新資料；尚未分拆的帳號則只讀舊 items[]。
+    // 讀取階段絕不刪除、搬移或改寫任何 Firebase 資料。
+    raw.items=splitItems.length?splitItems:(Array.isArray(raw.items)?raw.items:[]);
+    return raw;
   }));
   return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
 }
-async function migrateLegacyCloud(legacy){
-  const accounts=Array.isArray(legacy.accounts)?legacy.accounts:[];
-  const memories=Array.isArray(legacy.itemMemory)?legacy.itemMemory:[];
-  for(const raw of accounts){
-    const a={...raw,id:String(raw.id||crypto.randomUUID()),items:Array.isArray(raw.items)?raw.items:[]};
-    await persistAccount(a);
-  }
-  const writes=[];
-  memories.forEach((m,i)=>writes.push({ref:memoryRef(stableMemoryId(m,i)),data:m}));
-  for(let i=0;i<writes.length;i+=350){const batch=writeBatch(db);writes.slice(i,i+350).forEach(w=>batch.set(w.ref,w.data));await batch.commit();}
-  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,migratedAt:new Date().toISOString(),updated:legacy.updated||new Date().toLocaleString("zh-TW")},{merge:true});
-}
-function legacyMigrationItemId(item,index){
-  const raw=JSON.stringify([item?.category||"",item?.name||"",item?.variant||"",item?.gender||"",item?.candyType||"",index]);
-  let h=2166136261;for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
-  return "legacy_"+(h>>>0).toString(36)+"_"+index;
-}
-async function migrateV2Accounts(){
-  const snap=await getDocs(accountCol());
-  for(const ds of snap.docs){
-    const raw={id:ds.id,...ds.data()};
-    if(Array.isArray(raw.items)&&raw.items.length){
-      // 安全搬遷：先複製成獨立道具文件；驗證成功後，最後才移除帳號文件內舊 items[]。
-      const source=raw.items.map((item,index)=>({...item,_itemId:String(item?._itemId||legacyMigrationItemId(item,index))}));
-      for(let i=0;i<source.length;i+=350){
-        const batch=writeBatch(db);
-        source.slice(i,i+350).forEach(item=>batch.set(itemRef(ds.id,item._itemId),item));
-        await batch.commit();
-      }
-      const verify=await loadAccountItems(ds.id);
-      // 安全驗證採「文件存在 + 關鍵庫存欄位」；Firestore 會正規化部分值，
-      // 因此不再拿整個物件做完全相等比較，避免資料其實已成功寫入卻被誤判失敗。
-      const actualById=new Map(verify.map(x=>[String(x._itemId),x]));
-      const sameCore=(a,b)=>
-        String(a?.name??"")===String(b?.name??"") &&
-        String(a?.category??"")===String(b?.category??"") &&
-        String(a?.variant??"")===String(b?.variant??"") &&
-        String(a?.gender??"")===String(b?.gender??"") &&
-        String(a?.candyType??"")===String(b?.candyType??"") &&
-        Number(a?.qty??0)===Number(b?.qty??0);
-      const failed=source.filter(item=>{
-        const got=actualById.get(String(item._itemId));
-        return !got||!sameCore(item,got);
-      });
-      if(failed.length)
-        throw new Error(`帳號 ${raw.number||raw.name||ds.id} 的道具搬遷驗證失敗（${failed.length} 筆未通過），舊資料已保留，請勿繼續操作`);
-      const sourceIds=new Set(source.map(x=>x._itemId));
-      const stale=verify.filter(x=>!sourceIds.has(x._itemId));
-      for(let i=0;i<stale.length;i+=350){
-        const batch=writeBatch(db);
-        stale.slice(i,i+350).forEach(x=>batch.delete(itemRef(ds.id,x._itemId)));
-        await batch.commit();
-      }
-      await setDoc(accountRef(ds.id),accountMetaData({...raw,items:source}));
-    }else if(Object.prototype.hasOwnProperty.call(raw,"items")){
-      await setDoc(accountRef(ds.id),accountMetaData(raw));
-    }
-  }
-  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,itemDocumentsMigratedAt:new Date().toISOString(),updated:new Date().toLocaleString("zh-TW")},{merge:true});
-}
 async function loadCloud(){
-  const metaSnap=await getDoc(metaRef());
-  if(metaSnap.exists()&&Number(metaSnap.data()?.schemaVersion)>=MIGRATION_VERSION){
-    d=await readSplitCloud();
-  }else if(metaSnap.exists()&&Number(metaSnap.data()?.schemaVersion)>=2){
-    await migrateV2Accounts();
-    d=await readSplitCloud();
-  }else{
-    const legacySnap=await getDoc(legacyRef());
-    const legacy=legacySnap.exists()?legacySnap.data():{accounts:[],itemMemory:[]};
-    if(!Array.isArray(legacy.accounts))legacy.accounts=[];
-    if(!Array.isArray(legacy.itemMemory))legacy.itemMemory=[];
-    if(!legacy.accounts.length&&!legacy.itemMemory.length)await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:false,updated:new Date().toLocaleString("zh-TW")});
-    else await migrateLegacyCloud(legacy);
-    d=await readSplitCloud();
-  }
+  // v3 之後不再在開啟網站時自動搬遷。只做唯讀載入，避免重複掃描／寫入與半套搬遷。
+  d=await readHybridCloud();
   migrationReady=true;
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
-  // nene-box：保留原始資料，不在載入時自動改分類或刪除資料。
-
   active=d.accounts[0]?.id||null;
+  refreshStockFromLocal();
   render();
   setTimeout(()=>backfillInventoryMemory(),300);
 }
@@ -2552,21 +2493,13 @@ async function restorePortableBackup(file){
     if(!Array.isArray(d.accounts))d.accounts=[];
     if(!Array.isArray(d.itemMemory))d.itemMemory=[];
 
-    // 先還原帳號；小批次避免含圖片/記憶資料時超過 Firestore request size。
+    // 先完整寫入備份中的每個帳號與 items 子集合；全部成功後才刪除備份中不存在的帳號。
+    // 這樣即使還原中途失敗，也不會先把目前資料清掉。
     const existingSnap=await getDocs(accountCol());
     const incomingIds=new Set(d.accounts.map(a=>String(a.id)));
-    let ops=[];
+    for(const a of d.accounts)await persistAccount(a);
     for(const docSnap of existingSnap.docs){
-      if(!incomingIds.has(String(docSnap.id)))ops.push({type:"delete",ref:docSnap.ref});
-    }
-    for(const a of d.accounts)ops.push({type:"set",ref:accountRef(String(a.id)),data:a});
-    for(let i=0;i<ops.length;i+=20){
-      const batch=writeBatch(db);
-      for(const op of ops.slice(i,i+20)){
-        if(op.type==="delete")batch.delete(op.ref);
-        else batch.set(op.ref,accountMetaData(op.data));
-      }
-      await batch.commit();
+      if(!incomingIds.has(String(docSnap.id)))await deleteAccountDeep(String(docSnap.id));
     }
 
     // 辨識記憶完整取代。
@@ -2887,7 +2820,7 @@ onAuthStateChanged(auth,async user=>{
   }
   $("#userLabel").textContent=currentUser.email||"已登入";
   $("#authGate").classList.add("hidden");$("#app").style.visibility="visible";
-  try{await loadCloud()}catch(err){console.error(err);alert("讀取／搬移雲端庫存失敗｜"+(err?.code||err?.name||"error")+"\n"+(err?.message||String(err))+"\n\n原本庫存資料仍保留，請勿繼續操作。")}
+  try{await loadCloud()}catch(err){console.error(err);alert("讀取雲端庫存失敗｜"+(err?.code||err?.name||"error")+"\n"+(err?.message||String(err))+"\n\n這次只做讀取，沒有自動搬移或刪除庫存資料。")}
 });
 
 </script></body></html>
