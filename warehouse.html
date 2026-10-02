@@ -788,10 +788,30 @@ async function migrateV2Accounts(){
         await batch.commit();
       }
       const verify=await loadAccountItems(ds.id);
-      const expected=new Map(source.map(x=>[x._itemId,JSON.stringify({...x,_itemId:x._itemId})]));
-      const actual=new Map(verify.map(x=>[x._itemId,JSON.stringify({...x,_itemId:x._itemId})]));
-      if(expected.size!==actual.size||[...expected].some(([id,v])=>actual.get(id)!==v))
-        throw new Error(`帳號 ${raw.number||raw.name||ds.id} 的道具搬遷驗證失敗，舊資料已保留，請勿繼續操作`);
+      // Firestore 讀回物件時欄位順序不保證與寫入時一致，不能直接用 JSON.stringify 比字串。
+      // 這裡改成遞迴排序欄位後再比對；同時允許前一次中斷搬遷留下的額外 item 文件，
+      // 只有來源 items 每一筆都完整驗證成功後，才清掉多餘文件並移除舊 items[]。
+      const canonical=value=>{
+        if(Array.isArray(value))return value.map(canonical);
+        if(value&&typeof value==="object"&&Object.getPrototypeOf(value)===Object.prototype){
+          const out={};
+          Object.keys(value).sort().forEach(k=>{if(value[k]!==undefined)out[k]=canonical(value[k])});
+          return out;
+        }
+        return value;
+      };
+      const expected=new Map(source.map(x=>[x._itemId,JSON.stringify(canonical({...x,_itemId:x._itemId}))]));
+      const actual=new Map(verify.map(x=>[x._itemId,JSON.stringify(canonical({...x,_itemId:x._itemId}))]));
+      const missingOrDifferent=[...expected].filter(([id,v])=>actual.get(id)!==v);
+      if(missingOrDifferent.length)
+        throw new Error(`帳號 ${raw.number||raw.name||ds.id} 的道具搬遷驗證失敗（${missingOrDifferent.length} 筆未通過），舊資料已保留，請勿繼續操作`);
+      const sourceIds=new Set(source.map(x=>x._itemId));
+      const stale=verify.filter(x=>!sourceIds.has(x._itemId));
+      for(let i=0;i<stale.length;i+=350){
+        const batch=writeBatch(db);
+        stale.slice(i,i+350).forEach(x=>batch.delete(itemRef(ds.id,x._itemId)));
+        await batch.commit();
+      }
       await setDoc(accountRef(ds.id),accountMetaData({...raw,items:source}));
     }else if(Object.prototype.hasOwnProperty.call(raw,"items")){
       await setDoc(accountRef(ds.id),accountMetaData(raw));
