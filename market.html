@@ -2364,57 +2364,28 @@ onSnapshot(doc(db,"publicSettings","warehouseStock"),snap=>{
   if(typeof renderCart==="function")renderCart();
 },err=>console.error("公開庫存讀取失敗",err));
 
-// Admin-side stock publisher: updating a link in the marketplace must refresh
-// public stock even if the separate warehouse page is not open. Only publish
-// after both inventory and link snapshots are loaded (never an empty interim map).
-let marketStockLinks=new Map(),marketStockAccounts=[],marketLinksReady=false,marketAccountsReady=false;
-let marketStockPublishTimer=null,marketLastStockPublished="",marketStockUnsubs=[];
+// Admin-side stock publishing is intentionally NOT tied to an accounts snapshot.
+// With hundreds of accounts, rescanning every items subcollection whenever an
+// account document changes can consume a large number of Firestore reads.
+// We publish only after an explicit admin inventory/link action.
 const marketStockKey=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
-function queueMarketStockPublish(){
-  clearTimeout(marketStockPublishTimer);
-  if(!marketLinksReady||!marketAccountsReady||auth.currentUser?.uid!==ADMIN_UID)return;
-  marketStockPublishTimer=setTimeout(async()=>{
-    if(!marketLinksReady||!marketAccountsReady||auth.currentUser?.uid!==ADMIN_UID)return;
-    const totals={};
-    for(const account of marketStockAccounts)for(const item of (account.items||[])){
-      const key=marketStockKey(item);
-      totals[key]=(totals[key]||0)+Math.max(0,Math.floor(Number(item.qty)||0));
-    }
-    const output={};
-    for(const [id,link] of marketStockLinks){
-      const variants={};
-      for(const v of (link.variantLinks||[]))if(v.variant&&v.itemKey)variants[v.variant]=totals[v.itemKey]||0;
-      const entry={variants};
-      if(link.itemKey)entry.stock=totals[link.itemKey]||0;
-      output[id]=entry;
-    }
-    const hash=JSON.stringify(output);
-    if(hash===marketLastStockPublished)return;
-    try{
-      await setDoc(doc(db,"publicSettings","warehouseStock"),{products:output,updatedAt:new Date().toISOString()});
-      marketLastStockPublished=hash;
-    }catch(err){console.error("賣場公開庫存同步失敗",err);}
-  },350);
+async function publishPublicWarehouseStockFromCandidates(){
+  if(auth.currentUser?.uid!==ADMIN_UID)return;
+  const totals={};
+  for(const entry of (warehouseCandidates||[])) totals[entry.key]=Math.max(0,Math.floor(Number(entry.qty)||0));
+  const linkSnap=await getDocs(collection(db,"inventoryLinks"));
+  const output={};
+  for(const d of linkSnap.docs){
+    const link=d.data()||{};
+    const variants={};
+    for(const v of (link.variantLinks||[])) if(v.variant&&v.itemKey) variants[v.variant]=totals[v.itemKey]||0;
+    const entry={variants};
+    if(link.itemKey) entry.stock=totals[link.itemKey]||0;
+    output[d.id]=entry;
+  }
+  await setDoc(doc(db,"publicSettings","warehouseStock"),{products:output,updatedAt:new Date().toISOString()});
 }
-onAuthStateChanged(auth,user=>{
-  marketStockUnsubs.forEach(unsub=>unsub());marketStockUnsubs=[];
-  clearTimeout(marketStockPublishTimer);
-  marketLinksReady=false;marketAccountsReady=false;marketLastStockPublished="";
-  if(user?.uid!==ADMIN_UID)return;
-  marketStockUnsubs.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
-    marketStockLinks=new Map(snap.docs.map(d=>[d.id,d.data()]));
-    marketLinksReady=true;queueMarketStockPublish();
-  },err=>console.error("商品連結同步失敗",err)));
-  marketStockUnsubs.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),async snap=>{
-    try{
-      marketStockAccounts=await Promise.all(snap.docs.map(async d=>{
-        const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",d.id,"items"));
-        return {...d.data(),items:itemSnap.docs.map(x=>({...x.data(),_itemId:x.id}))};
-      }));
-      marketAccountsReady=true;queueMarketStockPublish();
-    }catch(err){console.error("小倉倉庫存同步失敗",err)}
-  },err=>console.error("小倉倉庫存同步失敗",err)));
-});
+
 function getVariants(p){
   return Array.isArray(p?.variants)
     ? p.variants
@@ -3929,6 +3900,9 @@ async function saveWarehouseLink(id,variantLinks=[]){
     const existing=await getDoc(ref);
     if(existing.exists())await deleteDoc(ref);
   }
+  // Reuse the inventory data already loaded for the admin picker; no automatic
+  // all-account rescan is started here.
+  await publishPublicWarehouseStockFromCandidates();
 }
 
 function openProduct(p=null){
@@ -4208,7 +4182,7 @@ $("#productForm").addEventListener("submit", async e=>{
     }
     try{
       await saveWarehouseLink(savedProductId,variantLinks);
-      // The inventoryLinks listener above publishes the refreshed linked stock.
+      // saveWarehouseLink publishes refreshed linked stock without an all-account snapshot scan.
     }catch(linkError){
       console.error("商品已儲存，但小倉倉連結未成功",linkError);
       $("#productId").value=savedProductId;
@@ -4873,6 +4847,10 @@ async function completeOrder(orderId,btn){
       tx.set(fulfillmentRef,{orderId,allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-fulfillment"});
       tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:plan.allocations.length>0});
     });
+    // A completed linked order changes warehouse quantities. Refresh/publish once
+    // for this explicit action instead of continuously watching all accounts.
+    await loadWarehouseCandidates(true);
+    await publishPublicWarehouseStockFromCandidates();
     toast("交易完成，指定帳號庫存已更新");
   }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"完成交易失敗");}
   finally{btn.disabled=false;btn.textContent="完成交易";}
