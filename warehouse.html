@@ -523,7 +523,7 @@
   <input id="tempShotInput" type="file" accept="image/*" multiple hidden>
   <div id="tempShotGrid" class="tempShotGrid"></div><div class="actions"><button class="btn" id="closeTempShots" type="button">關閉</button></div></div></dialog><dialog id="swapAccountDlg"><div class="modal">
 <h3>交換帳號資料</h3>
-<div class="note" style="margin-bottom:10px">編號和原本所在分類都保持原位，只交換遊戲 ID 與編號底下的帳號資料。例如 C10／Drevo 與 A31／OPх17 交換後，會變成 C10／OPх17、A31／Drevo；各自的道具、資源、臨時截圖也全部跟著原遊戲 ID 搬家。</div>
+<div class="note" style="margin-bottom:10px">編號保持原位，只交換編號底下的完整帳號資料。例如 C10／Drevo 與 A31／OPх17 交換後，會變成 C10／OPх17、A31／Drevo；各自的道具、資源、臨時截圖也全部跟著原遊戲 ID 搬家。</div>
 <div class="field"><label>第一個帳號</label><input id="swapAccountSearchA" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountA" size="5" style="width:100%;margin-top:6px"></select></div>
 <div style="text-align:center;font-weight:900">⇅</div>
 <div class="field"><label>第二個帳號</label><input id="swapAccountSearchB" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountB" size="5" style="width:100%;margin-top:6px"></select></div>
@@ -697,11 +697,41 @@ onAuthStateChanged(auth,user=>{
   stopPublicSync.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
     linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));linkedItemsReady=true;queueStockPublish();
   },err=>console.error("讀取商品連結失敗",err)));
-  stopPublicSync.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),snap=>{
-    stockAccounts=snap.docs.map(d=>d.data());stockAccountsReady=true;queueStockPublish();
+  stopPublicSync.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),async snap=>{
+    try{stockAccounts=await Promise.all(snap.docs.map(async d=>({id:d.id,...d.data(),items:await loadAccountItems(d.id)})));stockAccountsReady=true;queueStockPublish();}
+    catch(err){console.error("讀取庫存同步資料失敗",err)}
   },err=>console.error("讀取庫存同步資料失敗",err)));
 });
-const MIGRATION_VERSION=2;
+const itemCol=accountId=>collection(db,"users",ADMIN_UID,"accounts",String(accountId),"items");
+const itemRef=(accountId,itemId)=>doc(db,"users",ADMIN_UID,"accounts",String(accountId),"items",String(itemId));
+const ensureItemId=item=>{ if(!item._itemId)item._itemId=crypto.randomUUID(); return String(item._itemId); };
+const accountMetaData=a=>{ const x={...a}; delete x.items; x.itemsUpdatedAt=Date.now(); return x; };
+async function loadAccountItems(accountId){
+  const snap=await getDocs(itemCol(accountId));
+  return snap.docs.map(d=>({...d.data(),_itemId:String(d.id)}));
+}
+async function persistAccount(a){
+  if(!a?.id)return;
+  const accountId=String(a.id), items=Array.isArray(a.items)?a.items:[];
+  items.forEach(ensureItemId);
+  const old=await getDocs(itemCol(accountId));
+  const localIds=new Set(items.map(ensureItemId));
+  const ops=[{type:"set",ref:accountRef(accountId),data:accountMetaData(a)}];
+  old.docs.forEach(x=>{if(!localIds.has(x.id))ops.push({type:"delete",ref:x.ref})});
+  items.forEach(item=>ops.push({type:"set",ref:itemRef(accountId,ensureItemId(item)),data:{...item,_itemId:ensureItemId(item)}}));
+  for(let i=0;i<ops.length;i+=350){
+    const batch=writeBatch(db);
+    ops.slice(i,i+350).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));
+    await batch.commit();
+  }
+}
+async function persistAccounts(accounts){ for(const a of accounts)await persistAccount(a); }
+async function deleteAccountDeep(accountId){
+  const items=await getDocs(itemCol(accountId));
+  for(let i=0;i<items.docs.length;i+=350){const batch=writeBatch(db);items.docs.slice(i,i+350).forEach(x=>batch.delete(x.ref));await batch.commit();}
+  await deleteDoc(accountRef(String(accountId)));
+}
+const MIGRATION_VERSION=3;
 let migrationReady=false;
 
 function cur(){return d.accounts.find(a=>a.id===active)}
@@ -719,61 +749,73 @@ function stableMemoryId(m,index=0){
   return "m"+(h>>>0).toString(36)+"_"+index;
 }
 async function readSplitCloud(){
-  const [metaSnap,accountSnap,memorySnap]=await Promise.all([
-    getDoc(metaRef()), getDocs(accountCol()), getDocs(memoryCol())
-  ]);
+  const [metaSnap,accountSnap,memorySnap]=await Promise.all([getDoc(metaRef()),getDocs(accountCol()),getDocs(memoryCol())]);
   const meta=metaSnap.exists()?metaSnap.data():{};
-  return {
-    accounts:accountSnap.docs.map(x=>x.data()),
-    itemMemory:memorySnap.docs.map(x=>x.data()),
-    updated:meta.updated||""
-  };
+  const accounts=await Promise.all(accountSnap.docs.map(async x=>{
+    const a={id:x.id,...x.data()};
+    a.items=await loadAccountItems(x.id);
+    return a;
+  }));
+  return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
 }
 async function migrateLegacyCloud(legacy){
   const accounts=Array.isArray(legacy.accounts)?legacy.accounts:[];
   const memories=Array.isArray(legacy.itemMemory)?legacy.itemMemory:[];
-  // Firestore batches are limited to 500 writes; use conservative chunks.
-  const writes=[];
-  accounts.forEach((a,i)=>{
-    const id=String(a.id||crypto.randomUUID());
-    a.id=id;
-    writes.push({ref:accountRef(id),data:a});
-  });
-  memories.forEach((m,i)=>writes.push({ref:memoryRef(stableMemoryId(m,i)),data:m}));
-  writes.push({ref:metaRef(),data:{
-    schemaVersion:MIGRATION_VERSION,
-    migratedFromLegacy:true,
-    migratedAt:new Date().toISOString(),
-    updated:legacy.updated||new Date().toLocaleString("zh-TW")
-  }});
-  for(let i=0;i<writes.length;i+=400){
-    const batch=writeBatch(db);
-    writes.slice(i,i+400).forEach(w=>batch.set(w.ref,w.data));
-    await batch.commit();
+  for(const raw of accounts){
+    const a={...raw,id:String(raw.id||crypto.randomUUID()),items:Array.isArray(raw.items)?raw.items:[]};
+    await persistAccount(a);
   }
-  // Verify account count before switching the app to the new storage.
-  const verify=await getDocs(accountCol());
-  if(verify.size!==accounts.length) throw new Error(`資料搬家驗證失敗：原本 ${accounts.length} 個帳號，新資料 ${verify.size} 個帳號`);
+  const writes=[];
+  memories.forEach((m,i)=>writes.push({ref:memoryRef(stableMemoryId(m,i)),data:m}));
+  for(let i=0;i<writes.length;i+=350){const batch=writeBatch(db);writes.slice(i,i+350).forEach(w=>batch.set(w.ref,w.data));await batch.commit();}
+  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,migratedAt:new Date().toISOString(),updated:legacy.updated||new Date().toLocaleString("zh-TW")},{merge:true});
+}
+function legacyMigrationItemId(item,index){
+  const raw=JSON.stringify([item?.category||"",item?.name||"",item?.variant||"",item?.gender||"",item?.candyType||"",index]);
+  let h=2166136261;for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
+  return "legacy_"+(h>>>0).toString(36)+"_"+index;
+}
+async function migrateV2Accounts(){
+  const snap=await getDocs(accountCol());
+  for(const ds of snap.docs){
+    const raw={id:ds.id,...ds.data()};
+    if(Array.isArray(raw.items)&&raw.items.length){
+      // 安全搬遷：先複製成獨立道具文件；驗證成功後，最後才移除帳號文件內舊 items[]。
+      const source=raw.items.map((item,index)=>({...item,_itemId:String(item?._itemId||legacyMigrationItemId(item,index))}));
+      for(let i=0;i<source.length;i+=350){
+        const batch=writeBatch(db);
+        source.slice(i,i+350).forEach(item=>batch.set(itemRef(ds.id,item._itemId),item));
+        await batch.commit();
+      }
+      const verify=await loadAccountItems(ds.id);
+      const expected=new Map(source.map(x=>[x._itemId,JSON.stringify({...x,_itemId:x._itemId})]));
+      const actual=new Map(verify.map(x=>[x._itemId,JSON.stringify({...x,_itemId:x._itemId})]));
+      if(expected.size!==actual.size||[...expected].some(([id,v])=>actual.get(id)!==v))
+        throw new Error(`帳號 ${raw.number||raw.name||ds.id} 的道具搬遷驗證失敗，舊資料已保留，請勿繼續操作`);
+      await setDoc(accountRef(ds.id),accountMetaData({...raw,items:source}));
+    }else if(Object.prototype.hasOwnProperty.call(raw,"items")){
+      await setDoc(accountRef(ds.id),accountMetaData(raw));
+    }
+  }
+  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,itemDocumentsMigratedAt:new Date().toISOString(),updated:new Date().toLocaleString("zh-TW")},{merge:true});
 }
 async function loadCloud(){
   const metaSnap=await getDoc(metaRef());
   if(metaSnap.exists()&&Number(metaSnap.data()?.schemaVersion)>=MIGRATION_VERSION){
     d=await readSplitCloud();
-    migrationReady=true;
+  }else if(metaSnap.exists()&&Number(metaSnap.data()?.schemaVersion)>=2){
+    await migrateV2Accounts();
+    d=await readSplitCloud();
   }else{
     const legacySnap=await getDoc(legacyRef());
     const legacy=legacySnap.exists()?legacySnap.data():{accounts:[],itemMemory:[]};
     if(!Array.isArray(legacy.accounts))legacy.accounts=[];
     if(!Array.isArray(legacy.itemMemory))legacy.itemMemory=[];
-    // If no legacy data exists, simply initialize the new schema.
-    if(!legacy.accounts.length&&!legacy.itemMemory.length){
-      await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:false,updated:new Date().toLocaleString("zh-TW")});
-    }else{
-      await migrateLegacyCloud(legacy);
-    }
+    if(!legacy.accounts.length&&!legacy.itemMemory.length)await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:false,updated:new Date().toLocaleString("zh-TW")});
+    else await migrateLegacyCloud(legacy);
     d=await readSplitCloud();
-    migrationReady=true;
   }
+  migrationReady=true;
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
   // nene-box：保留原始資料，不在載入時自動改分類或刪除資料。
@@ -792,41 +834,26 @@ async function cleanupRemovedMaterials(){
     if(kept.length!==items.length){a.items=kept;changed.push(a)}
   }
   if(!changed.length)return;
-  for(let i=0;i<changed.length;i+=400){
-    const batch=writeBatch(db);
-    changed.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),a));
-    await batch.commit();
-  }
+  await persistAccounts(changed);
   d.updated=new Date().toLocaleString("zh-TW");
   await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,materialsRemoved:true,materialsRemovedAt:new Date().toISOString(),updated:d.updated},{merge:true});
 }
 async function save(){
   if(!currentUser||!migrationReady)return;
-  d.updated=new Date().toLocaleString("zh-TW");
-  saving=true;
+  d.updated=new Date().toLocaleString("zh-TW"); saving=true;
   try{
-    // Accounts are separate documents, so the old 1 MiB main-document limit is gone.
     const remote=await getDocs(accountCol());
     const localIds=new Set((d.accounts||[]).map(a=>String(a.id)));
-    const ops=[];
-    remote.docs.forEach(x=>{if(!localIds.has(x.id))ops.push({type:"delete",ref:x.ref})});
-    (d.accounts||[]).forEach(a=>ops.push({type:"set",ref:accountRef(String(a.id)),data:a}));
-    // Recognition memory is also split into separate documents.
+    for(const x of remote.docs)if(!localIds.has(x.id))await deleteAccountDeep(x.id);
+    await persistAccounts(d.accounts||[]);
     const remoteMem=await getDocs(memoryCol());
-    remoteMem.docs.forEach(x=>ops.push({type:"delete",ref:x.ref}));
+    const ops=[]; remoteMem.docs.forEach(x=>ops.push({type:"delete",ref:x.ref}));
     (d.itemMemory||[]).forEach((m,i)=>ops.push({type:"set",ref:memoryRef(stableMemoryId(m,i)),data:m}));
-    // meta 在批次完成後以 merge 更新，避免清掉補記憶版本標記。
-    for(let i=0;i<ops.length;i+=400){
-      const batch=writeBatch(db);
-      ops.slice(i,i+400).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));
-      await batch.commit();
-    }
+    for(let i=0;i<ops.length;i+=350){const batch=writeBatch(db);ops.slice(i,i+350).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));await batch.commit();}
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     render();
-  }catch(err){
-    console.error(err);
-    alert("雲端儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));
-  }finally{saving=false}
+  }catch(err){console.error(err);alert("雲端儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));}
+  finally{saving=false}
 }
 function migrateCategories(){
   (d.accounts||[]).forEach(a=>{
@@ -930,7 +957,7 @@ function render(){
     const removed=a.items.splice(i,1)[0];
     render();
     try{
-      await setDoc(accountRef(String(a.id)),a);
+      await persistAccount(a);
       d.updated=new Date().toLocaleString("zh-TW");
       await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
       $("#su").textContent=d.updated;
@@ -998,10 +1025,7 @@ $("#transferItemConfirm").onclick=async()=>{
 
   render();
   try{
-    const batch=writeBatch(db);
-    batch.set(accountRef(String(source.id)),source);
-    batch.set(accountRef(String(target.id)),target);
-    await batch.commit();
+    await persistAccounts([source,target]);
     d.updated=new Date().toLocaleString("zh-TW");
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
@@ -1036,7 +1060,7 @@ $("#editItemSave").onclick=async()=>{
   try{
     // 修改單一道具只儲存目前帳號，不再為一個修改重寫全部帳號。
     d.updated=new Date().toLocaleString("zh-TW");
-    await setDoc(accountRef(String(a.id)),a);
+    await persistAccount(a);
     await setDoc(metaRef(),{
       schemaVersion:MIGRATION_VERSION,
       migratedFromLegacy:true,
@@ -1232,7 +1256,7 @@ function renderSwapAccountPreview(){
   const a=d.accounts.find(x=>String(x.id)===String($("#swapAccountA")?.value||""));
   const b=d.accounts.find(x=>String(x.id)===String($("#swapAccountB")?.value||""));
   $("#swapAccountPreview").textContent=(a&&b&&a.id!==b.id)
-    ? `交換後：\n${a.number||a.name||"未命名"}／${b.gameId||"無遊戲 ID"}（原 ${b.number||b.name||"未命名"} 的道具、資源、截圖）\n${b.number||b.name||"未命名"}／${a.gameId||"無遊戲 ID"}（原 ${a.number||a.name||"未命名"} 的道具、資源、截圖）\n兩個編號及所在分類固定不變。`
+    ? `交換後：\n${a.number||a.name||"未命名"}／${b.gameId||"無遊戲 ID"}（原 ${b.number||b.name||"未命名"} 的道具、資源、截圖）\n${b.number||b.name||"未命名"}／${a.gameId||"無遊戲 ID"}（原 ${a.number||a.name||"未命名"} 的道具、資源、截圖）\n兩個編號固定不變。`
     : "請選擇兩個不同帳號";
 }
 $("#swapAccountNumbers").onclick=()=>{
@@ -1259,8 +1283,8 @@ $("#swapAccountConfirm").onclick=async()=>{
       resourcePendingAccountId=null;
     }
   }
-  // 帳號編號、文件 ID 與帳號分類固定在原位置；遊戲 ID、性別、物品、資源、截圖等跟著帳號交換。
-  const fixedFields=new Set(["id","number","name","accountType"]);
+  // 帳號編號與文件 ID 是固定位置；其餘帳號欄位（包含性別、類型、資源等）整份交換。
+  const fixedFields=new Set(["id","number","name","items"]);
   const movable=account=>Object.fromEntries(Object.entries(account).filter(([key])=>!fixedFields.has(key)).map(([key,value])=>[key,structuredClone(value)]));
   const aData=movable(a),bData=movable(b);
   const confirmBtn=$("#swapAccountConfirm");
@@ -1276,7 +1300,7 @@ $("#swapAccountConfirm").onclick=async()=>{
     // Firestore 每筆 batch 最多 500 次寫入。所有文件必須一次成功，絕不分批交換一半。
     const operations=2+2*(aShots.length+bShots.length);
     if(operations>450){alert(`這兩個帳號共有 ${aShots.length+bShots.length} 張臨時截圖，超過安全交換上限。請先備份並整理截圖，這次沒有修改任何資料。`);return;}
-    if(!confirm(`確認交換兩個編號底下的帳號資料？\n\n交換前：\n${swapAccountLabel(a)}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖）\n${swapAccountLabel(b)}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖）\n\n交換後：\n${a.number||a.name}／${b.gameId||"無遊戲 ID"}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖及全部資源）\n${b.number||b.name}／${a.gameId||"無遊戲 ID"}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖及全部資源）\n\n編號及原本所在分類不變；遊戲 ID、所有物品、資源和臨時截圖對換。`))return;
+    if(!confirm(`確認交換兩個編號底下的帳號資料？\n\n交換前：\n${swapAccountLabel(a)}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖）\n${swapAccountLabel(b)}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖）\n\n交換後：\n${a.number||a.name}／${b.gameId||"無遊戲 ID"}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖及全部資源）\n${b.number||b.name}／${a.gameId||"無遊戲 ID"}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖及全部資源）\n\n編號不變；遊戲 ID、所有物品、資源和臨時截圖對換。`))return;
     // 同一筆原子 batch：交換帳號資料、刪除舊截圖並在對方編號下重建。
     const batch=writeBatch(db);
     batch.update(accountRef(String(a.id)),{...bData,tempShotCount:bShots.length});
@@ -1287,8 +1311,9 @@ $("#swapAccountConfirm").onclick=async()=>{
     for(const shot of bShots)batch.set(tempShotRef(String(a.id),shot.id),shot.data);
     await batch.commit();
     // 同步畫面快取，避免交換後短暫顯示原本帳號的截圖。
-    Object.assign(a,bData,{tempShotCount:bShots.length});
-    Object.assign(b,aData,{tempShotCount:aShots.length});
+    Object.assign(a,bData,{tempShotCount:bShots.length}); a.items=bItems;
+    Object.assign(b,aData,{tempShotCount:aShots.length}); b.items=aItems;
+    await persistAccounts([a,b]);
     tempShotsCache.set(String(a.id),bShots.map(x=>({id:x.id,...x.data})));
     tempShotsCache.set(String(b.id),aShots.map(x=>({id:x.id,...x.data})));
     d.updated=new Date().toLocaleString("zh-TW");
@@ -1347,7 +1372,7 @@ $("#is").onclick=async()=>{
   render();
   // 只儲存目前帳號，避免每新增一件物品都重寫數百個帳號與整份圖片記憶。
   try{
-    await setDoc(accountRef(String(a.id)),a);
+    await persistAccount(a);
     d.updated=new Date().toLocaleString("zh-TW");
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated||"尚未";
@@ -1361,7 +1386,7 @@ $("#saveLoginRecord").onclick=async()=>{
   const v=$("#loginRecordInput").value.trim();
   if(!v)return alert("請輸入登入日期或文字");
   a.lastLogin=v; $("#loginRecordInput").value="";
-  await setDoc(accountRef(String(a.id)),a);
+  await persistAccount(a);
   d.updated=new Date().toLocaleString("zh-TW");
   await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
   render();
@@ -1413,7 +1438,7 @@ $("#batchLoginSave").onclick=async()=>{
     chosen.forEach(a=>a.lastLogin=value);
     for(let i=0;i<chosen.length;i+=400){
       const batch=writeBatch(db);
-      chosen.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),a));
+      chosen.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),accountMetaData(a)));
       await batch.commit();
     }
     d.updated=new Date().toLocaleString("zh-TW");
@@ -1449,7 +1474,7 @@ function renderRodResources(){
     const a=cur(); if(!a)return;
     ensureRodResources(a).splice(Number(btn.dataset.i),1);
     renderRodResources();
-    await setDoc(accountRef(String(a.id)),a);
+    await persistAccount(a);
     d.updated=new Date().toLocaleString("zh-TW");
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
@@ -1466,7 +1491,7 @@ $("#addRodResource").onclick=async()=>{
   else rods.push({name,qty});
   $("#rodNameInput").value=""; $("#rodQtyInput").value="";
   renderRodResources();
-  await setDoc(accountRef(String(a.id)),a);
+  await persistAccount(a);
   d.updated=new Date().toLocaleString("zh-TW");
   await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
   $("#su").textContent=d.updated;
@@ -1489,7 +1514,7 @@ async function persistResourceAccount(accountId){
   if(!a)return;
   const seq=++resourceSaveSeq;
   try{
-    await setDoc(accountRef(String(a.id)),a);
+    await persistAccount(a);
     d.updated=new Date().toLocaleString("zh-TW");
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     if(seq===resourceSaveSeq)$("#su").textContent=d.updated;
@@ -1623,7 +1648,7 @@ $("#eas").onclick=async()=>{
 
   // 修改帳號只儲存目前這一個帳號，避免 save() 重寫全部帳號造成延遲。
   try{
-    await setDoc(accountRef(String(a.id)),a);
+    await persistAccount(a);
     d.updated=new Date().toLocaleString("zh-TW");
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
@@ -2351,7 +2376,7 @@ $("#confirmRecognized").onclick=async()=>{
 
     // 這裡只寫目前帳號，不再因為一張截圖重寫全部 600 個帳號。
     d.updated=new Date().toLocaleString("zh-TW");
-    await setDoc(accountRef(String(a.id)),a);
+    await persistAccount(a);
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
 
     // 只補上雲端缺少的辨識記憶，不刪掉整包重建。
@@ -2520,7 +2545,7 @@ async function restorePortableBackup(file){
       const batch=writeBatch(db);
       for(const op of ops.slice(i,i+20)){
         if(op.type==="delete")batch.delete(op.ref);
-        else batch.set(op.ref,op.data);
+        else batch.set(op.ref,accountMetaData(op.data));
       }
       await batch.commit();
     }
