@@ -395,10 +395,17 @@
 .item.zero-stock-item .qty{color:#85776d}
 .item.zero-stock-item .transferItem:disabled{opacity:.45;cursor:not-allowed}
 .item.zero-stock-item .editItem,.item.zero-stock-item .deleteItem{opacity:1}
+
+/* 管理員待交易訂單提醒：只監聽待交易訂單，不掃描倉庫。 */
+.warehouse-order-alert{display:none;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 11px;background:#b96f62;color:#fff;font-weight:900;font-size:12px;box-shadow:0 4px 14px #6f3d3426;cursor:pointer;margin-left:auto}
+.warehouse-order-alert.show{display:inline-flex}
+.warehouse-order-alert .count{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#fff;color:#a45248;font-size:11px}
+.authbar{display:flex;align-items:center;gap:8px}
+@media(max-width:620px){.warehouse-order-alert{padding:6px 9px;font-size:11px}}
 </style></head><body>
 <div id="authGate"><div class="loginCard"><h2>🤎內內的小倉倉🤎</h2><p>請先使用你的 Google 帳號登入</p><button class="btn primary" id="googleLogin">使用 Google 登入</button><div id="loginMsg" class="note"></div></div></div>
 <div id="app"><div class="wrap">
-<div class="authbar"><span id="userLabel"></span><button class="mini" id="logout">登出</button></div><header><h1>🤎內內的小倉倉🤎</h1><p>庫存管理</p></header>
+<div class="authbar"><span id="userLabel"></span><button id="warehouseOrderAlert" class="warehouse-order-alert" type="button" title="目前待交易訂單">新訂單 <span id="warehouseOrderCount" class="count">0</span></button><button class="mini" id="logout">登出</button></div><header><h1>🤎內內的小倉倉🤎</h1><p>庫存管理</p></header>
 <section class="box"><div class="search"><input id="q" placeholder="搜尋物品，例如：珊瑚、藤編、粉色…"><button class="btn primary" id="go">搜尋</button></div><div id="grandTotal" class="stat" style="display:none;margin-top:12px"></div><div id="results"></div></section>
 <div class="stats"><div class="stat"><small>帳號數</small><b id="sa">0</b></div><div class="stat"><small>物品種類</small><b id="sk">0</b></div><div class="stat"><small>庫存總數</small><b id="sq">0</b></div><div class="stat"><small>最近更新</small><b id="su" style="font-size:13px">尚未</b></div></div>
 <div class="main"><aside class="panel"><div class="head"><h3>帳號</h3><div style="display:flex;gap:6px"><button class="btn" id="swapAccountNumbers" type="button">交換帳號資料</button><button class="btn" id="batchA">批次新增</button><button class="btn" id="newA">＋</button></div></div><div class="accountTypeTabs"><button class="accountTypeTab active" data-account-type="一次性">一次號</button><button class="accountTypeTab" data-account-type="永久">永久號</button><button class="accountTypeTab" data-account-type="主要培養">培養號</button></div><div class="accountSearch"><input id="accountSearch" placeholder="搜尋帳號／ID"><button class="btn" id="accountSearchBtn" type="button">搜尋</button></div><div style="margin:0 0 9px">
@@ -611,7 +618,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyAA2CR7TLIwJ4vBK-kS6qavj93g3LvgQdU",
@@ -2832,8 +2839,32 @@ $("#saveOverviewJpg").onclick=async()=>{
   }catch(err){console.error(err);alert("總覽 JPG 製作失敗："+(err?.message||err))}
   finally{btn.disabled=false;btn.textContent="儲存 JPG"}
 };
+let stopPendingOrdersAlert=null;
+function startPendingOrdersAlert(){
+  if(stopPendingOrdersAlert){stopPendingOrdersAlert();stopPendingOrdersAlert=null;}
+  const btn=$("#warehouseOrderAlert"), countEl=$("#warehouseOrderCount");
+  if(btn)btn.classList.remove("show");
+  if(countEl)countEl.textContent="0";
+  if(!currentUser)return;
+  const pendingQuery=query(collection(db,"orders"),where("status","==","待交易"));
+  stopPendingOrdersAlert=onSnapshot(pendingQuery,snap=>{
+    const count=snap.size;
+    if(countEl)countEl.textContent=String(count);
+    if(btn)btn.classList.toggle("show",count>0);
+    try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:"nene-orders-pending",count},"*");}catch(_){}
+  },err=>{
+    console.error("待交易訂單提醒讀取失敗",err);
+  });
+}
+$("#warehouseOrderAlert")?.addEventListener("click",()=>{
+  // 在整合頁中交給外層切回販售頁；單獨開小倉倉時則開 market.html。
+  try{if(window.parent&&window.parent!==window){window.parent.postMessage({type:"nene-open-market-orders"},"*");return;}}catch(_){}
+  location.href="market.html";
+});
+
 onAuthStateChanged(auth,async user=>{
   currentUser=user&&user.uid===ADMIN_UID?user:null;
+  startPendingOrdersAlert();
   if(!currentUser){
     $("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();return;
   }
