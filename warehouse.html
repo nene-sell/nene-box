@@ -407,6 +407,8 @@
   <button class="btn" id="restoreAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">♻️ 還原備份</button>
   <input id="restoreBackupFile" type="file" accept=".json,application/json" style="display:none">
 </div>
+<div style="margin-top:6px"><button class="btn" id="openCapacityMigration" type="button" style="width:100%;padding:8px 9px;font-size:12px">🧳 容量搬遷</button>
+</div>
 </div>
 <div id="accountActions" style="display:none;gap:6px;margin:0 0 9px">
   <button class="btn" id="editAccount" type="button" style="flex:1;padding:8px 9px;font-size:12px">✏️ 修改帳號</button>
@@ -529,7 +531,17 @@
 <div class="field"><label>第二個帳號</label><input id="swapAccountSearchB" placeholder="輸入編號或 ID 搜尋" autocomplete="off"><select id="swapAccountB" size="5" style="width:100%;margin-top:6px"></select></div>
 <div id="swapAccountPreview" class="note" style="margin-top:8px"></div>
 <div class="actions"><button class="btn" id="swapAccountCancel" type="button">取消</button><button class="btn primary" id="swapAccountConfirm" type="button">確認交換</button></div>
-</div></dialog><dialog id="batchAd"><h3>批次新增帳號</h3>
+</div></dialog>
+<dialog id="capacityMigrationDlg" style="width:min(560px,94vw)"><div class="modal">
+<h3>🧳 安全容量搬遷</h3>
+<div class="note" style="line-height:1.7">分兩階段處理，每次最多 10 個帳號。<br><b>第一階段</b>只複製並驗證道具，完全不刪舊資料。<br><b>第二階段</b>會再次驗證，只有完全一致的帳號才把舊 <code>items[]</code> 瘦身；新道具子集合保留。</div>
+<div id="capacityMigrationStatus" class="box" style="margin-top:12px;padding:12px">正在檢查…</div>
+<div class="actions" style="flex-wrap:wrap">
+<button class="btn" id="capacityMigrationClose" type="button">關閉</button>
+<button class="btn primary" id="capacityCopyBatch" type="button">① 複製驗證 10 個</button>
+<button class="btn" id="capacityCleanupBatch" type="button">② 瘦身 10 個</button>
+</div></div></dialog>
+<dialog id="batchAd"><h3>批次新增帳號</h3>
 <div class="field"><label>起始編號</label><input id="ban" inputmode="text" autocapitalize="characters" placeholder="例如：A1、A2、B1 或 457"></div>
 <div class="field"><label>ID 清單</label><textarea id="baids" rows="10" placeholder="一行一個 ID，例如：&#10;ABC123&#10;ABC456&#10;ABC789" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;resize:vertical;font:inherit;color:var(--text)"></textarea><div class="note" style="margin-top:5px">一行一個 ID，會從起始編號自動依序編號。空白行會自動忽略。</div></div>
 <div class="field"><label>帳號類型</label><select id="baat"><option value="主要培養">主要培養</option><option value="一次性">一次性</option><option value="永久">永久</option></select></div>
@@ -743,6 +755,83 @@ async function deleteAccountDeep(accountId){
   for(let i=0;i<items.docs.length;i+=350){const batch=writeBatch(db);items.docs.slice(i,i+350).forEach(x=>batch.delete(x.ref));await batch.commit();}
   await deleteDoc(accountRef(String(accountId)));
 }
+// 手動安全容量搬遷：絕不在網站開啟時自動執行。
+const CAPACITY_BATCH_SIZE=10;
+function plainClone(v){return JSON.parse(JSON.stringify(v));}
+function canonical(v){
+  if(Array.isArray(v))return v.map(canonical);
+  if(v&&typeof v==="object")return Object.keys(v).sort().reduce((o,k)=>{if(v[k]!==undefined)o[k]=canonical(v[k]);return o},{});
+  return v;
+}
+function legacyMigrationItemId(item,index){
+  if(item?._itemId)return String(item._itemId);
+  const raw=JSON.stringify(canonical({...item,_itemId:undefined}))+"|"+index;
+  let h=2166136261;
+  for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
+  return `legacy_${index}_${(h>>>0).toString(36)}`;
+}
+function comparableItems(items){
+  return (items||[]).map(x=>{const y=plainClone(x);delete y._itemId;return canonical(y)});
+}
+function sameItems(a,b){return JSON.stringify(comparableItems(a))===JSON.stringify(comparableItems(b));}
+async function copyAndVerifyLegacyItems(accountDoc){
+  const accountId=String(accountDoc.id), legacy=Array.isArray(accountDoc.items)?accountDoc.items:[];
+  if(!legacy.length)return {ok:true,count:0};
+  for(let i=0;i<legacy.length;i+=250){
+    const batch=writeBatch(db);
+    legacy.slice(i,i+250).forEach((item,j)=>{
+      const idx=i+j,id=legacyMigrationItemId(item,idx),data=plainClone({...item,_itemId:id});
+      batch.set(itemRef(accountId,id),data);
+    });
+    await batch.commit();
+  }
+  const snap=await getDocs(itemCol(accountId));
+  const byId=new Map(snap.docs.map(x=>[x.id,{...x.data(),_itemId:x.id}]));
+  const copied=legacy.map((item,index)=>byId.get(legacyMigrationItemId(item,index))).filter(Boolean);
+  if(copied.length!==legacy.length||!sameItems(legacy,copied))throw new Error(`${accountDoc.number||accountDoc.name||accountId} 驗證失敗；舊資料完全未刪除`);
+  return {ok:true,count:legacy.length};
+}
+async function getLegacyAccountDocs(){
+  const snap=await getDocs(accountCol());
+  return snap.docs.map(x=>({id:x.id,...x.data()})).filter(a=>Array.isArray(a.items)&&a.items.length>0).sort(naturalAccountCompare);
+}
+async function updateCapacityMigrationStatus(message=""){
+  const box=$("#capacityMigrationStatus"); if(!box)return;
+  try{
+    const legacy=await getLegacyAccountDocs();
+    const totalItems=legacy.reduce((n,a)=>n+a.items.length,0);
+    box.innerHTML=`${message?`<div style="font-weight:900;margin-bottom:7px">${e(message)}</div>`:""}<div>仍保留舊 items[]：<b>${legacy.length}</b> 個帳號</div><div>舊道具筆數：<b>${totalItems}</b></div><div class="meta" style="margin-top:6px">第一階段可重複執行；不會刪舊資料。第二階段每個帳號都會重新驗證後才瘦身。</div>`;
+  }catch(err){box.textContent="檢查失敗："+(err?.message||String(err));}
+}
+async function runCapacityCopyBatch(){
+  const btn=$("#capacityCopyBatch");btn.disabled=true;
+  try{
+    const legacy=(await getLegacyAccountDocs()).slice(0,CAPACITY_BATCH_SIZE);
+    if(!legacy.length){await updateCapacityMigrationStatus("沒有需要複製的舊帳號");return;}
+    let done=0,items=0;
+    for(const a of legacy){const r=await copyAndVerifyLegacyItems(a);done++;items+=r.count;btn.textContent=`① 搬遷中 ${done}/${legacy.length}`;}
+    await updateCapacityMigrationStatus(`第一階段完成：已複製並驗證 ${done} 個帳號、${items} 筆道具；舊資料仍保留`);
+  }catch(err){console.error(err);alert("容量搬遷停止｜"+(err?.message||String(err))+"\n\n舊 items[] 沒有被刪除。");await updateCapacityMigrationStatus("搬遷已停止，請勿執行瘦身");}
+  finally{btn.disabled=false;btn.textContent="① 複製驗證 10 個";}
+}
+async function runCapacityCleanupBatch(){
+  const btn=$("#capacityCleanupBatch");btn.disabled=true;
+  try{
+    const legacy=(await getLegacyAccountDocs()).slice(0,CAPACITY_BATCH_SIZE);
+    if(!legacy.length){await updateCapacityMigrationStatus("舊 items[] 已全部瘦身完成");return;}
+    const names=legacy.map(a=>a.number||a.name||a.id).join("、");
+    if(!confirm(`第二階段會處理最多 ${legacy.length} 個帳號：\n${names}\n\n每個帳號都會先重新複製＋驗證，完全一致才清掉主文件裡的舊 items[]。\n確定繼續？`))return;
+    let done=0;
+    for(const a of legacy){
+      await copyAndVerifyLegacyItems(a);
+      await setDoc(accountRef(String(a.id)),{items:null,itemsUpdatedAt:Date.now()},{merge:true});
+      done++;btn.textContent=`② 瘦身中 ${done}/${legacy.length}`;
+    }
+    await updateCapacityMigrationStatus(`第二階段完成：${done} 個帳號已驗證並瘦身`);
+  }catch(err){console.error(err);alert("瘦身已停止｜"+(err?.message||String(err))+"\n\n未通過驗證的帳號不會清除舊 items[]。");await updateCapacityMigrationStatus("瘦身中途停止；已完成的帳號仍可從 items 子集合讀取");}
+  finally{btn.disabled=false;btn.textContent="② 瘦身 10 個";}
+}
+
 const MIGRATION_VERSION=3;
 let migrationReady=false;
 
@@ -2567,6 +2656,10 @@ async function restorePortableBackup(file){
 $("#backupAllData").onclick=exportFullBackup;
 $("#restoreAllData").onclick=()=>$("#restoreBackupFile").click();
 $("#restoreBackupFile").onchange=e=>restorePortableBackup(e.target.files?.[0]);
+$("#openCapacityMigration").onclick=async()=>{$("#capacityMigrationDlg").showModal();await updateCapacityMigrationStatus();};
+$("#capacityMigrationClose").onclick=()=>$("#capacityMigrationDlg").close();
+$("#capacityCopyBatch").onclick=runCapacityCopyBatch;
+$("#capacityCleanupBatch").onclick=runCapacityCleanupBatch;
 $("#logout").onclick=()=>signOut(auth);
 getRedirectResult(auth).catch(err=>{
   if(err) console.error("Google redirect login error:",err);
