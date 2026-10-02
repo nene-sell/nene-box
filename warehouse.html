@@ -405,7 +405,6 @@
   <div style="display:flex;gap:6px">
   <button class="btn" id="backupAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">💾 完整備份</button>
   <button class="btn" id="restoreAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">♻️ 還原備份</button>
-   <button class="btn" id="openCapacityMigration" type="button" style="flex:1;padding:8px 9px;font-size:12px">🧳 容量搬遷</button>
   <input id="restoreBackupFile" type="file" accept=".json,application/json" style="display:none">
 </div>
 </div>
@@ -608,15 +607,7 @@
     <button class="btn primary" id="batchLoginSave" type="button">批量記錄</button>
   </div>
 </dialog>
-<dialog id="capacityMigrationDlg" style="width:min(520px,92vw)">
-<h3 style="margin-top:0">🧳 容量搬遷</h3>
-<div class="note" style="line-height:1.65">第一步只把舊帳號文件裡的 <b>items[]</b> 複製到新的 items 子集合並逐筆核對，<b>不刪舊資料</b>。第二步只處理已核對完全一致的帳號，才移除舊 items[]。</div>
-<div id="capacityMigrationStatus" class="box" style="margin-top:12px;padding:11px;font-size:12px;line-height:1.6">尚未執行。</div>
-<div class="actions" style="flex-wrap:wrap">
-<button class="btn primary" id="copyVerify10" type="button">① 複製驗證 10 個</button>
-<button class="btn" id="slimVerified10" type="button">② 瘦身 10 個</button>
-<button class="btn" id="closeCapacityMigration" type="button">關閉</button>
-</div></dialog>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
@@ -2835,77 +2826,4 @@ onAuthStateChanged(auth,async user=>{
 
 
 
-// ===== 手動安全容量搬遷：不在開站時自動執行 =====
-const capacityMigrationStatus=()=>$("#capacityMigrationStatus");
-function migrationItemComparable(item){
-  const x={...item}; delete x._itemId; return x;
-}
-function migrationCanonical(items){
-  return JSON.stringify((items||[]).map(migrationItemComparable).map(x=>JSON.stringify(x)).sort());
-}
-async function getLegacyAccountForMigration(accountId){
-  const snap=await getDoc(accountRef(String(accountId)));
-  return snap.exists()?{id:snap.id,...snap.data()}:null;
-}
-async function copyVerifyOneAccount(accountId){
-  const legacy=await getLegacyAccountForMigration(accountId);
-  if(!legacy||!Array.isArray(legacy.items)||!legacy.items.length)return {state:"skip"};
-  const source=legacy.items.map(x=>({...x}));
-  source.forEach(ensureItemId);
-  for(let i=0;i<source.length;i+=300){
-    const batch=writeBatch(db);
-    source.slice(i,i+300).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
-    await batch.commit();
-  }
-  const copied=await loadAccountItems(accountId);
-  if(migrationCanonical(source)!==migrationCanonical(copied))throw new Error(`帳號 ${legacy.number||accountId} 複製後核對不一致；舊 items[] 已保留。`);
-  await setDoc(accountRef(String(accountId)),{itemsMigrationVerified:true,itemsMigrationVerifiedAt:new Date().toISOString()},{merge:true});
-  return {state:"ok",label:legacy.number||accountId,count:source.length};
-}
-async function slimOneVerifiedAccount(accountId){
-  const legacy=await getLegacyAccountForMigration(accountId);
-  if(!legacy||!Array.isArray(legacy.items)||!legacy.items.length)return {state:"skip"};
-  if(legacy.itemsMigrationVerified!==true)return {state:"skip"};
-  const copied=await loadAccountItems(accountId);
-  if(migrationCanonical(legacy.items)!==migrationCanonical(copied))throw new Error(`帳號 ${legacy.number||accountId} 瘦身前核對不一致，已停止且未刪舊資料。`);
-  const slim={...legacy}; delete slim.id; delete slim.items;
-  slim.itemsMigrationSlimmed=true; slim.itemsMigrationSlimmedAt=new Date().toISOString();
-  await setDoc(accountRef(String(accountId)),slim,{merge:false});
-  return {state:"ok",label:legacy.number||accountId,count:copied.length};
-}
-$("#openCapacityMigration").onclick=()=>$("#capacityMigrationDlg").showModal();
-$("#closeCapacityMigration").onclick=()=>$("#capacityMigrationDlg").close();
-$("#copyVerify10").onclick=async()=>{
-  const btn=$("#copyVerify10"); btn.disabled=true; $("#slimVerified10").disabled=true;
-  try{
-    const snaps=await getDocs(accountCol()); let done=0,items=0;
-    capacityMigrationStatus().textContent="正在找尚未複製的帳號…";
-    for(const x of snaps.docs){
-      if(done>=10)break;
-      const raw=x.data(); if(!Array.isArray(raw.items)||!raw.items.length||raw.itemsMigrationVerified===true)continue;
-      capacityMigrationStatus().textContent=`正在複製驗證 ${raw.number||x.id}…（${done}/10）`;
-      const r=await copyVerifyOneAccount(x.id); if(r.state==="ok"){done++;items+=r.count;}
-    }
-    capacityMigrationStatus().textContent=done?`✅ 本次完成 ${done} 個帳號，共 ${items} 筆道具。舊 items[] 完全沒有刪除。\n可以先關閉視窗確認倉庫資料，再決定是否繼續複製。`:`✅ 沒有找到需要複製驗證的舊 items[] 帳號。`;
-  }catch(err){console.error(err);capacityMigrationStatus().textContent="❌ "+(err?.message||String(err))+"\n已停止；不會自動進入瘦身。";}
-  finally{btn.disabled=false;$("#slimVerified10").disabled=false;}
-};
-$("#slimVerified10").onclick=async()=>{
-  if(!confirm("第二階段會移除『已完成複製且再次核對一致』帳號主文件裡的舊 items[]。\n\n確定要瘦身最多 10 個已驗證帳號嗎？"))return;
-  if(!confirm("再確認一次：只有核對完全一致才會刪除舊 items[]；任何不一致會立刻停止。\n\n確定繼續？"))return;
-  const btn=$("#slimVerified10"); btn.disabled=true; $("#copyVerify10").disabled=true;
-  try{
-    const snaps=await getDocs(accountCol()); let done=0,items=0;
-    capacityMigrationStatus().textContent="正在找已驗證、尚未瘦身的帳號…";
-    for(const x of snaps.docs){
-      if(done>=10)break;
-      const raw=x.data(); if(!Array.isArray(raw.items)||!raw.items.length||raw.itemsMigrationVerified!==true)continue;
-      capacityMigrationStatus().textContent=`正在再次核對並瘦身 ${raw.number||x.id}…（${done}/10）`;
-      const r=await slimOneVerifiedAccount(x.id); if(r.state==="ok"){done++;items+=r.count;}
-    }
-    capacityMigrationStatus().textContent=done?`✅ 本次已安全瘦身 ${done} 個帳號，共核對 ${items} 筆道具。`:`目前沒有可瘦身的已驗證帳號。請先執行①。`;
-    if(done){await loadCloud();}
-  }catch(err){console.error(err);capacityMigrationStatus().textContent="❌ "+(err?.message||String(err))+"\n已停止；發生問題的帳號不會移除舊 items[]。";}
-  finally{btn.disabled=false;$("#copyVerify10").disabled=false;}
-};
 </script></body></html>
