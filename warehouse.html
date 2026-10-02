@@ -405,10 +405,8 @@
   <div style="display:flex;gap:6px">
   <button class="btn" id="backupAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">💾 完整備份</button>
   <button class="btn" id="restoreAllData" type="button" style="flex:1;padding:8px 9px;font-size:12px">♻️ 還原備份</button>
+   <button class="btn" id="openCapacityMigration" type="button" style="flex:1;padding:8px 9px;font-size:12px">🧳 容量搬遷</button>
   <input id="restoreBackupFile" type="file" accept=".json,application/json" style="display:none">
-</div>
-<div style="display:flex;gap:6px;margin-top:6px">
-  <button class="btn" id="openCapacityMigration" type="button" style="flex:1;padding:8px 9px;font-size:12px">🧳 容量搬遷</button>
 </div>
 </div>
 <div id="accountActions" style="display:none;gap:6px;margin:0 0 9px">
@@ -596,16 +594,6 @@
 <div style="text-align:center"><div id="ownerItemName" style="font-size:18px;font-weight:900"></div><div id="ownerItemMeta" class="meta" style="margin-top:4px"></div><div id="ownerSummary" style="font-weight:800;margin-top:10px"></div><div id="ownerList" class="ownerList"></div><div class="actions" style="justify-content:center;margin-top:14px"><button class="btn" id="closeOwners" type="button">關閉</button></div></div>
 </dialog>
 
-<dialog id="capacityMigrationDlg" style="width:min(560px,94vw)">
-  <h3 style="margin-top:0">🧳 容量搬遷</h3>
-  <div class="note" style="margin-top:0;line-height:1.6">把舊帳號文件內的 <b>items[]</b> 分拆到每個帳號的 <b>items</b> 子集合，避免單一文件超過 Firestore 1 MiB。<br>第一階段只複製＋驗證，<b>不刪舊資料</b>；第二階段只有再次驗證完全一致的帳號才會移除舊 items[]。</div>
-  <div id="capacityMigrationStatus" class="box" style="margin-top:12px;padding:12px;font-size:12px;line-height:1.6">尚未執行。</div>
-  <div class="actions" style="flex-wrap:wrap">
-    <button class="btn" id="capacityCopy10" type="button">① 複製驗證 10 個</button>
-    <button class="btn danger" id="capacitySlim10" type="button">② 瘦身 10 個</button>
-    <button class="btn" id="capacityMigrationClose" type="button">關閉</button>
-  </div>
-</dialog>
 <dialog id="batchLoginDlg" style="width:min(620px,94vw)">
   <h3 style="margin-top:0">批量登入紀錄</h3>
   <div class="field"><label>登入日期 / 文字</label><input id="batchLoginValue" type="text"></div>
@@ -620,6 +608,15 @@
     <button class="btn primary" id="batchLoginSave" type="button">批量記錄</button>
   </div>
 </dialog>
+<dialog id="capacityMigrationDlg" style="width:min(520px,92vw)">
+<h3 style="margin-top:0">🧳 容量搬遷</h3>
+<div class="note" style="line-height:1.65">第一步只把舊帳號文件裡的 <b>items[]</b> 複製到新的 items 子集合並逐筆核對，<b>不刪舊資料</b>。第二步只處理已核對完全一致的帳號，才移除舊 items[]。</div>
+<div id="capacityMigrationStatus" class="box" style="margin-top:12px;padding:11px;font-size:12px;line-height:1.6">尚未執行。</div>
+<div class="actions" style="flex-wrap:wrap">
+<button class="btn primary" id="copyVerify10" type="button">① 複製驗證 10 個</button>
+<button class="btn" id="slimVerified10" type="button">② 瘦身 10 個</button>
+<button class="btn" id="closeCapacityMigration" type="button">關閉</button>
+</div></dialog>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
@@ -721,7 +718,7 @@ function refreshStockFromLocal(){
 const itemCol=accountId=>collection(db,"users",ADMIN_UID,"accounts",String(accountId),"items");
 const itemRef=(accountId,itemId)=>doc(db,"users",ADMIN_UID,"accounts",String(accountId),"items",String(itemId));
 const ensureItemId=item=>{ if(!item._itemId)item._itemId=crypto.randomUUID(); return String(item._itemId); };
-const accountMetaData=a=>{ const x={...a}; delete x.items; delete x._legacyItemsPresent; delete x._splitItemsPresent; delete x._legacyItemsSnapshot; delete x._capacityCopyVerified; x.itemsUpdatedAt=Date.now(); return x; };
+const accountMetaData=a=>{ const x={...a}; delete x.items; x.itemsUpdatedAt=Date.now(); return x; };
 async function loadAccountItems(accountId){
   const snap=await getDocs(itemCol(accountId));
   return snap.docs.map(d=>({...d.data(),_itemId:String(d.id)}));
@@ -778,14 +775,10 @@ async function readHybridCloud(){
   const meta=metaSnap.exists()?metaSnap.data():{};
   const accounts=await Promise.all(accountSnap.docs.map(async x=>{
     const raw={id:x.id,...x.data()};
-    const legacyItems=Array.isArray(raw.items)?raw.items:[];
     const splitItems=await loadAccountItems(x.id);
-    // 已有新 items 子集合就讀新資料；尚未分拆的帳號則讀舊 items[]。
-    // 這兩個底線旗標只存在瀏覽器記憶體，不會寫回 Firebase。
-    raw._legacyItemsPresent=legacyItems.length>0;
-    raw._splitItemsPresent=splitItems.length>0;
-    raw._legacyItemsSnapshot=legacyItems;
-    raw.items=splitItems.length?splitItems:legacyItems;
+    // 已有新 items 子集合就讀新資料；尚未分拆的帳號則只讀舊 items[]。
+    // 讀取階段絕不刪除、搬移或改寫任何 Firebase 資料。
+    raw.items=splitItems.length?splitItems:(Array.isArray(raw.items)?raw.items:[]);
     return raw;
   }));
   return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
@@ -801,96 +794,6 @@ async function loadCloud(){
   render();
   setTimeout(()=>backfillInventoryMemory(),300);
 }
-
-// ===== 手動容量搬遷：永不在開站時自動執行 =====
-const capacityDlg=$("#capacityMigrationDlg"), capacityStatus=$("#capacityMigrationStatus");
-const cleanMigrationItem=item=>{const x={...(item||{})};delete x._itemId;return x};
-function canonicalMigrationValue(v){
-  if(Array.isArray(v))return v.map(canonicalMigrationValue);
-  if(v&&typeof v==="object"){const out={};Object.keys(v).sort().forEach(k=>{out[k]=canonicalMigrationValue(v[k])});return out}
-  return v;
-}
-const migrationItemSignature=item=>JSON.stringify(canonicalMigrationValue(cleanMigrationItem(item)));
-const migrationItemSet=items=>(Array.isArray(items)?items:[]).map(migrationItemSignature).sort();
-function migrationItemsEqual(a,b){
-  const aa=migrationItemSet(a),bb=migrationItemSet(b);
-  return aa.length===bb.length&&aa.every((x,i)=>x===bb[i]);
-}
-function migrationHash(text){let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
-function legacyMigrationId(item,index){return `legacy_${String(index).padStart(4,"0")}_${migrationHash(migrationItemSignature(item))}`}
-function capacityLabel(a){return String(a?.number||a?.name||a?.id||"未命名")}
-function setCapacityStatus(html){capacityStatus.innerHTML=html}
-
-$("#openCapacityMigration").onclick=()=>{
-  const legacy=(d.accounts||[]).filter(a=>a._legacyItemsPresent).length;
-  const split=(d.accounts||[]).filter(a=>a._splitItemsPresent).length;
-  setCapacityStatus(`目前載入：${d.accounts.length} 個帳號<br>仍有舊 items[]：${legacy} 個<br>已有分拆 items：${split} 個<br><b>先執行①；確認成功後再執行②。</b>`);
-  capacityDlg.showModal();
-};
-$("#capacityMigrationClose").onclick=()=>capacityDlg.close();
-
-$("#capacityCopy10").onclick=async()=>{
-  if(saving)return;
-  const candidates=(d.accounts||[]).filter(a=>a._legacyItemsPresent&&!a._capacityCopyVerified).slice(0,10);
-  if(!candidates.length){setCapacityStatus("沒有尚待複製驗證的舊帳號。若仍有舊 items[]，代表它們可能已驗證完成，可以進行②。");return}
-  saving=true;$("#capacityCopy10").disabled=true;$("#capacitySlim10").disabled=true;
-  const ok=[],blocked=[],failed=[];
-  try{
-    for(const a of candidates){
-      try{
-        const fresh=await getDoc(accountRef(String(a.id)));
-        if(!fresh.exists()){failed.push(`${capacityLabel(a)}：帳號文件不存在`);continue}
-        const legacy=Array.isArray(fresh.data().items)?fresh.data().items:[];
-        if(!legacy.length){a._legacyItemsPresent=false;continue}
-        let split=await loadAccountItems(a.id);
-        if(split.length){
-          if(migrationItemsEqual(legacy,split)){a._capacityCopyVerified=true;a._splitItemsPresent=true;ok.push(`${capacityLabel(a)}（原本已一致）`)}
-          else blocked.push(`${capacityLabel(a)}：新舊資料不一致，未覆蓋任何資料`);
-          continue;
-        }
-        for(let i=0;i<legacy.length;i+=200){
-          const batch=writeBatch(db);
-          legacy.slice(i,i+200).forEach((item,j)=>{const idx=i+j,id=legacyMigrationId(item,idx);batch.set(itemRef(a.id,id),{...item,_itemId:id})});
-          await batch.commit();
-        }
-        split=await loadAccountItems(a.id);
-        if(!migrationItemsEqual(legacy,split)){blocked.push(`${capacityLabel(a)}：複製後驗證不一致，舊資料仍保留`);continue}
-        a._capacityCopyVerified=true;a._splitItemsPresent=true;a.items=split;ok.push(capacityLabel(a));
-      }catch(err){console.error("容量搬遷複製失敗",a?.id,err);failed.push(`${capacityLabel(a)}：${err?.code||err?.message||"unknown"}`)}
-    }
-    refreshStockFromLocal();render();
-    setCapacityStatus(`<b>① 複製驗證完成</b><br>成功：${ok.length} 個${ok.length?`（${ok.join("、")}）`:""}<br>暫停處理：${blocked.length} 個${blocked.length?`<br>${blocked.join("<br>")}`:""}<br>錯誤：${failed.length} 個${failed.length?`<br>${failed.join("<br>")}`:""}<br><br><b>這一步沒有刪除舊 items[]。</b>`);
-  }finally{saving=false;$("#capacityCopy10").disabled=false;$("#capacitySlim10").disabled=false}
-};
-
-$("#capacitySlim10").onclick=async()=>{
-  if(saving)return;
-  const candidates=(d.accounts||[]).filter(a=>a._legacyItemsPresent&&a._capacityCopyVerified).slice(0,10);
-  if(!candidates.length){setCapacityStatus("目前沒有已通過①、可安全瘦身的帳號。請先執行① 複製驗證。");return}
-  if(!confirm(`即將對 ${candidates.length} 個「已通過複製驗證」的帳號再次核對；只有完全一致才移除主文件舊 items[]。要繼續嗎？`))return;
-  saving=true;$("#capacityCopy10").disabled=true;$("#capacitySlim10").disabled=true;
-  const ok=[],blocked=[],failed=[];
-  try{
-    for(const a of candidates){
-      try{
-        const fresh=await getDoc(accountRef(String(a.id)));
-        if(!fresh.exists()){failed.push(`${capacityLabel(a)}：帳號文件不存在`);continue}
-        const raw=fresh.data(),legacy=Array.isArray(raw.items)?raw.items:[];
-        if(!legacy.length){a._legacyItemsPresent=false;continue}
-        const split=await loadAccountItems(a.id);
-        if(!split.length||!migrationItemsEqual(legacy,split)){blocked.push(`${capacityLabel(a)}：再次驗證不一致，未刪舊資料`);continue}
-        const slim={...raw};delete slim.items;slim.itemsUpdatedAt=Date.now();slim.itemsMigrationVersion=3;
-        await setDoc(accountRef(String(a.id)),slim,{merge:false});
-        const verify=await getDoc(accountRef(String(a.id)));
-        if(!verify.exists()||Array.isArray(verify.data().items)){blocked.push(`${capacityLabel(a)}：瘦身後確認失敗`);continue}
-        a._legacyItemsPresent=false;a._legacyItemsSnapshot=[];a._capacityCopyVerified=false;a._splitItemsPresent=true;a.items=split;ok.push(capacityLabel(a));
-      }catch(err){console.error("容量瘦身失敗",a?.id,err);failed.push(`${capacityLabel(a)}：${err?.code||err?.message||"unknown"}`)}
-    }
-    refreshStockFromLocal();render();
-    const remaining=(d.accounts||[]).filter(a=>a._legacyItemsPresent).length;
-    setCapacityStatus(`<b>② 瘦身完成</b><br>成功：${ok.length} 個${ok.length?`（${ok.join("、")}）`:""}<br>跳過：${blocked.length} 個${blocked.length?`<br>${blocked.join("<br>")}`:""}<br>錯誤：${failed.length} 個${failed.length?`<br>${failed.join("<br>")}`:""}<br>目前仍有舊 items[]：${remaining} 個。`);
-  }finally{saving=false;$("#capacityCopy10").disabled=false;$("#capacitySlim10").disabled=false}
-};
 
 async function cleanupRemovedMaterials(){
   // 「材料」分類已從網站移除：把舊帳號文件內殘留的材料物品真正刪掉，避免總覽重新讀回。
@@ -2930,4 +2833,79 @@ onAuthStateChanged(auth,async user=>{
   try{await loadCloud()}catch(err){console.error(err);alert("讀取雲端庫存失敗｜"+(err?.code||err?.name||"error")+"\n"+(err?.message||String(err))+"\n\n這次只做讀取，沒有自動搬移或刪除庫存資料。")}
 });
 
+
+
+// ===== 手動安全容量搬遷：不在開站時自動執行 =====
+const capacityMigrationStatus=()=>$("#capacityMigrationStatus");
+function migrationItemComparable(item){
+  const x={...item}; delete x._itemId; return x;
+}
+function migrationCanonical(items){
+  return JSON.stringify((items||[]).map(migrationItemComparable).map(x=>JSON.stringify(x)).sort());
+}
+async function getLegacyAccountForMigration(accountId){
+  const snap=await getDoc(accountRef(String(accountId)));
+  return snap.exists()?{id:snap.id,...snap.data()}:null;
+}
+async function copyVerifyOneAccount(accountId){
+  const legacy=await getLegacyAccountForMigration(accountId);
+  if(!legacy||!Array.isArray(legacy.items)||!legacy.items.length)return {state:"skip"};
+  const source=legacy.items.map(x=>({...x}));
+  source.forEach(ensureItemId);
+  for(let i=0;i<source.length;i+=300){
+    const batch=writeBatch(db);
+    source.slice(i,i+300).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
+    await batch.commit();
+  }
+  const copied=await loadAccountItems(accountId);
+  if(migrationCanonical(source)!==migrationCanonical(copied))throw new Error(`帳號 ${legacy.number||accountId} 複製後核對不一致；舊 items[] 已保留。`);
+  await setDoc(accountRef(String(accountId)),{itemsMigrationVerified:true,itemsMigrationVerifiedAt:new Date().toISOString()},{merge:true});
+  return {state:"ok",label:legacy.number||accountId,count:source.length};
+}
+async function slimOneVerifiedAccount(accountId){
+  const legacy=await getLegacyAccountForMigration(accountId);
+  if(!legacy||!Array.isArray(legacy.items)||!legacy.items.length)return {state:"skip"};
+  if(legacy.itemsMigrationVerified!==true)return {state:"skip"};
+  const copied=await loadAccountItems(accountId);
+  if(migrationCanonical(legacy.items)!==migrationCanonical(copied))throw new Error(`帳號 ${legacy.number||accountId} 瘦身前核對不一致，已停止且未刪舊資料。`);
+  const slim={...legacy}; delete slim.id; delete slim.items;
+  slim.itemsMigrationSlimmed=true; slim.itemsMigrationSlimmedAt=new Date().toISOString();
+  await setDoc(accountRef(String(accountId)),slim,{merge:false});
+  return {state:"ok",label:legacy.number||accountId,count:copied.length};
+}
+$("#openCapacityMigration").onclick=()=>$("#capacityMigrationDlg").showModal();
+$("#closeCapacityMigration").onclick=()=>$("#capacityMigrationDlg").close();
+$("#copyVerify10").onclick=async()=>{
+  const btn=$("#copyVerify10"); btn.disabled=true; $("#slimVerified10").disabled=true;
+  try{
+    const snaps=await getDocs(accountCol()); let done=0,items=0;
+    capacityMigrationStatus().textContent="正在找尚未複製的帳號…";
+    for(const x of snaps.docs){
+      if(done>=10)break;
+      const raw=x.data(); if(!Array.isArray(raw.items)||!raw.items.length||raw.itemsMigrationVerified===true)continue;
+      capacityMigrationStatus().textContent=`正在複製驗證 ${raw.number||x.id}…（${done}/10）`;
+      const r=await copyVerifyOneAccount(x.id); if(r.state==="ok"){done++;items+=r.count;}
+    }
+    capacityMigrationStatus().textContent=done?`✅ 本次完成 ${done} 個帳號，共 ${items} 筆道具。舊 items[] 完全沒有刪除。\n可以先關閉視窗確認倉庫資料，再決定是否繼續複製。`:`✅ 沒有找到需要複製驗證的舊 items[] 帳號。`;
+  }catch(err){console.error(err);capacityMigrationStatus().textContent="❌ "+(err?.message||String(err))+"\n已停止；不會自動進入瘦身。";}
+  finally{btn.disabled=false;$("#slimVerified10").disabled=false;}
+};
+$("#slimVerified10").onclick=async()=>{
+  if(!confirm("第二階段會移除『已完成複製且再次核對一致』帳號主文件裡的舊 items[]。\n\n確定要瘦身最多 10 個已驗證帳號嗎？"))return;
+  if(!confirm("再確認一次：只有核對完全一致才會刪除舊 items[]；任何不一致會立刻停止。\n\n確定繼續？"))return;
+  const btn=$("#slimVerified10"); btn.disabled=true; $("#copyVerify10").disabled=true;
+  try{
+    const snaps=await getDocs(accountCol()); let done=0,items=0;
+    capacityMigrationStatus().textContent="正在找已驗證、尚未瘦身的帳號…";
+    for(const x of snaps.docs){
+      if(done>=10)break;
+      const raw=x.data(); if(!Array.isArray(raw.items)||!raw.items.length||raw.itemsMigrationVerified!==true)continue;
+      capacityMigrationStatus().textContent=`正在再次核對並瘦身 ${raw.number||x.id}…（${done}/10）`;
+      const r=await slimOneVerifiedAccount(x.id); if(r.state==="ok"){done++;items+=r.count;}
+    }
+    capacityMigrationStatus().textContent=done?`✅ 本次已安全瘦身 ${done} 個帳號，共核對 ${items} 筆道具。`:`目前沒有可瘦身的已驗證帳號。請先執行①。`;
+    if(done){await loadCloud();}
+  }catch(err){console.error(err);capacityMigrationStatus().textContent="❌ "+(err?.message||String(err))+"\n已停止；發生問題的帳號不會移除舊 items[]。";}
+  finally{btn.disabled=false;$("#copyVerify10").disabled=false;}
+};
 </script></body></html>
