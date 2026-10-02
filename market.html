@@ -4624,7 +4624,29 @@ function setOrdersBadgeCount(count){
     badge.classList.toggle("hidden",count===0);
     badge.setAttribute("aria-label",`待交易訂單 ${count} 筆`);
   }
-  try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:"nene-orders-pending",count},"*"); }catch(_){}
+  try{
+    if(window.parent&&window.parent!==window){
+      const pd=window.parent.document;
+      if(!pd.getElementById("neneParentOrderBadgeStyle")){
+        const st=pd.createElement("style");
+        st.id="neneParentOrderBadgeStyle";
+        st.textContent='.nene-parent-order-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:5px;border-radius:999px;background:#c94f45;color:#fff;font-size:11px;font-weight:900;line-height:1}.nene-parent-order-badge.is-hidden{display:none}';
+        pd.head.appendChild(st);
+      }
+      const candidates=[...pd.querySelectorAll("button,a")];
+      const target=candidates.find(el=>{
+        const own=[...el.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim();
+        return own==="訂單" || (el.textContent||'').trim()==="訂單";
+      });
+      if(target){
+        let parentBadge=target.querySelector(".nene-parent-order-badge");
+        if(!parentBadge){parentBadge=pd.createElement("span");parentBadge.className="nene-parent-order-badge";target.appendChild(parentBadge);}
+        parentBadge.textContent=String(count);
+        parentBadge.classList.toggle("is-hidden",count===0);
+      }
+      window.parent.postMessage({type:"nene-orders-pending",count},"*");
+    }
+  }catch(_){}
 }
 function updateOrdersBadge(){
   setOrdersBadgeCount(adminOrders.filter(o=>o.status==="待交易").length);
