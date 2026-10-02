@@ -2405,9 +2405,14 @@ onAuthStateChanged(auth,user=>{
     marketStockLinks=new Map(snap.docs.map(d=>[d.id,d.data()]));
     marketLinksReady=true;queueMarketStockPublish();
   },err=>console.error("商品連結同步失敗",err)));
-  marketStockUnsubs.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),snap=>{
-    marketStockAccounts=snap.docs.map(d=>d.data());
-    marketAccountsReady=true;queueMarketStockPublish();
+  marketStockUnsubs.push(onSnapshot(collection(db,"users",ADMIN_UID,"accounts"),async snap=>{
+    try{
+      marketStockAccounts=await Promise.all(snap.docs.map(async d=>{
+        const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",d.id,"items"));
+        return {...d.data(),items:itemSnap.docs.map(x=>({...x.data(),_itemId:x.id}))};
+      }));
+      marketAccountsReady=true;queueMarketStockPublish();
+    }catch(err){console.error("小倉倉庫存同步失敗",err)}
   },err=>console.error("小倉倉庫存同步失敗",err)));
 });
 function getVariants(p){
@@ -3810,10 +3815,14 @@ async function loadWarehouseCandidates(force=false){
   warehouseLoadPromise=(async()=>{
     const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts"));
     const map=new Map();
-    snap.forEach(ds=>{
+    const rows=await Promise.all(snap.docs.map(async ds=>{
       const a=ds.data();
+      const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",ds.id,"items"));
+      return {ds,a,items:itemSnap.docs.map(x=>({...x.data(),_itemId:x.id}))};
+    }));
+    for(const {ds,a,items} of rows){
       const owner=String(a.number||a.name||a.gameId||ds.id);
-      for(const item of (Array.isArray(a.items)?a.items:[])){
+      for(const item of items){
         if(!item?.name)continue;
         const key=warehouseIdentity(item);
         if(!map.has(key))map.set(key,{key,item,qty:0,owners:[]});
@@ -3822,7 +3831,7 @@ async function loadWarehouseCandidates(force=false){
         entry.qty+=qty;
         entry.owners.push({owner,qty});
       }
-    });
+    }
     warehouseCandidates=[...map.values()].sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
     return warehouseCandidates;
   })();
@@ -4719,7 +4728,10 @@ async function planWarehouseFulfillment(order){
   }
   if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
   const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts"));
-  const accounts=snap.docs.map(d=>({id:d.id,...d.data()}));
+  const accounts=await Promise.all(snap.docs.map(async d=>{
+    const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",d.id,"items"));
+    return {id:d.id,...d.data(),items:itemSnap.docs.map(x=>({...x.data(),_itemId:x.id}))};
+  }));
   const allocations=[];
   const used=new Map();
   for(const row of linkedRows){
@@ -4776,6 +4788,19 @@ async function completeOrder(orderId,btn){
         const ref=doc(db,"users",ADMIN_UID,"accounts",id);
         accountRead.set(id,{ref,snap:await tx.get(ref)});
       }
+      const itemRead=new Map();
+      for(const id of accountIds){
+        const plannedKeys=new Set(plan.allocations.filter(a=>a.accountId===id).map(a=>a.key));
+        const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",id,"items"));
+        const refs=itemSnap.docs.filter(x=>plannedKeys.has(warehouseIdentity(x.data()))).map(x=>x.ref);
+        itemRead.set(id,refs);
+      }
+      const itemTxRead=new Map();
+      for(const [id,refs] of itemRead){
+        const rows=[];
+        for(const ref of refs){const snap=await tx.get(ref);if(snap.exists())rows.push({ref,snap});}
+        itemTxRead.set(id,rows);
+      }
       const fulfillmentRef=doc(db,"orderFulfillments",orderId);
       const existing=await tx.get(fulfillmentRef);
       if(existing.exists())throw new Error("此訂單已有配貨紀錄，未重複扣除");
@@ -4805,21 +4830,22 @@ async function completeOrder(orderId,btn){
       }
       if(requiredByKey.size!==planned.size||[...requiredByKey].some(([k,v])=>planned.get(k)!==v))
         throw new Error("商品連結或訂單內容已變更，請重新配貨");
-      for(const [id,{ref,snap}] of accountRead){
+      for(const [id,{snap}] of accountRead){
         if(!snap.exists())throw new Error("出貨帳號已刪除");
-        const items=(snap.data().items||[]).map(i=>({...i}));
+        const rows=(itemTxRead.get(id)||[]).map(x=>({ref:x.ref,item:{...x.snap.data(),_itemId:x.snap.id}}));
         for(const a of plan.allocations.filter(x=>x.accountId===id)){
           let remaining=a.qty;
-          for(const item of items){
-            if(warehouseIdentity(item)!==a.key)continue;
-            const available=Math.max(0,Math.floor(Number(item.qty)||0));
+          for(const row of rows){
+            if(warehouseIdentity(row.item)!==a.key)continue;
+            const available=Math.max(0,Math.floor(Number(row.item.qty)||0));
             const taken=Math.min(remaining,available);
-            item.qty=available-taken;remaining-=taken;
+            row.item.qty=available-taken;remaining-=taken;
             if(!remaining)break;
           }
           if(remaining)throw new Error(`帳號 ${a.label} 的實際庫存不足，未扣除任何數量`);
         }
-        tx.update(ref,{items});
+        for(const row of rows)tx.update(row.ref,{qty:Math.max(0,Math.floor(Number(row.item.qty)||0))});
+        tx.update(accountRead.get(id).ref,{itemsUpdatedAt:Date.now()});
       }
       // 未連結商品維持原有手動庫存扣除方式。
       for(const id of productIds){
