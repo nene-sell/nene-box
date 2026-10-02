@@ -2835,48 +2835,9 @@ $("#saveOverviewJpg").onclick=async()=>{
   }catch(err){console.error(err);alert("總覽 JPG 製作失敗："+(err?.message||err))}
   finally{btn.disabled=false;btn.textContent="儲存 JPG"}
 };
-let stopPendingOrdersAlert=null;
-function syncParentOrderBadge(count){
-  count=Math.max(0,Number(count)||0);
-  try{
-    if(window.parent&&window.parent!==window){
-      const pd=window.parent.document;
-      if(!pd.getElementById("neneParentOrderBadgeStyle")){
-        const st=pd.createElement("style");
-        st.id="neneParentOrderBadgeStyle";
-        st.textContent='.nene-parent-order-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:5px;border-radius:999px;background:#c94f45;color:#fff;font-size:11px;font-weight:900;line-height:1}.nene-parent-order-badge.is-hidden{display:none}';
-        pd.head.appendChild(st);
-      }
-      const candidates=[...pd.querySelectorAll("button,a")];
-      const target=candidates.find(el=>{
-        const own=[...el.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim();
-        return own==="訂單" || (el.textContent||'').trim()==="訂單";
-      });
-      if(target){
-        let badge=target.querySelector(".nene-parent-order-badge");
-        if(!badge){badge=pd.createElement("span");badge.className="nene-parent-order-badge";target.appendChild(badge);}
-        badge.textContent=String(count);
-        badge.classList.toggle("is-hidden",count===0);
-      }
-      window.parent.postMessage({type:"nene-orders-pending",count},"*");
-    }
-  }catch(_){}
-}
-function startPendingOrdersAlert(){
-  if(stopPendingOrdersAlert){stopPendingOrdersAlert();stopPendingOrdersAlert=null;}
-  syncParentOrderBadge(0);
-  if(!currentUser)return;
-  const pendingQuery=query(collection(db,"orders"),where("status","==","待交易"));
-  stopPendingOrdersAlert=onSnapshot(pendingQuery,snap=>{
-    syncParentOrderBadge(snap.size);
-  },err=>{
-    console.error("待交易訂單提醒讀取失敗",err);
-  });
-}
-
+// 訂單提醒由整合首頁中常駐的 market iframe 統一監聽，避免小倉倉再重複讀取 orders。
 onAuthStateChanged(auth,async user=>{
   currentUser=user&&user.uid===ADMIN_UID?user:null;
-  startPendingOrdersAlert();
   if(!currentUser){
     $("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();return;
   }
