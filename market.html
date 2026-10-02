@@ -3784,30 +3784,19 @@ async function loadWarehouseCandidates(force=false){
   if(!isAdmin())return;
   if(warehouseLoadPromise&&!force)return warehouseLoadPromise;
   warehouseLoadPromise=(async()=>{
-    const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts"));
-    const map=new Map();
-    const rows=await Promise.all(snap.docs.map(async ds=>{
-      const a=ds.data();
-      const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",ds.id,"items"));
-      return {ds,a,items:itemSnap.docs.map(x=>({...x.data(),_itemId:x.id}))};
-    }));
-    for(const {ds,a,items} of rows){
-      const owner=String(a.number||a.name||a.gameId||ds.id);
-      for(const item of items){
-        if(!item?.name)continue;
-        const key=warehouseIdentity(item);
-        if(!map.has(key))map.set(key,{key,item,qty:0,owners:[]});
-        const entry=map.get(key);
-        const qty=Math.max(0,Number(item.qty)||0);
-        entry.qty+=qty;
-        entry.owners.push({owner,qty});
-      }
-    }
-    warehouseCandidates=[...map.values()].sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
+    const indexSnap=await getDoc(doc(db,"adminSettings","warehouseInventoryIndex"));
+    if(!indexSnap.exists()){warehouseCandidates=[];return warehouseCandidates;}
+    const rows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
+    warehouseCandidates=rows.map(r=>{
+      const key=String(r?.key||"");
+      const [category,name,variant,gender,candyType]=warehouseParseKey(key);
+      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>({owner:String(o?.label||o?.accountId||""),qty:Math.max(0,Math.floor(Number(o?.qty)||0))}));
+      const qty=owners.reduce((n,o)=>n+o.qty,0);
+      return {key,item:{category,name,variant,gender,candyType},qty,owners};
+    }).filter(x=>x.key&&x.item.name).sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
     return warehouseCandidates;
   })();
-  try{return await warehouseLoadPromise;}
-  finally{warehouseLoadPromise=null;}
+  try{return await warehouseLoadPromise;}finally{warehouseLoadPromise=null;}
 }
 function renderVariantWarehouseInfo(row){
   const x=warehouseCandidates.find(x=>x.key===row.dataset.warehouseKey);
@@ -4262,7 +4251,8 @@ onAuthStateChanged(auth,user=>{
   render();
 });
 
-$("#ordersBtn")?.addEventListener("click",()=>{ if(isAdmin()){ordersView="pending";renderOrders();$("#ordersDialog").showModal();} });
+$("#ordersBtn")?.addEventListener("click",()=>{ if(isAdmin()){ordersView="pending";startOrdersDataListener();renderOrders();$("#ordersDialog").showModal();} });
+$("#ordersDialog")?.addEventListener("close",stopOrdersData);
 $("#pendingOrdersTab")?.addEventListener("click",()=>{ordersView="pending";renderOrders();});
 $("#historyOrdersTab")?.addEventListener("click",()=>{ordersView="history";renderOrders();});
 
@@ -4616,75 +4606,37 @@ async function saveOrderAdminFields(orderId,btn){
 }
 let ordersListenerReady=false;
 let pendingOrderIds=new Set();
+let stopPendingOrdersListener=null;
+let stopOrdersDataListener=null;
 function setOrdersBadgeCount(count){
   count=Math.max(0,Number(count)||0);
   const badge=$("#ordersBadge");
-  if(badge){
-    badge.textContent=String(count);
-    badge.classList.toggle("hidden",count===0);
-    badge.setAttribute("aria-label",`待交易訂單 ${count} 筆`);
-  }
-  try{
-    if(window.parent&&window.parent!==window){
-      const pd=window.parent.document;
-      if(!pd.getElementById("neneParentOrderBadgeStyle")){
-        const st=pd.createElement("style");
-        st.id="neneParentOrderBadgeStyle";
-        st.textContent='.nene-parent-order-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:5px;border-radius:999px;background:#c94f45;color:#fff;font-size:11px;font-weight:900;line-height:1}.nene-parent-order-badge.is-hidden{display:none}';
-        pd.head.appendChild(st);
-      }
-      const candidates=[...pd.querySelectorAll("button,a")];
-      const target=candidates.find(el=>{
-        const own=[...el.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim();
-        return own==="訂單" || (el.textContent||'').trim()==="訂單";
-      });
-      if(target){
-        let parentBadge=target.querySelector(".nene-parent-order-badge");
-        if(!parentBadge){parentBadge=pd.createElement("span");parentBadge.className="nene-parent-order-badge";target.appendChild(parentBadge);}
-        parentBadge.textContent=String(count);
-        parentBadge.classList.toggle("is-hidden",count===0);
-      }
-      window.parent.postMessage({type:"nene-orders-pending",count},"*");
-    }
-  }catch(_){}
+  if(badge){badge.textContent=String(count);badge.classList.toggle("hidden",count===0);badge.setAttribute("aria-label",`待交易訂單 ${count} 筆`);}
+  try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:"nene-orders-pending",count},"*");}catch(_){}
 }
-function updateOrdersBadge(){
-  setOrdersBadgeCount(adminOrders.filter(o=>o.status==="待交易").length);
+function stopOrdersData(){if(stopOrdersDataListener){try{stopOrdersDataListener();}catch(_){}stopOrdersDataListener=null;}}
+function startOrdersDataListener(){
+  stopOrdersData();
+  if(!isAdmin())return;
+  stopOrdersDataListener=onSnapshot(collection(db,"orders"),snap=>{
+    adminOrders=snap.docs.map(d=>({id:d.id,...d.data()}));
+    ordersListenerReady=true;renderOrders();
+  },err=>{console.error(err);toast("訂單讀取失敗");});
 }
 function startOrdersListener(){
-  if(stopOrdersListener){stopOrdersListener();stopOrdersListener=null;}
-  adminOrders=[];ordersListenerReady=false;pendingOrderIds=new Set();renderOrders();setOrdersBadgeCount(0);
+  if(stopPendingOrdersListener){try{stopPendingOrdersListener();}catch(_){}stopPendingOrdersListener=null;}
+  stopOrdersData();adminOrders=[];ordersListenerReady=false;pendingOrderIds=new Set();renderOrders();setOrdersBadgeCount(0);
   if(!isAdmin())return;
-
-  // 訂單管理維持完整清單；紅色提醒另用只讀「待交易」的小型監聽，
-  // 不讀小倉倉、不掃 616 個帳號，並確保提醒數字不受歷史訂單渲染影響。
-  const unsubAll=onSnapshot(collection(db,"orders"),snap=>{
-    adminOrders=snap.docs.map(d=>({id:d.id,...d.data()}));
-    ordersListenerReady=true;
-    renderOrders();
-  },err=>{console.error(err);toast("訂單讀取失敗");});
-
   const pendingQ=query(collection(db,"orders"),where("status","==","待交易"));
   let pendingReady=false;
-  const unsubPending=onSnapshot(pendingQ,snap=>{
+  stopPendingOrdersListener=onSnapshot(pendingQ,snap=>{
     const nextIds=new Set(snap.docs.map(d=>d.id));
     if(pendingReady){
       const fresh=snap.docs.filter(d=>!pendingOrderIds.has(d.id));
-      if(fresh.length){
-        const first=fresh[0].data()||{};
-        toast(fresh.length===1?`有新訂單：${first.orderNumber||fresh[0].id}`:`有 ${fresh.length} 筆新訂單`);
-      }
+      if(fresh.length){const first=fresh[0].data()||{};toast(fresh.length===1?`有新訂單：${first.orderNumber||fresh[0].id}`:`有 ${fresh.length} 筆新訂單`);}
     }
-    pendingOrderIds=nextIds;
-    pendingReady=true;
-    setOrdersBadgeCount(snap.size);
-  },err=>{
-    console.error(err);
-    // 若待交易查詢暫時失敗，仍以已載入的訂單清單顯示數字。
-    updateOrdersBadge();
-  });
-
-  stopOrdersListener=()=>{ try{unsubAll();}catch(_){} try{unsubPending();}catch(_){} };
+    pendingOrderIds=nextIds;pendingReady=true;setOrdersBadgeCount(snap.size);
+  },err=>{console.error("待交易訂單提醒讀取失敗",err);setOrdersBadgeCount(0);});
 }
 // 用可點選的配貨視窗取代手動輸入「1:2,2:1」格式。
 function chooseFulfillmentAccounts(order,row,candidates){
