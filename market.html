@@ -2150,7 +2150,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, setDoc,
-  onSnapshot, serverTimestamp, runTransaction, getDoc, getDocs, writeBatch, Timestamp
+  onSnapshot, serverTimestamp, runTransaction, getDoc, getDocs, writeBatch, Timestamp, collectionGroup, query, where
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig={
@@ -4701,22 +4701,43 @@ async function planWarehouseFulfillment(order){
     linkedRows.push({item,key,qty:Math.max(1,Math.floor(Number(item.qty)||1))});
   }
   if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
-  const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts"));
-  const accounts=await Promise.all(snap.docs.map(async d=>{
-    const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",d.id,"items"));
-    return {id:d.id,...d.data(),items:itemSnap.docs.map(x=>({...x.data(),_itemId:x.id}))};
+
+  // 只查這張訂單實際需要的道具名稱，不再掃 616 個帳號與每個 items 子集合。
+  // collectionGroup(items) 先用 name 篩選，再在瀏覽器端核對完整 identity。
+  const keys=[...new Set(linkedRows.map(r=>r.key))];
+  const itemsByKey=new Map(keys.map(k=>[k,[]]));
+  const names=[...new Set(keys.map(k=>warehouseParseKey(k)[1]).filter(Boolean))];
+  for(const name of names){
+    const qs=await getDocs(query(collectionGroup(db,"items"),where("name","==",name)));
+    for(const ds of qs.docs){
+      const key=warehouseIdentity(ds.data());
+      if(!itemsByKey.has(key))continue;
+      const accountRef=ds.ref.parent.parent;
+      if(!accountRef)continue;
+      itemsByKey.get(key).push({accountId:accountRef.id,itemId:ds.id,qty:Math.max(0,Math.floor(Number(ds.data().qty)||0))});
+    }
+  }
+
+  const candidateAccountIds=[...new Set([...itemsByKey.values()].flat().map(x=>x.accountId))];
+  const accountSnaps=await Promise.all(candidateAccountIds.map(id=>getDoc(doc(db,"users",ADMIN_UID,"accounts",id))));
+  const accountMeta=new Map(candidateAccountIds.map((id,i)=>{
+    const a=accountSnaps[i].exists()?accountSnaps[i].data():{};
+    return [id,{label:String(a.number||a.name||a.gameId||id),gameId:String(a.gameId||"")}];
   }));
+
   const allocations=[];
   const used=new Map();
   for(const row of linkedRows){
+    const grouped=new Map();
+    for(const hit of (itemsByKey.get(row.key)||[])){
+      if(!grouped.has(hit.accountId))grouped.set(hit.accountId,0);
+      grouped.set(hit.accountId,grouped.get(hit.accountId)+hit.qty);
+    }
     const candidates=[];
-    for(const a of accounts){
-      const matchingItems=(a.items||[]).filter(i=>warehouseIdentity(i)===row.key);
-      if(!matchingItems.length)continue;
-      const available=matchingItems.reduce((sum,i)=>sum+Math.max(0,Math.floor(Number(i.qty)||0)),0);
-      const remaining=Math.max(0,available-(used.get(a.id+"\u001f"+row.key)||0));
-      // 曾持有這件道具的帳號即使數量為零，也保留在配貨清單並禁用輸入。
-      candidates.push({id:a.id,label:String(a.number||a.name||a.gameId||a.id),gameId:String(a.gameId||""),remaining});
+    for(const [accountId,available] of grouped){
+      const remaining=Math.max(0,available-(used.get(accountId+"\u001f"+row.key)||0));
+      const meta=accountMeta.get(accountId)||{label:accountId,gameId:""};
+      candidates.push({id:accountId,label:meta.label,gameId:meta.gameId,remaining});
     }
     if(candidates.reduce((n,a)=>n+a.remaining,0)<row.qty)
       throw new Error(`「${row.item.name||"商品"}」目前實際庫存不足，請先確認小倉倉`);
@@ -4725,14 +4746,36 @@ async function planWarehouseFulfillment(order){
     for(const x of parsed){
       const k=x.accountId+"\u001f"+x.key;
       used.set(k,(used.get(k)||0)+x.qty);
-      const candidate=candidates.find(a=>a.id===x.accountId);
-      if(used.get(k)>accounts.find(a=>a.id===x.accountId).items.filter(i=>warehouseIdentity(i)===x.key).reduce((n,i)=>n+Math.max(0,Math.floor(Number(i.qty)||0)),0))
-        throw new Error(`帳號 ${candidate?.label||""} 配貨超過現有數量`);
+      const total=(itemsByKey.get(x.key)||[]).filter(v=>v.accountId===x.accountId).reduce((n,v)=>n+v.qty,0);
+      if(used.get(k)>total)throw new Error(`帳號 ${x.label||""} 配貨超過現有數量`);
       allocations.push(x);
     }
   }
   return {allocations,linkedIds:new Set(linkedRows.map(r=>String(r.item.id||"")))};
 }
+
+async function publishCompletedOrderStock(order){
+  if(auth.currentUser?.uid!==ADMIN_UID)return;
+  const next=JSON.parse(JSON.stringify(publicWarehouseStock||{}));
+  let changed=false;
+  for(const item of (order?.items||[])){
+    const id=String(item.id||"");
+    const entry=next[id];
+    if(!entry)continue;
+    const qty=Math.max(1,Math.floor(Number(item.qty)||1));
+    const variant=String(item.variant||"");
+    if(variant && entry.variants && Object.prototype.hasOwnProperty.call(entry.variants,variant)){
+      entry.variants[variant]=Math.max(0,Math.floor(Number(entry.variants[variant])||0)-qty);changed=true;
+    }else if(!variant && Object.prototype.hasOwnProperty.call(entry,"stock")){
+      entry.stock=Math.max(0,Math.floor(Number(entry.stock)||0)-qty);changed=true;
+    }
+  }
+  if(changed){
+    await setDoc(doc(db,"publicSettings","warehouseStock"),{products:next,updatedAt:new Date().toISOString()});
+    publicWarehouseStock=next;render();renderCart();
+  }
+}
+
 async function completeOrder(orderId,btn){
   if(!isAdmin()||!orderId)return;
   btn.disabled=true;btn.textContent="處理中…";
@@ -4847,10 +4890,8 @@ async function completeOrder(orderId,btn){
       tx.set(fulfillmentRef,{orderId,allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-fulfillment"});
       tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:plan.allocations.length>0});
     });
-    // A completed linked order changes warehouse quantities. Refresh/publish once
-    // for this explicit action instead of continuously watching all accounts.
-    await loadWarehouseCandidates(true);
-    await publishPublicWarehouseStockFromCandidates();
+    // 完成訂單後只更新這張訂單影響的公開庫存，不再重新掃全部帳號。
+    await publishCompletedOrderStock(order);
     toast("交易完成，指定帳號庫存已更新");
   }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"完成交易失敗");}
   finally{btn.disabled=false;btn.textContent="完成交易";}
