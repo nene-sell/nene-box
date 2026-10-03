@@ -7734,3 +7734,107 @@ main.wrap #productCount{
   else {fix();setTimeout(fix,50);setTimeout(fix,500)}
 })();
 </script>
+
+<style id="nene-compact-layout-v8">
+/* v8: 近期上架真正縮框、手機完整置中、DC 固定在使用說明下方 */
+.home-feature{
+  display:flex!important;
+  align-items:flex-start!important;
+  justify-content:center!important;
+  gap:16px!important;
+  width:100%!important;
+  max-width:1680px!important;
+  margin:16px auto 12px!important;
+}
+.recent-showcase{
+  flex:0 1 auto!important;
+  width:fit-content!important;
+  min-width:0!important;
+  max-width:calc(100% - 396px)!important;
+  height:auto!important;
+  min-height:0!important;
+  align-self:flex-start!important;
+  padding:12px 13px 13px!important;
+}
+.recent-mini-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(135px,190px))!important;
+  grid-auto-flow:row!important;
+  gap:10px!important;
+  width:max-content!important;
+  max-width:100%!important;
+  justify-content:start!important;
+  align-items:start!important;
+}
+.recent-mini{width:100%!important;min-width:0!important}
+.recent-mini-empty{width:min(420px,70vw)!important;min-height:62px!important}
+.usage-guide{
+  flex:0 0 380px!important;
+  width:380px!important;
+  max-width:380px!important;
+  height:auto!important;
+  min-height:0!important;
+  align-self:flex-start!important;
+}
+.usage-guide .shop-discord-contact{
+  display:flex!important;
+  width:100%!important;
+  min-height:42px!important;
+  margin:12px 0 0!important;
+  background:#8f6047!important;
+  border-color:#8f6047!important;
+  color:#fff!important;
+}
+.toolbar .shop-discord-contact{display:none!important}
+
+@media(max-width:900px){
+  .home-feature{flex-direction:column!important;align-items:center!important;gap:10px!important}
+  .recent-showcase,.usage-guide{
+    width:min(100%,720px)!important;
+    max-width:720px!important;
+    flex:0 0 auto!important;
+    margin-left:auto!important;margin-right:auto!important;
+  }
+  .recent-mini-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;width:100%!important}
+}
+@media(max-width:600px){
+  main.wrap{width:100%!important;max-width:100%!important;margin:0 auto!important;padding-left:10px!important;padding-right:10px!important}
+  .home-feature{width:100%!important;max-width:100%!important;margin:10px auto!important;align-items:center!important}
+  .recent-showcase,.usage-guide{
+    width:100%!important;max-width:100%!important;
+    margin-left:auto!important;margin-right:auto!important;
+    padding:10px!important;
+  }
+  .recent-showcase-head{width:100%!important;margin:0 0 8px!important;text-align:center!important}
+  .recent-showcase-title{margin:auto!important}
+  .recent-showcase-more{position:absolute!important;right:20px!important}
+  .recent-mini-grid{
+    width:100%!important;max-width:100%!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:7px!important;justify-content:center!important;
+  }
+  .recent-mini{margin:0 auto!important;padding:6px!important}
+  .recent-mini:nth-child(n+5){display:none!important}
+  .recent-mini-empty{width:100%!important;min-height:48px!important}
+  .usage-guide{text-align:center!important}
+  .usage-guide .usage-step{text-align:left!important}
+  .toolbar,main.wrap nav.tabs,.section-head,#grid,#empty{
+    width:100%!important;max-width:100%!important;
+    margin-left:auto!important;margin-right:auto!important;
+  }
+  .section-head{text-align:center!important}
+  .section-title-row{justify-content:center!important}
+  #productCount{text-align:center!important}
+}
+</style>
+<script id="nene-compact-layout-v8-script">
+(function(){
+  function applyV8(){
+    const contact=document.getElementById('shopDiscordContact');
+    const guide=document.querySelector('.usage-guide');
+    if(contact&&guide&&contact.parentElement!==guide) guide.appendChild(contact);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>{applyV8();setTimeout(applyV8,100);setTimeout(applyV8,800)});
+  else {applyV8();setTimeout(applyV8,100);setTimeout(applyV8,800)}
+})();
+</script>
