@@ -5560,16 +5560,15 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
   function setupLayout(){
     const main=document.querySelector('main.wrap'), tabs=document.querySelector('nav.tabs'), usage=document.querySelector('.usage-guide'), toolbar=document.querySelector('.toolbar');
     if(!main||!tabs||!usage||!toolbar||document.querySelector('.home-feature')) return;
-    const hero=document.querySelector('.nene-art-hero');
-    if(hero) hero.insertAdjacentElement('afterend',tabs);
     const feature=document.createElement('section'); feature.className='home-feature';
     const shelf=document.createElement('div'); shelf.className='recent-showcase'; shelf.innerHTML='<div class="recent-showcase-head"><div class="recent-showcase-title">近期上架</div><div class="recent-showcase-more">新品上架</div></div><div id="recentMiniGrid" class="recent-mini-grid"><div class="recent-mini-empty">商品載入中…</div></div>';
     feature.appendChild(shelf); feature.appendChild(usage);
     toolbar.insertAdjacentElement('beforebegin',feature);
+    toolbar.insertAdjacentElement('afterend',tabs);
   }
   window.renderRecentShowcase=function(){
     const box=document.getElementById('recentMiniGrid'); if(!box||typeof products==='undefined')return;
-    let list=(products||[]).filter(p=>p&&p.recentFeatured===true&&!['收購區','交換區'].includes(String(p.category||'')));
+    let list=(products||[]).filter(p=>p&&(p.recentFeatured===true || (typeof isNewActive==='function' && isNewActive(p)))&&!['收購區','交換區'].includes(String(p.category||'')));
     list.sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
     if(!list.length) list=(products||[]).filter(p=>p&&!['收購區','交換區'].includes(String(p.category||''))).sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
     list=list.slice(0,4);
@@ -7612,5 +7611,53 @@ main.wrap{
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(placeCategories,0));
   else setTimeout(placeCategories,0);
+})();
+</script>
+
+<style id="nene-layout-hardfix-v6">
+/* hard fix: search -> categories -> product heading, with strong text contrast */
+main.wrap .toolbar{order:initial!important;}
+main.wrap nav.tabs{
+  width:100%!important;max-width:1680px!important;
+  margin:0 auto 14px!important;padding:10px 12px!important;
+  border:1px solid #c3a187!important;border-radius:15px!important;
+  background:#d6b69d!important;
+}
+main.wrap .section-head, main.wrap .section-head *{opacity:1!important;}
+main.wrap .section-head #sectionTitle, main.wrap #sectionTitle{
+  color:#51372a!important;-webkit-text-fill-color:#51372a!important;
+  font-weight:900!important;text-shadow:none!important;opacity:1!important;
+}
+main.wrap #productCount{
+  color:#856652!important;-webkit-text-fill-color:#856652!important;
+  font-weight:700!important;opacity:1!important;
+}
+.nene-art-hero{margin-top:0!important;border-top:0!important;}
+@media(max-width:600px){
+  main.wrap nav.tabs{
+    width:100%!important;max-width:none!important;margin:0 0 12px!important;
+    display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:7px!important;padding:9px 7px!important;overflow:visible!important;
+  }
+  main.wrap nav.tabs .tab,main.wrap nav.tabs .group-tab{
+    width:100%!important;min-width:0!important;justify-content:center!important;
+    padding:7px 4px!important;font-size:11px!important;
+  }
+}
+</style>
+<script id="nene-layout-hardfix-v6-script">
+(function(){
+  function fix(){
+    const main=document.querySelector('main.wrap');
+    const toolbar=main&&main.querySelector('.toolbar');
+    const tabs=main&&main.querySelector('nav.tabs');
+    if(toolbar&&tabs&&toolbar.nextElementSibling!==tabs) toolbar.insertAdjacentElement('afterend',tabs);
+    const title=document.getElementById('sectionTitle');
+    const count=document.getElementById('productCount');
+    if(title){title.style.setProperty('color','#51372a','important');title.style.setProperty('-webkit-text-fill-color','#51372a','important');title.style.setProperty('opacity','1','important');}
+    if(count){count.style.setProperty('color','#856652','important');count.style.setProperty('-webkit-text-fill-color','#856652','important');count.style.setProperty('opacity','1','important');}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>{fix();setTimeout(fix,50);setTimeout(fix,500)});
+  else {fix();setTimeout(fix,50);setTimeout(fix,500)}
 })();
 </script>
