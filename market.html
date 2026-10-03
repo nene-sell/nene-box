@@ -4879,6 +4879,8 @@ async function completeOrder(orderId,btn){
         }
       }
       tx.set(fulfillmentRef,{orderId,allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-fulfillment"});
+      // 讓小倉倉的低讀取快取知道庫存已被訂單扣除；下次開啟只在版本變更時重載。
+      if(plan.allocations.length>0)tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
       tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:plan.allocations.length>0});
     });
     // 完成訂單後只更新這張訂單影響的公開庫存，不再重新掃全部帳號。
