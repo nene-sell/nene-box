@@ -3790,7 +3790,7 @@ async function loadWarehouseCandidates(force=false){
     warehouseCandidates=rows.map(r=>{
       const key=String(r?.key||"");
       const [category,name,variant,gender,candyType]=warehouseParseKey(key);
-      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>({owner:String(o?.label||o?.accountId||""),qty:Math.max(0,Math.floor(Number(o?.qty)||0))}));
+      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>({accountId:String(o?.accountId||""),owner:String(o?.label||o?.accountId||""),qty:Math.max(0,Math.floor(Number(o?.qty)||0))}));
       const qty=owners.reduce((n,o)=>n+o.qty,0);
       return {key,item:{category,name,variant,gender,candyType},qty,owners};
     }).filter(x=>x.key&&x.item.name).sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
@@ -3798,10 +3798,40 @@ async function loadWarehouseCandidates(force=false){
   })();
   try{return await warehouseLoadPromise;}finally{warehouseLoadPromise=null;}
 }
+const warehouseOwnerMetaCache=new Map();
+async function warehouseOwnerLabel(o){
+  const accountId=String(o?.accountId||"");
+  if(!accountId)return String(o?.owner||"");
+  if(warehouseOwnerMetaCache.has(accountId))return warehouseOwnerMetaCache.get(accountId);
+  try{
+    const snap=await getDoc(doc(db,"users",ADMIN_UID,"accounts",accountId));
+    if(snap.exists()){
+      const a=snap.data()||{};
+      const number=String(a.number||a.name||"").trim();
+      const gameId=String(a.gameId||"").trim();
+      const label=[number,gameId].filter(Boolean).join("｜")||String(o?.owner||accountId);
+      warehouseOwnerMetaCache.set(accountId,label);
+      return label;
+    }
+  }catch(err){console.error("讀取持有帳號資料失敗",err);}
+  const fallback=String(o?.owner||accountId);
+  warehouseOwnerMetaCache.set(accountId,fallback);
+  return fallback;
+}
+async function warehouseOwnersText(x){
+  if(!x?.owners?.length)return "";
+  const labels=await Promise.all(x.owners.map(warehouseOwnerLabel));
+  return x.owners.map((o,i)=>`${labels[i]} ×${o.qty}`).join("、");
+}
 function renderVariantWarehouseInfo(row){
+  const box=row.querySelector(".variant-warehouse-info");
   const x=warehouseCandidates.find(x=>x.key===row.dataset.warehouseKey);
-  row.querySelector(".variant-warehouse-info").textContent=x
-    ?`庫存 ${x.qty}｜${x.owners.map(o=>`${o.owner} ×${o.qty}`).join("、")}`:"尚未連結";
+  if(!x){box.textContent="尚未連結";return;}
+  box.textContent=`庫存 ${x.qty}｜讀取持有帳號…`;
+  const key=x.key;
+  warehouseOwnersText(x).then(text=>{
+    if(row.dataset.warehouseKey===key)box.textContent=`庫存 ${x.qty}${text?`｜${text}`:""}`;
+  });
 }
 function renderVariantWarehousePicker(row){
   const sel=row.querySelector(".variant-warehouse-select");
@@ -3840,9 +3870,14 @@ function showWarehouseInfo(){
   const key=$("#warehouseItemChoice").value;
   $("#warehouseItemChoice").dataset.chosen=key;
   const x=warehouseCandidates.find(x=>x.key===key);
-  $("#warehouseItemInfo").textContent=x
-    ? `總數 ${x.qty}｜持有帳號：${x.owners.map(o=>`${o.owner} ×${o.qty}`).join("、")}`
-    : (warehouseCandidates.length?"尚未連結小倉倉道具":"按「更新小倉倉資料」讀取庫存");
+  if(!x){
+    $("#warehouseItemInfo").textContent=warehouseCandidates.length?"尚未連結小倉倉道具":"按「更新小倉倉資料」讀取庫存";
+    return;
+  }
+  $("#warehouseItemInfo").textContent=`總數 ${x.qty}｜持有帳號：讀取中…`;
+  warehouseOwnersText(x).then(text=>{
+    if($("#warehouseItemChoice").value===key)$("#warehouseItemInfo").textContent=`總數 ${x.qty}｜持有帳號：${text||"—"}`;
+  });
 }
 $("#warehouseItemSearch").addEventListener("input",showWarehouseChoice);
 $("#warehouseItemChoice").addEventListener("change",showWarehouseInfo);
