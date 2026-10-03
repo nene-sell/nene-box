@@ -2512,6 +2512,54 @@ main.wrap nav.tabs .tab:hover,main.wrap nav.tabs .group-tab:hover{background:#d5
 main.wrap nav.tabs .tab.active,main.wrap nav.tabs .group-tab.active{background:#95604f!important;border-color:#825040!important;color:#fff!important;box-shadow:0 2px 6px rgba(84,50,40,.18)!important}
 @media(min-width:601px){main.wrap nav.tabs{background:transparent!important;border:0!important;box-shadow:none!important;padding:8px 0!important;justify-content:flex-start!important}}
 </style>
+
+<style id="nene-discord-blue-return-v17">
+/* 點我私訊：恢復 Discord 藍色識別，保留目前文字與尺寸 */
+#discordProfileLink{
+  background:#5865F2!important;
+  border-color:#4752c4!important;
+  color:#fff!important;
+  text-shadow:none!important;
+  box-shadow:0 2px 7px rgba(88,101,242,.22)!important;
+}
+#discordProfileLink:hover{
+  background:#4752c4!important;
+  border-color:#3c45a5!important;
+  box-shadow:0 3px 9px rgba(88,101,242,.28)!important;
+}
+#discordProfileLink .discord-blue-badge{background:transparent!important;border:0!important;box-shadow:none!important}
+#discordProfileLink .discord-logo-circle{background:transparent!important;color:#fff!important;width:25px!important;height:25px!important}
+#discordProfileLink .discord-blue-logo{color:#fff!important;fill:#fff!important;width:19px!important;height:19px!important}
+#discordProfileLink .discord-message-text{color:#fff!important;font-weight:900!important}
+#discordProfileLink .discord-soft-heart{display:none!important}
+</style>
+
+<style id="nene-home-feature-natural-height-v15">
+/* 桌機首頁雙欄各自依內容高度，不互相撐高 */
+@media (min-width:901px){
+  .home-feature{align-items:start!important;}
+  .recent-showcase,.usage-guide{align-self:start!important;height:auto!important;min-height:0!important;}
+}
+</style>
+
+<style id="nene-recent-product-cards-v19">
+/* 近期上架改為可直接加入購物車的精簡商品卡；桌機與使用說明等高 */
+@media (min-width:901px){
+  .home-feature{align-items:stretch!important}
+  .recent-showcase,.usage-guide{height:100%!important;align-self:stretch!important}
+  .recent-mini-grid{align-items:stretch!important}
+}
+.recent-product-card{display:flex!important;flex-direction:column!important;min-width:0!important}
+.recent-product-card .recent-mini-name{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:#51382f!important}
+.recent-product-card .recent-mini-price{font-size:12px!important;font-weight:900!important;color:#8a5545!important;margin:1px 2px!important}
+.recent-product-card .recent-mini-stock{font-size:10px!important;font-weight:800!important;color:#95695b!important;margin:1px 2px 5px!important}
+.recent-product-card .recent-variant{width:100%!important;min-width:0!important;height:27px!important;margin:0 0 5px!important;padding:2px 5px!important;border:1px solid #cfb2a5!important;border-radius:7px!important;background:#faf4f1!important;color:#5b4035!important;font-size:10px!important}
+.recent-buy-actions{display:grid!important;grid-template-columns:42px minmax(0,1fr)!important;gap:5px!important;margin-top:auto!important}
+.recent-buy-actions .recent-qty{width:42px!important;min-width:0!important;height:29px!important;padding:2px 3px!important;text-align:center!important;border:1px solid #c9a99b!important;border-radius:7px!important;background:#fbf5f2!important;color:#543d34!important;font-size:11px!important;box-sizing:border-box!important}
+.recent-buy-actions .recent-add{min-width:0!important;height:29px!important;padding:3px 5px!important;border:1px solid #98664a!important;border-radius:7px!important;background:#98664a!important;color:#fff!important;font-size:10px!important;font-weight:900!important;cursor:pointer!important;white-space:nowrap!important}
+.recent-buy-actions .recent-add:disabled{background:#b9aaa3!important;border-color:#b9aaa3!important;cursor:not-allowed!important}
+@media(max-width:600px){.recent-product-card .recent-mini-stock{font-size:10px!important}.recent-buy-actions{grid-template-columns:40px minmax(0,1fr)!important}}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -3945,6 +3993,38 @@ $("#productCount").textContent=`${list.length} 件商品`;
   updateCartFab();
 }
 
+// 近期上架精簡商品卡共用原本購物車邏輯
+window.__neneRecentCardData=function(productId){
+  const p=products.find(x=>String(x.id)===String(productId));
+  if(!p)return null;
+  const variants=getVariants(p);
+  const stock=getAvailableStock(p);
+  return {
+    id:p.id,name:p.name||"",price:p.price||"",imageData:p.imageData||"",category:p.category||"",
+    sold:p.status==="sold"||stock<=0,stock,
+    variants:variants.map(v=>({name:v.name,stock:variantAvailableStock(p,v.name)}))
+  };
+};
+window.__neneRecentAdd=async function(productId,qty,variant){
+  const p=products.find(x=>String(x.id)===String(productId));
+  if(!p)return;
+  const sold=p.status==="sold"||getAvailableStock(p)<=0;
+  if(sold){toast("此商品已售完");return;}
+  let buyerOfferValue="";
+  if(isBuyerOfferProduct(p)){
+    const existingOffer=cart.find(x=>x.id===p.id&&String(x.variant||"")===String(variant||""))?.offerPrice||"";
+    const answer=await openBuyerOfferDialog(p,existingOffer);
+    if(answer===null)return;
+    buyerOfferValue=answer;
+  }
+  addToList(p,qty||1,"sale",variant||"");
+  if(buyerOfferValue){
+    const target=cart.find(x=>x.id===p.id&&String(x.variant||"")===String(variant||""));
+    if(target)target.offerPrice=buyerOfferValue;
+    renderCart();
+  }
+  render();
+};
 
 async function loadCatalogImage(src){
   return new Promise((resolve,reject)=>{
@@ -6234,7 +6314,25 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
     list=list.slice(0,6);
     if(!list.length){box.innerHTML='<div class="recent-mini-empty">目前還沒有近期商品</div>';return;}
     const safe=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    box.innerHTML=list.map(p=>'<div class="recent-mini"><img src="'+(p.imageData||'')+'" alt="'+safe(p.name)+'"><b>'+safe(p.name)+'</b><span>'+safe(p.price||'')+'</span></div>').join('');
+    box.innerHTML=list.map(p=>{
+      const d=window.__neneRecentCardData?window.__neneRecentCardData(p.id):null;
+      const variants=d?.variants||[];
+      const sold=!!d?.sold;
+      const max=Math.max(0,variants.length?(variants.find(v=>v.stock>0)?.stock||0):(d?.stock||0));
+      return '<div class="recent-mini recent-product-card" data-product-id="'+safe(p.id)+'">'+
+        '<img src="'+(p.imageData||'')+'" alt="'+safe(p.name)+'">'+
+        '<b class="recent-mini-name">'+safe(p.name)+'</b>'+
+        '<div class="recent-mini-price">'+safe(p.price||'')+'</div>'+
+        '<div class="recent-mini-stock">'+(sold?'售完':'庫存 '+max)+'</div>'+
+        (variants.length?'<select class="recent-variant">'+variants.map(v=>'<option value="'+safe(v.name)+'" data-stock="'+v.stock+'" '+(v.stock<=0?'disabled':'')+'>'+safe(v.name)+'｜庫存 '+v.stock+'</option>').join('')+'</select>':'')+
+        '<div class="recent-buy-actions"><input class="recent-qty" type="number" min="1" max="'+max+'" value="1" '+(sold?'disabled':'')+'><button type="button" class="recent-add" '+(sold?'disabled':'')+'>'+(sold?'售完':'加入購物車')+'</button></div>'+
+      '</div>';
+    }).join('');
+    box.querySelectorAll('.recent-product-card').forEach(card=>{
+      const variant=card.querySelector('.recent-variant'),qty=card.querySelector('.recent-qty'),btn=card.querySelector('.recent-add');
+      if(variant&&qty)variant.addEventListener('change',()=>{const o=variant.selectedOptions[0];qty.max=o?.dataset.stock||1;qty.value=1;});
+      if(btn)btn.addEventListener('click',()=>window.__neneRecentAdd?.(card.dataset.productId,qty?.value||1,variant?.value||''));
+    });
   };
   document.addEventListener('DOMContentLoaded',()=>{setupLayout(); setTimeout(()=>window.renderRecentShowcase(),400); setTimeout(()=>window.renderRecentShowcase(),1400);});
 })();
