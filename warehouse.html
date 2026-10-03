@@ -698,7 +698,12 @@ function queueStockPublish(){
           if(!i?.name)continue;
           const key=stockKey(i),qty=Math.max(0,Math.floor(Number(i.qty)||0));
           if(!ownersByKey.has(key))ownersByKey.set(key,[]);
-          ownersByKey.get(key).push({accountId,qty});
+          ownersByKey.get(key).push({
+            accountId,
+            number:String(a.number||a.name||"").trim(),
+            gameId:String(a.gameId||"").trim(),
+            qty
+          });
         }
       }
       const inventoryRows=[...ownersByKey].map(([key,owners])=>({key,owners}));
