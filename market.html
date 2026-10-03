@@ -2088,6 +2088,53 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 }
 </style>
+<style id="nene-final-feature-balance-v13">
+/* 2026-10-03：桌機新品/說明 1:1、縮短 Banner 下留白、新品卡放大且完整顯示 */
+@media (min-width:901px){
+  .nene-art-hero{
+    width:100vw!important;max-width:none!important;
+    margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;
+    margin-bottom:0!important;
+    background-size:cover!important;background-position:center center!important;background-repeat:no-repeat!important;
+  }
+  .home-feature{
+    width:100%!important;max-width:1840px!important;
+    margin:8px auto 12px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    gap:18px!important;align-items:start!important;
+  }
+  .recent-showcase,.usage-guide{
+    width:100%!important;max-width:none!important;min-width:0!important;
+    margin:0!important;align-self:start!important;
+  }
+  .recent-showcase{padding:14px 16px 16px!important;overflow:hidden!important}
+  .recent-mini-grid{
+    width:100%!important;max-width:none!important;
+    display:flex!important;flex-wrap:wrap!important;
+    justify-content:flex-start!important;align-items:flex-start!important;
+    gap:14px!important;
+  }
+  .recent-mini{
+    flex:0 0 250px!important;width:250px!important;max-width:250px!important;
+    padding:8px!important;border-radius:13px!important;
+  }
+  .recent-mini img{
+    display:block!important;width:100%!important;height:190px!important;max-height:none!important;
+    object-fit:contain!important;object-position:center!important;
+    background:#f7eee7!important;border-radius:10px!important;
+  }
+  .recent-mini b,.recent-mini .recent-mini-name{font-size:13px!important;line-height:1.35!important}
+  .recent-mini span,.recent-mini .recent-mini-price{font-size:12px!important}
+}
+@media (max-width:900px){
+  .recent-mini img{object-fit:contain!important;object-position:center!important;background:#f7eee7!important}
+}
+@media (max-width:600px){
+  .home-feature{margin-top:6px!important}
+  .recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:contain!important;max-height:none!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -8019,3 +8066,91 @@ main.wrap #productCount{
 }
 </style>
 
+
+<style id="nene-feature-banner-final-v13">
+/* v13：桌機近期上架/使用說明 1:1、同高；新品卡放大且完整顯示；Banner 無右側留白 */
+@media (min-width:901px){
+  .nene-art-hero{
+    width:100vw!important;
+    max-width:none!important;
+    margin-left:calc(50% - 50vw)!important;
+    margin-right:calc(50% - 50vw)!important;
+    background-size:cover!important;
+    background-position:center center!important;
+  }
+  .home-feature{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    align-items:stretch!important;
+    gap:18px!important;
+    width:min(100%,1680px)!important;
+    max-width:1680px!important;
+    margin:10px auto 12px!important;
+  }
+  .recent-showcase,.usage-guide{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    height:100%!important;
+    min-height:0!important;
+    align-self:stretch!important;
+    margin:0!important;
+  }
+  .recent-showcase{
+    display:flex!important;
+    flex-direction:column!important;
+    padding:14px 16px 16px!important;
+  }
+  .recent-mini-grid{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    grid-auto-flow:row!important;
+    gap:14px!important;
+    width:100%!important;
+    max-width:100%!important;
+    margin:0!important;
+    justify-content:stretch!important;
+    align-items:stretch!important;
+  }
+  .recent-mini{
+    width:100%!important;
+    min-width:0!important;
+    padding:8px!important;
+    border-radius:14px!important;
+  }
+  .recent-mini img{
+    display:block!important;
+    width:100%!important;
+    height:210px!important;
+    max-height:none!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    margin:0 auto 8px!important;
+    border-radius:10px!important;
+  }
+  .recent-mini b{font-size:14px!important;line-height:1.35!important}
+  .recent-mini span{font-size:13px!important;line-height:1.3!important}
+}
+@media (min-width:1500px){
+  .recent-mini img{height:230px!important}
+}
+@media (max-width:900px){
+  .nene-art-hero{
+    width:100vw!important;
+    max-width:none!important;
+    margin-left:calc(50% - 50vw)!important;
+    margin-right:calc(50% - 50vw)!important;
+    background-size:cover!important;
+    background-position:center center!important;
+  }
+}
+@media (max-width:600px){
+  .recent-mini img{
+    width:100%!important;
+    height:145px!important;
+    max-height:none!important;
+    object-fit:contain!important;
+    object-position:center!important;
+  }
+}
+</style>
