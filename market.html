@@ -2560,6 +2560,24 @@ main.wrap nav.tabs .tab.active,main.wrap nav.tabs .group-tab.active{background:#
 .recent-buy-actions .recent-add:disabled{background:#b9aaa3!important;border-color:#b9aaa3!important;cursor:not-allowed!important}
 @media(max-width:600px){.recent-product-card .recent-mini-stock{font-size:10px!important}.recent-buy-actions{grid-template-columns:40px minmax(0,1fr)!important}}
 </style>
+
+<style id="nene-discord-soft-pill-final-v21">
+/* 點我私訊：柔和奶茶 Discord 膠囊 */
+#discordProfileLink{
+  display:inline-flex!important;align-items:center!important;
+  padding:4px 10px 4px 5px!important;gap:0!important;
+  background:#fff8f5!important;border:1px solid #ead9d2!important;
+  border-radius:999px!important;color:#a77970!important;
+  box-shadow:none!important;text-shadow:none!important;text-decoration:none!important;
+}
+#discordProfileLink:hover{background:#fbf0ec!important;border-color:#dfc7be!important;box-shadow:none!important}
+#discordProfileLink .discord-blue-badge{display:inline-flex!important;align-items:center!important;gap:7px!important;background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+#discordProfileLink .discord-logo-circle{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:30px!important;height:30px!important;border-radius:50%!important;background:#cbbdc3!important;color:#fff!important;overflow:hidden!important;box-shadow:none!important}
+#discordProfileLink .discord-blue-logo{display:block!important;width:19px!important;height:19px!important;color:#fff!important;fill:#fff!important}
+#discordProfileLink .discord-message-text{display:inline!important;color:#a77970!important;font-size:13px!important;font-weight:900!important;white-space:nowrap!important}
+#discordProfileLink .discord-soft-heart{display:inline!important;color:#d3a39b!important;font-size:19px!important;font-weight:400!important;line-height:1!important;margin-left:1px!important}
+@media(max-width:600px){#discordProfileLink{padding:3px 9px 3px 4px!important}#discordProfileLink .discord-logo-circle{width:28px!important;height:28px!important}#discordProfileLink .discord-blue-logo{width:18px!important;height:18px!important}#discordProfileLink .discord-message-text{font-size:12px!important}#discordProfileLink .discord-soft-heart{font-size:18px!important}}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -8931,3 +8949,76 @@ body{background:var(--nene-page)!important;color:var(--nene-text)!important}
 /* 權限仍由 Firebase 登入狀態控制；hidden 時絕不顯示小倉倉 */
 #warehouseNavLink.hidden{display:none!important;}
 </style>
+
+<style id="nene-mobile-header-hidden-category-fix-v21">
+/* 手機：管理區固定在導覽列右側，不再跑到左邊；標題/私訊與導覽分兩列避免互相擠壓 */
+@media (max-width:600px){
+  .topbar{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+    align-items:center!important;
+    column-gap:7px!important;
+    row-gap:6px!important;
+    padding:7px 9px!important;
+    overflow:visible!important;
+  }
+  .topbar .brand{
+    grid-column:1 / -1!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+    display:flex!important;
+  }
+  .topbar .brand-copy,.topbar .brand-title-line{min-width:0!important;max-width:100%!important}
+  .topbar .brand-title-line{display:flex!important;align-items:center!important;gap:6px!important;flex-wrap:nowrap!important}
+  .topbar .brand-title-line h1{font-size:13px!important;flex:0 1 auto!important;min-width:0!important;white-space:nowrap!important}
+  #discordProfileLink{display:inline-flex!important;flex:0 0 auto!important;min-height:30px!important;padding:3px 8px 3px 5px!important}
+  #discordProfileLink .discord-logo-circle{display:inline-flex!important;width:22px!important;height:22px!important}
+  #discordProfileLink .discord-message-text{font-size:11px!important}
+  .nene-top-nav{
+    grid-column:1!important;
+    grid-row:2!important;
+    order:initial!important;
+    width:auto!important;
+    min-width:0!important;
+    margin:0!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:5px!important;
+  }
+  .nene-top-link{font-size:11px!important;padding:5px 9px!important;min-height:30px!important}
+  .topbar .admin-tools{
+    grid-column:2!important;
+    grid-row:2!important;
+    position:static!important;
+    inset:auto!important;
+    margin:0!important;
+    padding:0!important;
+    justify-self:end!important;
+    align-self:center!important;
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    gap:5px!important;
+    max-width:none!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  .topbar .admin-tools #ordersBtn{min-height:30px!important;padding:5px 8px!important;font-size:11px!important}
+  #adminBtn{width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;margin:0!important}
+}
+/* 分類被管理員隱藏後，任何尺寸都必須真的消失，避免手機版 display 規則蓋掉 hidden */
+main.wrap nav.tabs > .tab.hidden,
+main.wrap nav.tabs > .category-dropdown.hidden,
+main.wrap nav.tabs .category-menu > button.hidden{display:none!important;}
+</style>
+<script id="nene-category-visibility-mobile-guard-v21">
+(function(){
+  function enforce(){
+    if(typeof applyCategoryVisibility==='function') applyCategoryVisibility();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',enforce); else enforce();
+  window.addEventListener('resize',enforce,{passive:true});
+})();
+</script>
