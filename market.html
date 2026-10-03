@@ -4050,7 +4050,11 @@ async function loadWarehouseCandidates(force=false){
     warehouseCandidates=rows.map(r=>{
       const key=String(r?.key||"");
       const [category,name,variant,gender,candyType]=warehouseParseKey(key);
-      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>({owner:String(o?.label||o?.accountId||""),qty:Math.max(0,Math.floor(Number(o?.qty)||0))}));
+      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>{
+        const raw=String(o?.label||"").trim();
+        const owner=raw && !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(raw) ? raw : "未設定編號";
+        return {owner,qty:Math.max(0,Math.floor(Number(o?.qty)||0))};
+      });
       const qty=owners.reduce((n,o)=>n+o.qty,0);
       return {key,item:{category,name,variant,gender,candyType},qty,owners};
     }).filter(x=>x.key&&x.item.name).sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
