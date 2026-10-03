@@ -2301,6 +2301,105 @@ main.wrap{background:var(--box-page)!important}
   .usage-guide h3{font-size:19px!important}
 }
 </style>
+<style id="nene-final-layout-color-v14">
+/* v14：近期上架橫向六張、說明短框同高；商品卡改燕麥灰粉奶茶 */
+:root{
+  --nene-page:#e8ddd5;
+  --nene-panel:#f1e7e0;
+  --nene-panel-2:#eadbd1;
+  --nene-card:#eee1d8;
+  --nene-card-body:#e7d6cc;
+  --nene-border:#c9ab98;
+  --nene-media:#d8c5ba;
+  --nene-coffee:#5a3d31;
+  --nene-muted:#8a6d60;
+  --nene-accent:#a66f57;
+}
+body{background:var(--nene-page)!important;color:var(--nene-coffee)!important}
+main.wrap{background:transparent!important}
+.toolbar{background:#dcc6b8!important;border-color:#c7a996!important}
+.tabs{background:#d7b9a4!important;border-color:#c4a38d!important}
+.tab,.group-tab{background:#ead9ce!important;border-color:#cfb3a2!important;color:#725446!important}
+.tab.active,.group-tab.active{background:#a8755d!important;border-color:#a8755d!important;color:#fff!important}
+
+/* 主商品卡：去黃，改灰粉燕麥奶茶 */
+#grid .card{
+  background:#d2b6a5!important;
+  border:1.5px solid #b9947e!important;
+  box-shadow:0 5px 14px rgba(77,55,45,.12)!important;
+}
+#grid .card-media{background:#d7c4b9!important}
+#grid .card-media img{background:#f5ece6!important}
+#grid .card-body{background:#eadbd2!important}
+#grid .card-title{color:#4e352b!important;-webkit-text-fill-color:#4e352b!important}
+#grid .badge{background:#f5ebe5!important;border-color:#cdb0a0!important;color:#674b3f!important}
+#grid .price{color:#8d503d!important}
+#grid .stock,#grid .stock-text{color:#a15f50!important}
+#grid select,#grid input{background:#f8f0eb!important;border-color:#c9ad9d!important;color:#513a30!important}
+#grid .buy-actions .add-cart{background:#93634f!important;border-color:#93634f!important;color:#fff!important}
+
+/* 上方兩框共用視覺 */
+.recent-showcase,.usage-guide{
+  background:#f1e6df!important;
+  border-color:#cdb3a3!important;
+  box-shadow:0 3px 10px rgba(78,57,47,.06)!important;
+}
+.recent-mini{background:#f7efea!important;border-color:#d5bcae!important}
+.recent-mini img{background:#e4d8d1!important}
+
+@media (min-width:901px){
+  .home-feature{
+    display:grid!important;
+    grid-template-columns:minmax(0,2.15fr) minmax(350px,.85fr)!important;
+    gap:16px!important;
+    align-items:stretch!important;
+    width:min(calc(100% - 36px),1840px)!important;
+    max-width:1840px!important;
+    margin:12px auto 12px!important;
+  }
+  .recent-showcase,.usage-guide{
+    width:100%!important;max-width:none!important;min-width:0!important;
+    height:100%!important;min-height:0!important;margin:0!important;
+    align-self:stretch!important;
+  }
+  .recent-showcase{padding:12px 14px 14px!important;display:flex!important;flex-direction:column!important}
+  .recent-showcase-head{margin:0 0 8px!important}
+  .recent-showcase-title{font-size:18px!important}
+  .recent-mini-grid{
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:9px!important;
+    width:100%!important;max-width:100%!important;
+    align-items:stretch!important;justify-content:stretch!important;
+  }
+  .recent-mini{
+    display:flex!important;flex-direction:column!important;
+    min-width:0!important;width:100%!important;
+    padding:7px!important;border-radius:12px!important;
+  }
+  .recent-mini img{
+    width:100%!important;height:auto!important;aspect-ratio:1/1!important;
+    max-height:190px!important;object-fit:contain!important;object-position:center!important;
+    margin:0 auto 6px!important;border-radius:8px!important;
+  }
+  .recent-mini b{font-size:13px!important;line-height:1.25!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+  .recent-mini span{font-size:12px!important;line-height:1.25!important;margin-top:3px!important}
+  .usage-guide{padding:12px 14px!important;overflow:hidden!important}
+  .usage-guide h3{font-size:19px!important;margin:0 0 7px!important}
+  .usage-guide .usage-step{padding:7px 0!important}
+  .usage-guide .usage-step strong{font-size:14px!important}
+  .usage-guide .usage-step p{font-size:11.5px!important;line-height:1.35!important}
+}
+
+@media (max-width:900px){
+  .home-feature{display:flex!important;flex-direction:column!important;gap:10px!important;width:100%!important}
+  .recent-showcase,.usage-guide{width:100%!important;max-width:100%!important;height:auto!important}
+  .recent-mini-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;width:100%!important}
+  .recent-mini:nth-child(n){display:flex!important}
+  .recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:contain!important;max-height:170px!important}
+}
+</style>
+
 </head>
 <body>
 <header class="topbar">
@@ -6056,6 +6155,38 @@ main.wrap #productCount{color:#80614e!important;-webkit-text-fill-color:#80614e!
   #grid .card-body{background:#f0ddca!important}
 }
 </style>
+
+<style id="nene-horizontal-feature-final-v14">
+/* 最終覆蓋：桌機左長右短、同高；近期上架六個一排；整體去黃 */
+:root{--oat-bg:#eadfd8;--oat-panel:#f1e7e1;--oat-card:#f5ebe5;--oat-border:#d5b9aa;--oat-media:#ded0c8;--coffee:#5a3b30;}
+html,body{background:var(--oat-bg)!important;}
+main.wrap{background:transparent!important;}
+@media (min-width:901px){
+ .home-feature{display:grid!important;grid-template-columns:minmax(0,2.25fr) minmax(330px,.85fr)!important;gap:16px!important;align-items:stretch!important;width:min(100%,1680px)!important;max-width:1680px!important;margin:10px auto 12px!important;}
+ .recent-showcase,.usage-guide{width:100%!important;max-width:none!important;min-width:0!important;height:100%!important;min-height:0!important;align-self:stretch!important;margin:0!important;background:var(--oat-panel)!important;border-color:var(--oat-border)!important;}
+ .recent-showcase{padding:11px 12px 12px!important;}
+ .recent-showcase-head{margin-bottom:8px!important;}
+ .recent-mini-grid{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-auto-flow:row!important;gap:8px!important;width:100%!important;max-width:100%!important;justify-content:stretch!important;align-items:stretch!important;}
+ .recent-mini{width:100%!important;min-width:0!important;padding:6px!important;background:var(--oat-card)!important;border-color:var(--oat-border)!important;}
+ .recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;max-height:150px!important;object-fit:contain!important;object-position:center!important;background:var(--oat-media)!important;margin:0 auto 6px!important;}
+ .recent-mini b,.recent-mini .recent-mini-name{font-size:12px!important;line-height:1.25!important;}
+ .recent-mini span,.recent-mini .recent-mini-price{font-size:12px!important;line-height:1.2!important;}
+ .usage-guide{padding:11px 14px!important;}
+ .usage-guide h3{font-size:18px!important;margin:0 0 7px!important;}
+ .usage-step{padding:7px 0!important;}
+ .usage-step strong{font-size:13px!important;}
+ .usage-step p,.usage-step span{font-size:11px!important;line-height:1.35!important;}
+}
+/* 主商品卡同步改成灰粉燕麥奶茶，不再偏黃 */
+#grid .card{background:#e6d5cb!important;border-color:#cba998!important;box-shadow:0 6px 16px rgba(83,57,48,.12)!important;}
+#grid .card-media{background:#d8c5bb!important;border-color:#cba998!important;}
+#grid .card-media img{background:#f4ebe6!important;}
+#grid .card-body{background:#eee0d8!important;}
+#grid .buy-actions,#grid .quick-stock{background:#e9dbd2!important;}
+#grid input,#grid select{background:#f8f1ed!important;border-color:#cfb4a5!important;}
+@media (max-width:900px){.home-feature{display:flex!important;flex-direction:column!important;align-items:center!important}.recent-showcase,.usage-guide{width:100%!important;max-width:720px!important;height:auto!important}}
+@media (max-width:600px){.recent-mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}.recent-mini:nth-child(n+7){display:none!important}.recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:contain!important;background:var(--oat-media)!important}}
+</style>
 </body>
 </html>
 
@@ -8320,3 +8451,4 @@ main.wrap #productCount{
   }
 }
 </style>
+
