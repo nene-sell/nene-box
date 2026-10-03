@@ -1941,6 +1941,40 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
 
+
+<style id="nene-compact-layout-v9">
+/* v9: 移除說明區 DC；近期上架再縮約一半 */
+.shop-discord-contact{display:none!important}
+.recent-showcase{
+  padding:8px 9px 9px!important;
+  border-radius:14px!important;
+}
+.recent-showcase-head{margin-bottom:6px!important}
+.recent-showcase-title{font-size:16px!important}
+.recent-showcase-more{font-size:10px!important}
+.recent-mini-grid{
+  grid-template-columns:repeat(4,minmax(105px,145px))!important;
+  gap:7px!important;
+}
+.recent-mini{padding:5px!important;border-radius:11px!important}
+.recent-mini img{max-height:118px!important;object-fit:cover!important}
+.recent-mini .recent-mini-name{font-size:11px!important;line-height:1.25!important}
+.recent-mini .recent-mini-price{font-size:11px!important}
+@media(max-width:900px){
+  .recent-showcase{width:min(100%,600px)!important;max-width:600px!important}
+}
+@media(max-width:600px){
+  .recent-showcase{
+    width:calc(100% - 18px)!important;
+    max-width:440px!important;
+    padding:8px!important;
+    margin-left:auto!important;margin-right:auto!important;
+  }
+  .recent-mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}
+  .recent-mini{padding:5px!important}
+  .recent-mini img{max-height:105px!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -1991,7 +2025,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     <button id="addBtn" class="btn primary hidden">＋ 新增商品</button>
     <button id="catalogImageBtn" class="btn hidden" type="button">📷 產生分類圖片</button>
     <button id="categorySettingsBtn" class="btn hidden" type="button">分類顯示</button>
-    <a id="shopDiscordContact" class="btn shop-discord-contact" href="https://discord.com/users/868208720407040060" target="_blank" rel="noopener noreferrer">私訊內內 ♡</a>
     <span id="status" style="display:none!important"></span>
 </section>
 
@@ -5652,6 +5685,51 @@ main.wrap .section-head #sectionTitle{color:#51372a!important;-webkit-text-fill-
 main.wrap #productCount{color:#80614e!important;-webkit-text-fill-color:#80614e!important;font-weight:700!important;opacity:1!important}
 @media(max-width:600px){.shop-discord-contact{flex:1 1 auto!important;min-height:40px!important}.toolbar .search,#searchInput{flex-basis:100%!important}}
 </style>
+
+<style id="nene-product-card-contrast-v9">
+/* v9: 商品卡與頁面背景拉開層次，保留奶茶色系 */
+#grid .card{
+  background:#d1aa8d!important;
+  border:1.5px solid #b98e70!important;
+  box-shadow:0 5px 14px rgba(86,55,38,.13)!important;
+}
+#grid .card-media{
+  background:#c69e80!important;
+  border-bottom:1px solid rgba(126,83,57,.16)!important;
+}
+#grid .card-body{
+  background:#f0ddca!important;
+}
+#grid .card-title{color:#3f2a20!important;-webkit-text-fill-color:#3f2a20!important}
+#grid .badge{
+  background:#f8eee4!important;
+  border-color:#c7a287!important;
+  color:#654839!important;
+}
+#grid .price{color:#7b442d!important;-webkit-text-fill-color:#7b442d!important}
+#grid .stock,#grid .stock-text{
+  color:#b45f4a!important;
+  -webkit-text-fill-color:#b45f4a!important;
+  font-weight:800!important;
+}
+#grid select,#grid input[type="number"],#grid .qty-input{
+  background:#fffaf5!important;
+  border:1.5px solid #d0ad94!important;
+  color:#594136!important;
+  box-shadow:0 1px 3px rgba(87,57,39,.05)!important;
+}
+#grid .buy-actions .add-cart{
+  background:#98694d!important;
+  border-color:#98694d!important;
+  color:#fff!important;
+  box-shadow:0 2px 5px rgba(91,57,39,.12)!important;
+}
+#grid .buy-actions .add-cart:hover{background:#85583f!important;border-color:#85583f!important}
+@media(max-width:600px){
+  #grid .card{border-width:1.5px!important;box-shadow:0 4px 11px rgba(86,55,38,.14)!important}
+  #grid .card-body{background:#f0ddca!important}
+}
+</style>
 </body>
 </html>
 
@@ -7827,14 +7905,4 @@ main.wrap #productCount{
   #productCount{text-align:center!important}
 }
 </style>
-<script id="nene-compact-layout-v8-script">
-(function(){
-  function applyV8(){
-    const contact=document.getElementById('shopDiscordContact');
-    const guide=document.querySelector('.usage-guide');
-    if(contact&&guide&&contact.parentElement!==guide) guide.appendChild(contact);
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>{applyV8();setTimeout(applyV8,100);setTimeout(applyV8,800)});
-  else {applyV8();setTimeout(applyV8,100);setTimeout(applyV8,800)}
-})();
-</script>
+
