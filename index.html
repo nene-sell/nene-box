@@ -146,6 +146,74 @@ body.admin-view #warehouseTab,body.admin-view #headerOrdersBtn{visibility:visibl
 .header-orders:hover{background:#ead6d1!important;border-color:#cda69c!important}
 .shell-orders-badge{background:#b96f68!important;color:#fff!important;box-shadow:0 0 0 2px #f8efec!important}
 </style>
+
+<style id="nene-mobile-all-header-one-row-20261003">
+@media(max-width:700px){
+  header{
+    min-height:58px!important;
+    height:auto!important;
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    align-items:center!important;
+    gap:6px!important;
+    padding:7px 8px!important;
+  }
+  header>b{
+    flex:0 0 auto!important;
+    max-width:none!important;
+    font-size:12px!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+  }
+  .mobile-nav-row{
+    display:flex!important;
+    flex:1 1 auto!important;
+    align-items:center!important;
+    gap:6px!important;
+    min-width:0!important;
+    width:auto!important;
+  }
+  .mobile-nav-row>.header-dc{
+    flex:0 0 auto!important;
+    height:34px!important;
+    max-width:none!important;
+    padding:3px 7px 3px 4px!important;
+    font-size:10.5px!important;
+    gap:4px!important;
+  }
+  .mobile-nav-row>.header-dc .dc-round{width:24px!important;height:24px!important}
+  .mobile-nav-row>.tabs{
+    display:flex!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    width:auto!important;
+    gap:4px!important;
+  }
+  .mobile-nav-row>.tabs .tab{
+    flex:1 1 0!important;
+    min-width:0!important;
+    height:34px!important;
+    padding:5px 6px!important;
+    font-size:11px!important;
+    white-space:nowrap!important;
+  }
+  .header-admin-tools{
+    flex:0 0 auto!important;
+    margin-left:0!important;
+  }
+  .header-orders{height:32px!important;padding:0 6px!important;font-size:10px!important}
+  .header-gear{width:32px!important;height:32px!important}
+}
+@media(max-width:390px){
+  header{gap:4px!important;padding-left:6px!important;padding-right:6px!important}
+  header>b{font-size:11px!important}
+  .mobile-nav-row{gap:4px!important}
+  .mobile-nav-row>.header-dc{font-size:0!important;padding-right:4px!important}
+  .mobile-nav-row>.header-dc::after{content:"私訊 ♡";font-size:10px!important}
+  .mobile-nav-row>.tabs .tab{font-size:10.5px!important;padding-left:4px!important;padding-right:4px!important}
+  .header-gear{width:30px!important;height:30px!important}
+}
+</style>
 </head>
 <body><header><b>🤎內內的小盒子🤎</b><div class="mobile-nav-row"><a class="header-dc" href="https://discord.com/users/868208720407040060" target="_blank" rel="noopener noreferrer" title="Discord 私訊內內"><span class="dc-round"><svg class="dc-symbol" viewBox="0 0 24 24"><path fill="currentColor" d="M19.54 5.34A16.3 16.3 0 0 0 15.44 4c-.18.32-.39.75-.53 1.09a15.2 15.2 0 0 0-4.81 0A11.7 11.7 0 0 0 9.56 4a16.5 16.5 0 0 0-4.11 1.35C2.85 9.2 2.15 12.95 2.5 16.65a16.7 16.7 0 0 0 5.03 2.54c.41-.55.77-1.14 1.08-1.76-.59-.22-1.15-.49-1.69-.81.14-.1.28-.21.41-.32 3.26 1.51 6.8 1.51 10.02 0 .14.11.27.22.41.32-.54.32-1.11.59-1.69.81.31.62.67 1.21 1.08 1.76a16.6 16.6 0 0 0 5.03-2.54c.42-4.29-.72-8-2.64-11.31ZM8.68 14.38c-.98 0-1.79-.9-1.79-2s.79-2 1.79-2 1.81.91 1.79 2c0 1.1-.79 2-1.79 2Zm6.64 0c-.98 0-1.79-.9-1.79-2s.79-2 1.79-2 1.81.91 1.79 2c0 1.1-.79 2-1.79 2Z"/></svg></span>點我私訊 ♡</a><div class="tabs">
 <button class="tab on" data-id="market">販售與收購</button><button class="tab admin-only" data-id="warehouse" id="warehouseTab" hidden>小倉倉</button>
