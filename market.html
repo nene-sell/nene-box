@@ -1809,6 +1809,30 @@ footer{border:0!important;background:#cfaf94!important;color:#72533f!important;t
 @media(max-width:900px){.nene-art-hero{height:245px}.home-feature{grid-template-columns:1fr}.grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 @media(max-width:600px){main.wrap{width:calc(100% - 12px)!important;margin:6px auto 18px!important;padding:0 8px 16px!important;border-radius:17px!important}.nene-art-hero{height:165px;margin:0 -8px;background-position:center}.tabs{margin:0 -8px!important;padding:9px 8px!important;justify-content:flex-start!important}.tab{padding:7px 9px!important;font-size:10px!important}.home-feature{margin:10px 0;gap:10px}.recent-showcase{padding:11px}.recent-mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.recent-mini:nth-child(n+5){display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}.toolbar{padding:8px}}
 </style>
+
+<style id="nene-fullbleed-final-v4">
+/* 2026-10-03 最終滿版修正：桌機不留咖啡邊，Banner 不留白；手機維持獨立響應式 */
+html,body{margin:0!important;width:100%!important;max-width:none!important;background:#ead8c6!important;overflow-x:hidden!important}
+body::before,body::after{display:none!important}
+main.wrap{width:100%!important;max-width:none!important;margin:0!important;padding:0 clamp(14px,2.4vw,42px) 34px!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:#ead8c6!important;overflow:visible!important}
+.nene-art-hero{display:block!important;width:calc(100% + (clamp(14px,2.4vw,42px) * 2))!important;max-width:none!important;aspect-ratio:2048/350!important;height:auto!important;min-height:0!important;margin:0 calc(clamp(14px,2.4vw,42px) * -1)!important;padding:0!important;background-color:#ead8c6!important;background-image:url('nene-shop-header.png')!important;background-size:100% 100%!important;background-position:center!important;background-repeat:no-repeat!important;border:0!important;border-radius:0!important}
+.tabs{width:calc(100% + (clamp(14px,2.4vw,42px) * 2))!important;max-width:none!important;margin:0 calc(clamp(14px,2.4vw,42px) * -1)!important}
+.home-feature,.toolbar,.section-head,#grid,#empty{width:100%!important;max-width:1680px!important;margin-left:auto!important;margin-right:auto!important}
+@media (min-width:1800px){.home-feature,.toolbar,.section-head,#grid,#empty{max-width:none!important}}
+@media (max-width:900px){
+ main.wrap{padding-left:14px!important;padding-right:14px!important}
+ .nene-art-hero,.tabs{width:calc(100% + 28px)!important;margin-left:-14px!important;margin-right:-14px!important}
+ .nene-art-hero{aspect-ratio:2048/350!important;height:auto!important;background-size:100% 100%!important}
+}
+@media (max-width:600px){
+ html,body{background:#ead8c6!important}
+ main.wrap{width:100%!important;max-width:none!important;margin:0!important;padding:0 10px 82px!important}
+ .nene-art-hero,.tabs{width:calc(100% + 20px)!important;margin-left:-10px!important;margin-right:-10px!important}
+ .nene-art-hero{aspect-ratio:2048/350!important;height:auto!important;min-height:0!important;background-size:100% 100%!important}
+ .tabs{overflow-x:auto!important;overflow-y:hidden!important;flex-wrap:nowrap!important}
+ .home-feature,.toolbar,.section-head,#grid,#empty{max-width:none!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar">
