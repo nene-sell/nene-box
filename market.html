@@ -2135,6 +2135,73 @@ document.addEventListener('DOMContentLoaded',()=>{
   .recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:contain!important;max-height:none!important}
 }
 </style>
+
+<style id="nene-recent-six-final-v14">
+/* v14：近期上架最多 6 個；桌機一排六張完整顯示；說明字體放大 */
+@media (min-width:901px){
+  .home-feature{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    align-items:stretch!important;
+    gap:16px!important;
+    margin-top:8px!important;
+    margin-bottom:10px!important;
+  }
+  .recent-showcase,.usage-guide{
+    min-height:0!important;
+    height:auto!important;
+    padding:12px 14px!important;
+  }
+  .recent-mini-grid{
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:8px!important;
+    align-items:stretch!important;
+  }
+  .recent-mini{
+    display:flex!important;
+    flex-direction:column!important;
+    min-width:0!important;
+    padding:6px!important;
+    border-radius:11px!important;
+  }
+  .recent-mini img{
+    width:100%!important;
+    height:112px!important;
+    max-height:112px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    margin:0 auto 5px!important;
+    border-radius:8px!important;
+  }
+  .recent-mini b{font-size:12px!important;line-height:1.25!important;margin-top:auto!important}
+  .recent-mini span{font-size:12px!important;line-height:1.25!important}
+  .usage-guide h3{font-size:22px!important;line-height:1.25!important;margin-bottom:10px!important}
+  .usage-guide .usage-step b{font-size:15px!important;line-height:1.45!important}
+  .usage-guide .usage-step span{font-size:13px!important;line-height:1.55!important}
+  .usage-guide .usage-trade-note{font-size:13px!important;line-height:1.6!important}
+  .usage-guide .usage-note{font-size:12px!important;line-height:1.55!important}
+}
+@media (max-width:600px){
+  .recent-mini-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+  .recent-mini:nth-child(n+5){display:flex!important}
+  .recent-mini:nth-child(n+7){display:none!important}
+  .recent-mini{width:100%!important;padding:6px!important}
+  .recent-mini img{
+    width:100%!important;
+    height:118px!important;
+    max-height:118px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+  }
+  .usage-guide h3{font-size:22px!important}
+  .usage-guide .usage-step b{font-size:14px!important}
+  .usage-guide .usage-step span{font-size:12px!important;line-height:1.5!important}
+  .usage-guide .usage-trade-note{font-size:12px!important}
+  .usage-guide .usage-note{font-size:11px!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -5829,7 +5896,7 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
     let list=source.filter(p=>p&&(p.recentFeatured===true || newActive(p))&&!['收購區','交換區'].includes(String(p.category||'')));
     list.sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
     if(!list.length) list=source.filter(p=>p&&!['收購區','交換區'].includes(String(p.category||''))).sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
-    list=list.slice(0,4);
+    list=list.slice(0,6);
     if(!list.length){box.innerHTML='<div class="recent-mini-empty">目前還沒有近期商品</div>';return;}
     const safe=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     box.innerHTML=list.map(p=>'<div class="recent-mini"><img src="'+(p.imageData||'')+'" alt="'+safe(p.name)+'"><b>'+safe(p.name)+'</b><span>'+safe(p.price||'')+'</span></div>').join('');
