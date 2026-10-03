@@ -5499,6 +5499,52 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
 
 
 
+<style id="nene-storefront-v4-layout-fix">
+/* === v4：真正依預覽圖排列，清掉舊 grid 版型互相打架 === */
+main.wrap{
+  display:flex!important;
+  flex-direction:column!important;
+  width:min(1480px,calc(100% - 42px))!important;
+  max-width:1480px!important;
+  margin:0 auto!important;
+  padding-left:28px!important;
+  padding-right:28px!important;
+  box-sizing:border-box!important;
+}
+.hero.storefront-hero{order:1!important;width:100%!important}
+.tabs{order:2!important;width:max-content!important;max-width:100%!important;align-self:center!important;box-sizing:border-box!important}
+.shop-home-row{order:3!important;width:100%!important;box-sizing:border-box!important}
+.toolbar{order:4!important;width:calc(100% - 348px)!important;box-sizing:border-box!important;margin:0 348px 18px 0!important}
+.section-head{order:5!important;width:calc(100% - 348px)!important;box-sizing:border-box!important}
+#grid{order:6!important;width:calc(100% - 348px)!important;box-sizing:border-box!important}
+#empty{order:7!important;width:calc(100% - 348px)!important;box-sizing:border-box!important}
+/* 使用說明只存在右側卡片，不再吃掉首頁中間的大面積 */
+.purchase-side{box-sizing:border-box!important;overflow:hidden!important;min-width:0!important}
+.purchase-side .usage-guide{display:block!important;width:100%!important;max-width:none!important;box-sizing:border-box!important;margin:0!important;padding:18px 16px 16px!important;overflow:hidden!important}
+.purchase-side .usage-steps{display:grid!important;grid-template-columns:1fr!important;gap:9px!important;width:100%!important;box-sizing:border-box!important}
+.purchase-side .usage-step{position:relative!important;width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important;padding:12px 10px 12px 60px!important;margin:0!important;overflow:hidden!important;text-align:left!important}
+.purchase-side .usage-step b,.purchase-side .usage-step span{display:block!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important}
+.purchase-side .usage-step-icon{left:11px!important;top:50%!important}
+.purchase-side .usage-trade-note,.purchase-side .usage-note{max-width:100%!important;box-sizing:border-box!important;white-space:normal!important;overflow-wrap:anywhere!important}
+/* 近期上架就是預覽圖中的主櫥窗 */
+.recent-showcase{width:100%!important;min-width:0!important;box-sizing:border-box!important}
+.recent-products{min-width:0!important}
+/* 商品區與右側流程對齊，避免商品被拉成六張超窄卡 */
+.grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+@media(max-width:1100px){
+  .toolbar,.section-head,#grid,#empty{width:100%!important;margin-right:0!important}
+  .shop-home-row{grid-template-columns:1fr!important}
+  .purchase-side{margin-top:0!important}
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:760px){
+  main.wrap{width:100%!important;padding-left:12px!important;padding-right:12px!important}
+  .tabs{align-self:stretch!important;width:100%!important}
+  .toolbar{width:100%!important;margin:0 0 12px!important}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+</style>
+
 </body>
 </html>
 
@@ -7424,3 +7470,4 @@ footer:after{content:'';position:absolute;right:4%;bottom:-18px;width:250px;heig
   setInterval(()=>{const b=document.getElementById('recentProductsPreview'); if(b&&/載入中|準備中/.test(b.textContent))renderRecentPreview();},2000);
 })();
 </script>
+
