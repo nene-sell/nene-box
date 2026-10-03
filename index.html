@@ -6806,5 +6806,27 @@ header.topbar .admin-menu-wrap{position:relative!important}
 }
 </style>
 
+
+<style id="nene-final-fix-v50">
+/* Keep the management dropdown above the banner/content. */
+header.topbar{overflow:visible!important;position:relative!important;z-index:10000!important}
+header.topbar .admin-tools,header.topbar .admin-menu-wrap{overflow:visible!important;position:relative!important;z-index:10001!important}
+header.topbar .admin-menu{display:block;position:absolute!important;right:0!important;top:calc(100% + 8px)!important;z-index:10050!important;min-width:168px!important;background:#fff8f4!important;border:1px solid #d7bcb1!important;border-radius:14px!important;padding:7px!important;box-shadow:0 12px 30px rgba(75,48,40,.22)!important}
+header.topbar .admin-menu.hidden{display:none!important}
+header.topbar .admin-menu-item{min-height:38px!important}
+
+/* Formal product grid: keep cards readable; 6–10 per row only as space actually allows. */
+#grid.grid{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:12px!important}
+#grid .card{width:100%!important;min-width:0!important;max-width:none!important}
+#grid .card-media{aspect-ratio:1/1!important;height:auto!important;min-height:0!important}
+#grid .card-media img{width:100%!important;height:100%!important;object-fit:contain!important}
+@media (min-width:1600px){#grid.grid{grid-template-columns:repeat(7,minmax(0,1fr))!important}}
+@media (min-width:1900px){#grid.grid{grid-template-columns:repeat(8,minmax(0,1fr))!important}}
+@media (min-width:2200px){#grid.grid{grid-template-columns:repeat(9,minmax(0,1fr))!important}}
+@media (min-width:2500px){#grid.grid{grid-template-columns:repeat(10,minmax(0,1fr))!important}}
+@media (max-width:1100px) and (min-width:761px){#grid.grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+@media (max-width:760px){#grid.grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}}
+</style>
+
 </body>
 </html>
