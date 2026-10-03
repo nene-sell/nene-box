@@ -6187,6 +6187,37 @@ main.wrap{background:transparent!important;}
 @media (max-width:900px){.home-feature{display:flex!important;flex-direction:column!important;align-items:center!important}.recent-showcase,.usage-guide{width:100%!important;max-width:720px!important;height:auto!important}}
 @media (max-width:600px){.recent-mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}.recent-mini:nth-child(n+7){display:none!important}.recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:contain!important;background:var(--oat-media)!important}}
 </style>
+
+<style id="nene-discord-cta-final-v15">
+/* 私訊按鈕：乾燥玫瑰奶茶 CTA，明顯但不破壞整體配色 */
+.discord-copy{
+  background:linear-gradient(135deg,#b87870 0%,#a86561 100%)!important;
+  color:#fffaf8!important;
+  border:1px solid #9b5d59!important;
+  border-radius:999px!important;
+  padding:8px 14px!important;
+  font-weight:800!important;
+  text-decoration:none!important;
+  box-shadow:0 3px 10px rgba(155,93,89,.28),0 0 0 3px rgba(211,155,147,.14)!important;
+  transition:transform .18s ease,filter .18s ease,box-shadow .18s ease!important;
+  animation:neneDiscordBreathe 3.8s ease-in-out infinite!important;
+}
+.discord-copy:hover,.discord-copy:focus-visible{
+  filter:brightness(1.09)!important;
+  transform:translateY(-1px) scale(1.025)!important;
+  box-shadow:0 5px 14px rgba(155,93,89,.34),0 0 0 4px rgba(211,155,147,.20)!important;
+  outline:none!important;
+}
+.discord-copy .discord-message-text::before{content:'💬 ';font-size:.92em}
+@keyframes neneDiscordBreathe{
+  0%,72%,100%{box-shadow:0 3px 10px rgba(155,93,89,.25),0 0 0 3px rgba(211,155,147,.10)}
+  82%{box-shadow:0 4px 14px rgba(155,93,89,.34),0 0 0 6px rgba(211,155,147,.18)}
+}
+@media (prefers-reduced-motion:reduce){.discord-copy{animation:none!important}}
+@media (max-width:600px){
+  .discord-copy{padding:7px 11px!important;font-size:13px!important;white-space:nowrap!important}
+}
+</style>
 </body>
 </html>
 
@@ -8452,3 +8483,82 @@ main.wrap #productCount{
 }
 </style>
 
+
+<style id="nene-final-layout-v14">
+/* 最終覆蓋：桌機左長右短、同高；近期 6 個一排；整體去黃 */
+:root{
+  --nene-page:#e8ddd7;
+  --nene-panel:#f2e8e3;
+  --nene-card:#f7efeb;
+  --nene-media:#e4d8d3;
+  --nene-border:#d4b9ad;
+  --nene-accent:#a87561;
+  --nene-text:#50382f;
+}
+body{background:var(--nene-page)!important;color:var(--nene-text)!important}
+@media (min-width:901px){
+  .home-feature{
+    display:grid!important;
+    grid-template-columns:minmax(0,3fr) minmax(300px,1fr)!important;
+    gap:16px!important;
+    align-items:stretch!important;
+    width:calc(100% - 52px)!important;
+    max-width:none!important;
+    margin:12px 26px!important;
+  }
+  .recent-showcase,.usage-guide{
+    width:100%!important;max-width:none!important;min-width:0!important;
+    height:auto!important;min-height:0!important;align-self:stretch!important;
+    margin:0!important;background:var(--nene-panel)!important;
+    border:1px solid var(--nene-border)!important;
+    box-sizing:border-box!important;
+  }
+  .recent-showcase{padding:12px 14px!important;display:flex!important;flex-direction:column!important}
+  .recent-showcase-head{margin:0 0 8px!important}
+  .recent-mini-grid{
+    display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:9px!important;width:100%!important;max-width:100%!important;
+    align-items:stretch!important;justify-content:stretch!important;
+  }
+  .recent-mini{
+    width:100%!important;min-width:0!important;padding:7px!important;
+    background:var(--nene-card)!important;border:1px solid var(--nene-border)!important;
+    box-sizing:border-box!important;
+  }
+  .recent-mini img{
+    display:block!important;width:100%!important;height:auto!important;aspect-ratio:1/1!important;
+    max-height:150px!important;object-fit:contain!important;object-position:center!important;
+    background:var(--nene-media)!important;margin:0 auto 6px!important;
+  }
+  .recent-mini b{font-size:12px!important;line-height:1.25!important}
+  .recent-mini span{font-size:12px!important;line-height:1.2!important}
+  .usage-guide{padding:12px 14px!important;overflow:hidden!important}
+  .usage-guide h3{font-size:18px!important;margin:0 0 5px!important}
+  .usage-guide .usage-step{padding:5px 0!important}
+  .usage-guide .usage-step strong{font-size:13px!important}
+  .usage-guide .usage-step p{font-size:11px!important;line-height:1.3!important}
+}
+/* 主商品卡去黃，接近灰粉燕麥色 */
+#grid .card{background:#eadbd4!important;border-color:#cba997!important}
+#grid .card-media{background:#ded2cd!important}
+#grid .card-body{background:#f0e3dc!important}
+#grid .badge{background:#f7efeb!important;border-color:#d2b7aa!important;color:#64493d!important}
+#grid .buy-actions input,#grid .buy-actions select{background:#fbf6f3!important;border-color:#d1b5a8!important}
+@media (max-width:900px){
+  .home-feature{display:flex!important;flex-direction:column!important;gap:10px!important;width:100%!important;max-width:100%!important;margin:10px auto!important}
+  .recent-showcase,.usage-guide{width:100%!important;max-width:100%!important;height:auto!important}
+  .recent-mini-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;width:100%!important}
+  .recent-mini:nth-child(n){display:flex!important}
+  .recent-mini:nth-child(n+7){display:none!important}
+  .recent-mini img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:contain!important;max-height:none!important}
+}
+</style>
+<script id="nene-name-final-v14">
+(function(){
+  document.title='內內的小盒子｜販售與收購';
+  function rename(){
+    document.querySelectorAll('h1').forEach(function(el){if(el.textContent.includes('內內選物所')||el.textContent.includes('內內的小盒子')) el.textContent='🤎內內的小盒子🤎';});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rename);else rename();
+})();
+</script>
