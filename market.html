@@ -7547,3 +7547,70 @@ main.wrap{
   .buy-actions{grid-template-columns:46px minmax(0,1fr)!important}
 }
 </style>
+
+
+<style id="nene-final-layout-v5">
+/* 2026-10-03 最終版面整理：分類放搜尋下方、標題對比、手機分類完整可見 */
+.nene-art-hero{padding:0!important;border:0!important;background-color:transparent!important;background-size:cover!important;background-position:center!important;display:block!important;line-height:0!important}
+.toolbar{margin-bottom:8px!important}
+.tabs{
+  margin:0 auto 16px!important;
+  padding:10px 12px!important;
+  max-width:1680px!important;
+  border:1px solid #c7a78d!important;
+  border-radius:16px!important;
+  background:#d6b69d!important;
+  justify-content:center!important;
+}
+.section-head{color:#51392d!important}
+.section-head h3,#sectionTitle{color:#5a3e30!important;font-weight:900!important;text-shadow:none!important}
+#productCount{color:#8a6b58!important;opacity:1!important;font-weight:700!important}
+.section-title-row{color:#5a3e30!important}
+.card{background:#d9bda5!important;border-color:#b99377!important;box-shadow:0 6px 16px rgba(91,62,43,.12)!important}
+.card-media{background:#c9aa91!important}
+.card-media img{background:#f7eee7!important}
+.card-body{background:#ead6c5!important}
+
+@media(max-width:600px){
+  .nene-art-hero{
+    margin-left:-10px!important;margin-right:-10px!important;
+    height:clamp(112px,25vw,145px)!important;
+    background-size:cover!important;
+    background-position:50% 50%!important;
+  }
+  .tabs{
+    width:100%!important;max-width:none!important;
+    margin:0 0 12px!important;padding:9px 7px!important;
+    display:flex!important;flex-wrap:wrap!important;
+    justify-content:center!important;align-items:center!important;
+    gap:7px!important;overflow:visible!important;
+    border-radius:14px!important;
+  }
+  .tab,.group-tab{
+    flex:0 0 auto!important;min-height:36px!important;
+    padding:7px 10px!important;font-size:11px!important;
+    white-space:nowrap!important;
+  }
+  .category-dropdown{flex:0 0 auto!important}
+  .section-head{margin:12px 4px 8px!important}
+  .section-head h3,#sectionTitle{font-size:20px!important;color:#54392d!important}
+  #productCount{font-size:12px!important;color:#8a6b58!important}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:390px){
+  .nene-art-hero{margin-left:-8px!important;margin-right:-8px!important}
+  .tabs{gap:6px!important;padding:8px 5px!important}
+  .tab,.group-tab{padding:7px 9px!important;font-size:10.5px!important}
+}
+</style>
+<script id="nene-final-tab-position-v5">
+(function(){
+  function placeCategories(){
+    const toolbar=document.querySelector('main.wrap .toolbar');
+    const tabs=document.querySelector('main.wrap nav.tabs');
+    if(toolbar&&tabs) toolbar.insertAdjacentElement('afterend',tabs);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(placeCategories,0));
+  else setTimeout(placeCategories,0);
+})();
+</script>
