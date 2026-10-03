@@ -6726,5 +6726,85 @@ main.wrap nav.tabs > .hidden,main.wrap nav.tabs > .tab.hidden,main.wrap nav.tabs
 }
 </style>
 
-\n<style id="nene-final-layout-v41">\n/* 2026-10-03 final: restore nav pills + dense product grid; recent area scales independently */\n.nene-top-nav{display:flex!important;align-items:center!important;gap:10px!important;flex:0 0 auto!important}\n.nene-top-link{\n  display:inline-flex!important;align-items:center!important;justify-content:center!important;\n  min-width:128px!important;width:auto!important;height:38px!important;min-height:38px!important;\n  padding:6px 18px!important;border-radius:999px!important;box-sizing:border-box!important;\n  background:#f8efeb!important;border:1px solid #d8bcb0!important;color:#68483f!important;\n  text-decoration:none!important;font-weight:900!important;line-height:1!important;box-shadow:none!important;\n}\n.nene-top-link.active{background:#b57a63!important;border-color:#b57a63!important;color:#fff!important;box-shadow:0 2px 7px rgba(89,55,43,.10)!important}\n#warehouseNavLink.hidden{display:none!important}\n#discordProfileLink{background:#fff9f6!important;border:1px solid #e3d1ca!important;color:#9a746c!important}\n#discordProfileLink .discord-message-text{color:#9a746c!important}\n#discordProfileLink .discord-soft-heart{display:inline!important;color:#cfa19a!important}\n#discordProfileLink .discord-logo-circle{background:#cdbfc5!important}\n#discordProfileLink .discord-blue-logo{color:#fff!important;fill:#fff!important}\n\n@media (min-width:761px){\n  /* 正式商品：恢復桌機高密度，一排依視窗自然維持約 6~10 個 */\n  #grid.grid{\n    display:grid!important;\n    grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;\n    gap:14px!important;align-items:start!important;justify-content:start!important;\n  }\n  #grid .card{width:100%!important;min-width:0!important;max-width:none!important;margin:0!important}\n  /* 近期上架只調自己，不再牽動正式商品卡；卡片保持合理比例、不硬擠 */\n  .home-feature{grid-template-columns:minmax(0,3fr) minmax(300px,1fr)!important;align-items:stretch!important}\n  .recent-mini-grid{\n    display:grid!important;\n    grid-template-columns:repeat(auto-fit,minmax(140px,180px))!important;\n    gap:12px!important;justify-content:start!important;align-items:start!important;\n  }\n  .recent-mini{width:100%!important;max-width:180px!important;min-width:0!important}\n}\n@media (min-width:1500px){\n  #grid.grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))!important}\n}\n@media (max-width:760px){\n  .nene-top-link{min-width:0!important;width:auto!important;height:32px!important;min-height:32px!important;padding:5px 12px!important;font-size:11px!important}\n  #grid.grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}\n  #grid .card{width:100%!important;max-width:none!important}\n}\n</style>\n</body>
+
+<style id="nene-verified-final-20261003">
+/* verified final override: header pills + pale Discord + responsive grid */
+header.topbar{
+  display:flex!important; align-items:center!important; gap:clamp(7px,1vw,14px)!important;
+  min-height:58px!important; height:auto!important; padding:8px clamp(10px,2vw,24px)!important;
+  box-sizing:border-box!important; overflow:visible!important; flex-wrap:nowrap!important;
+}
+header.topbar>.brand{display:flex!important;align-items:center!important;min-width:0!important;flex:0 1 auto!important}
+header.topbar .brand-copy,header.topbar .brand-title-line{display:flex!important;align-items:center!important;gap:clamp(6px,.8vw,10px)!important;min-width:0!important;flex-wrap:nowrap!important}
+header.topbar .brand-title-line h1{font-size:clamp(14px,1.35vw,18px)!important;white-space:nowrap!important;margin:0!important;color:#60463d!important}
+header.topbar .brand small{display:inline-flex!important;margin:0!important}
+#discordProfileLink{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;
+  width:auto!important;min-width:max-content!important;max-width:none!important;height:36px!important;min-height:36px!important;
+  padding:3px 11px 3px 4px!important;border-radius:999px!important;box-sizing:border-box!important;
+  background:#fff9f6!important;border:1px solid #dfcec7!important;color:#94716a!important;
+  box-shadow:0 2px 7px rgba(91,62,52,.07)!important;text-shadow:none!important;text-decoration:none!important;
+}
+#discordProfileLink .discord-blue-badge{display:inline-flex!important;align-items:center!important;gap:7px!important;background:transparent!important;border:0!important;padding:0!important}
+#discordProfileLink .discord-logo-circle{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:28px!important;height:28px!important;flex:0 0 28px!important;border-radius:50%!important;background:#c9bbc1!important;color:#fff!important}
+#discordProfileLink .discord-blue-logo{display:block!important;width:18px!important;height:18px!important;color:#fff!important;fill:#fff!important}
+#discordProfileLink .discord-message-text{display:inline!important;color:#94716a!important;font-size:12px!important;font-weight:900!important;white-space:nowrap!important}
+#discordProfileLink .discord-soft-heart{display:inline!important;color:#c99b95!important;font-size:17px!important;line-height:1!important}
+#discordProfileLink:hover{background:#fff5f1!important;transform:none!important}
+header.topbar>.nene-top-nav{display:flex!important;align-items:center!important;gap:clamp(6px,.7vw,9px)!important;flex:0 0 auto!important;margin:0!important;padding:0!important;position:static!important;transform:none!important}
+header.topbar .nene-top-link{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  width:auto!important;min-width:clamp(104px,9vw,132px)!important;max-width:none!important;height:36px!important;min-height:36px!important;
+  padding:5px clamp(10px,1.1vw,16px)!important;border-radius:999px!important;box-sizing:border-box!important;
+  background:#f7eeea!important;border:1px solid #d7bcb1!important;color:#684a40!important;
+  font-size:clamp(11px,.9vw,13px)!important;font-weight:900!important;text-decoration:none!important;white-space:nowrap!important;
+}
+header.topbar .nene-top-link.active{background:#b77d68!important;border-color:#aa705d!important;color:#fff!important;box-shadow:0 2px 6px rgba(83,52,42,.12)!important}
+#warehouseNavLink.hidden{display:none!important}
+header.topbar>.admin-tools{display:flex!important;align-items:center!important;gap:6px!important;flex:0 0 auto!important;margin-left:auto!important;position:static!important;inset:auto!important;transform:none!important;background:transparent!important;box-shadow:none!important;padding:0!important}
+header.topbar #ordersBtn,header.topbar #adminBtn{position:static!important;transform:none!important;min-height:34px!important;height:34px!important;border-radius:999px!important;padding:5px 11px!important;white-space:nowrap!important}
+header.topbar .admin-menu-wrap{position:relative!important}
+
+/* hidden category means hidden at every breakpoint */
+.tabs>.hidden,.tabs>.tab.hidden,.tabs>.category-dropdown.hidden,.tabs .category-menu>.hidden,.tabs .category-menu>button.hidden{display:none!important;visibility:hidden!important}
+
+/* formal products: 6 on ordinary desktop, rising to 10 on wide screens */
+@media (min-width:761px){#grid.grid{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:12px!important}#grid .card{width:100%!important;min-width:0!important;max-width:none!important}}
+@media (min-width:1250px){#grid.grid{grid-template-columns:repeat(7,minmax(0,1fr))!important}}
+@media (min-width:1450px){main.wrap{width:min(1380px,calc(100% - 40px))!important}#grid.grid{grid-template-columns:repeat(8,minmax(0,1fr))!important}}
+@media (min-width:1700px){main.wrap{width:min(1540px,calc(100% - 48px))!important}#grid.grid{grid-template-columns:repeat(9,minmax(0,1fr))!important}}
+@media (min-width:1950px){main.wrap{width:min(1700px,calc(100% - 56px))!important}#grid.grid{grid-template-columns:repeat(10,minmax(0,1fr))!important}}
+
+/* recent area scales independently; never changes formal-product density */
+@media (min-width:761px){
+ .home-feature{display:grid!important;grid-template-columns:minmax(0,3fr) minmax(280px,1fr)!important;gap:clamp(12px,1.2vw,18px)!important;align-items:stretch!important}
+ .recent-showcase,.usage-guide{min-width:0!important;width:100%!important;height:100%!important;box-sizing:border-box!important}
+ .recent-mini-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(128px,1fr))!important;gap:10px!important;width:100%!important}
+ .recent-mini{min-width:0!important;width:100%!important;max-width:none!important}
+}
+
+/* phone: clean two-row header; formal products stay 2 columns */
+@media (max-width:760px){
+ header.topbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-rows:auto auto!important;gap:7px 6px!important;padding:8px 9px!important;flex-wrap:initial!important}
+ header.topbar>.brand{grid-column:1/-1!important;grid-row:1!important;width:100%!important;min-width:0!important}
+ header.topbar .brand-copy,header.topbar .brand-title-line{width:100%!important;gap:5px!important}
+ header.topbar .brand-title-line h1{font-size:12.5px!important;flex:0 1 auto!important}
+ #discordProfileLink{height:30px!important;min-height:30px!important;padding:2px 7px 2px 3px!important;gap:5px!important}
+ #discordProfileLink .discord-logo-circle{width:23px!important;height:23px!important;flex-basis:23px!important}
+ #discordProfileLink .discord-blue-logo{width:15px!important;height:15px!important}
+ #discordProfileLink .discord-message-text{font-size:10.5px!important}
+ #discordProfileLink .discord-soft-heart{font-size:14px!important}
+ header.topbar>.nene-top-nav{grid-column:1!important;grid-row:2!important;justify-content:flex-start!important;gap:5px!important;min-width:0!important}
+ header.topbar .nene-top-link{min-width:0!important;width:auto!important;height:31px!important;min-height:31px!important;padding:5px 10px!important;font-size:10.5px!important}
+ header.topbar>.admin-tools{grid-column:2!important;grid-row:2!important;justify-self:end!important;margin:0!important}
+ header.topbar #ordersBtn{height:31px!important;min-height:31px!important;padding:4px 7px!important;font-size:10.5px!important}
+ header.topbar #adminBtn{width:auto!important;min-width:31px!important;max-width:none!important;height:31px!important;min-height:31px!important;padding:4px 8px!important;font-size:10.5px!important}
+ #grid.grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+ #grid .card{width:100%!important;max-width:none!important;min-width:0!important}
+ .recent-showcase{display:none!important}
+ .home-feature{display:block!important;width:100%!important;max-width:100%!important}
+}
+</style>
+
+</body>
 </html>
