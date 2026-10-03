@@ -410,8 +410,27 @@
 </style>
 </head><body>
 <div id="authGate"><div class="loginCard"><h2>🤎內內的小倉倉🤎</h2><p>請先使用你的 Google 帳號登入</p><button class="btn primary" id="googleLogin">使用 Google 登入</button><div id="loginMsg" class="note"></div></div></div>
-<div id="app"><div class="wrap">
-<div class="authbar"><span id="userLabel"></span><button class="mini" id="logout">登出</button></div><header class="warehouseHeader"><div class="warehouseTitleRow"><h1>🤎內內的小倉倉🤎</h1><a class="btn warehouseBack" href="index.html">販售與收購</a></div><p>庫存管理</p></header>
+<div id="app">
+<header class="sharedTopbar">
+  <div class="sharedBrand">🤎內內的小盒子🤎</div>
+  <nav class="sharedNav" aria-label="主要導覽">
+    <a class="sharedPill" href="index.html">販售與收購</a>
+    <a class="sharedPill active" href="warehouse.html">小倉倉</a>
+  </nav>
+  <div class="sharedAdmin">
+    <span id="userLabel"></span>
+    <div class="warehouseAdminMenuWrap">
+      <button class="sharedPill adminPill" id="warehouseManageBtn" type="button" aria-expanded="false">⚙️ 管理</button>
+      <div class="warehouseAdminMenu hidden" id="warehouseAdminMenu">
+        <a href="backup.html">整站備份</a>
+        <button type="button" id="warehouseBackupMenuBtn">完整備份</button>
+        <button type="button" id="warehouseRestoreMenuBtn">還原備份</button>
+        <button type="button" id="warehouseLogoutMenuBtn">登出</button>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="wrap">
 <section class="box"><div class="search"><input id="q" placeholder="搜尋物品，例如：珊瑚、藤編、粉色…"><button class="btn primary" id="go">搜尋</button></div><div id="grandTotal" class="stat" style="display:none;margin-top:12px"></div><div id="results"></div></section>
 <div class="stats"><div class="stat"><small>帳號數</small><b id="sa">0</b></div><div class="stat"><small>物品種類</small><b id="sk">0</b></div><div class="stat"><small>庫存總數</small><b id="sq">0</b></div><div class="stat"><small>最近更新</small><b id="su" style="font-size:13px">尚未</b></div></div>
 <div class="main"><aside class="panel"><div class="head"><h3>帳號</h3><div style="display:flex;gap:6px"><button class="btn" id="swapAccountNumbers" type="button">交換帳號資料</button><button class="btn" id="batchA">批次新增</button><button class="btn" id="newA">＋</button></div></div><div class="accountTypeTabs"><button class="accountTypeTab active" data-account-type="一次性">一次號</button><button class="accountTypeTab" data-account-type="永久">永久號</button><button class="accountTypeTab" data-account-type="主要培養">培養號</button></div><div class="accountSearch"><input id="accountSearch" placeholder="搜尋帳號／ID"><button class="btn" id="accountSearchBtn" type="button">搜尋</button></div><div style="margin:0 0 9px">
@@ -1701,7 +1720,23 @@ function renderTempShots(accountId){
     const shot=shots.find(x=>x.id===img.dataset.shotView);
     if(!shot)return;
     const w=window.open();
-    if(w){w.document.write(`<title>臨時截圖</title><body style="margin:0;background:#211b18;display:grid;place-items:center;min-height:100vh"><img src="${shot.image}" style="max-width:100%;max-height:100vh;object-fit:contain"></body>`);w.document.close()}
+    if(w){w.document.write(`<title>臨時截圖</title><body style="margin:0;background:#211b18;display:grid;place-items:center;min-height:100vh"><img src="${shot.image}" style="max-width:100%;max-height:100vh;object-fit:contain">
+<style id="nene-shared-warehouse-topbar-v20">
+.sharedTopbar{min-height:58px;display:flex;align-items:center;gap:12px;padding:9px 18px;background:#f4ebe5;border-bottom:1px solid #d5beb2;color:#513b33;position:relative;z-index:100}
+.sharedBrand{font-size:20px;font-weight:900;white-space:nowrap}.sharedNav{display:flex;gap:8px;align-items:center}.sharedPill{height:38px;min-width:132px;padding:7px 15px;border:1px solid #c7a89a;border-radius:999px;background:#eadbd4;color:#65493e;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}.sharedPill.active{background:#a97463;border-color:#96604f;color:#fff}.sharedAdmin{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:12px;color:#765e53}.adminPill{min-width:92px;cursor:pointer}.warehouseAdminMenuWrap{position:relative}.warehouseAdminMenu{position:absolute;right:0;top:44px;min-width:150px;padding:7px;background:#fff9f5;border:1px solid #d2b9ad;border-radius:13px;box-shadow:0 12px 28px #5f403522;display:grid;gap:5px}.warehouseAdminMenu.hidden{display:none!important}.warehouseAdminMenu a,.warehouseAdminMenu button{border:0;background:#eadbd4;color:#5c4238;border-radius:9px;padding:9px 11px;text-align:left;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}.warehouseAdminMenu a:hover,.warehouseAdminMenu button:hover{background:#dcc2b7}
+@media(max-width:700px){.sharedTopbar{padding:8px 9px;gap:6px;flex-wrap:wrap}.sharedBrand{font-size:16px}.sharedNav{gap:5px}.sharedPill{min-width:0;height:34px;padding:6px 10px;font-size:11px}.sharedAdmin{margin-left:auto}.sharedAdmin #userLabel{display:none}.adminPill{min-width:0}.wrap{padding-top:9px}}
+</style>
+<script id="nene-shared-warehouse-topbar-v20-script">
+(function(){
+ const btn=document.getElementById('warehouseManageBtn'), menu=document.getElementById('warehouseAdminMenu');
+ btn?.addEventListener('click',e=>{e.stopPropagation();const open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);btn.setAttribute('aria-expanded',open?'true':'false')});
+ document.addEventListener('click',e=>{if(!e.target.closest('.warehouseAdminMenuWrap')){menu?.classList.add('hidden');btn?.setAttribute('aria-expanded','false')}});
+ document.getElementById('warehouseBackupMenuBtn')?.addEventListener('click',()=>document.getElementById('backupAllData')?.click());
+ document.getElementById('warehouseRestoreMenuBtn')?.addEventListener('click',()=>document.getElementById('restoreAllData')?.click());
+ document.getElementById('warehouseLogoutMenuBtn')?.addEventListener('click',()=>document.getElementById('logout')?.click());
+})();
+</script>
+</body>`);w.document.close()}
   });
   grid.querySelectorAll("[data-shot-recognize]").forEach(btn=>btn.onclick=()=>{
     const shot=shots.find(x=>x.id===btn.dataset.shotRecognize);
