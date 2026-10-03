@@ -1757,6 +1757,15 @@ html.page-visible body{visibility:visible;}
   .hero:empty { display: none !important; }
 }
 </style>
+
+<style>
+/* === 款式編輯列修正：主欄橫排，倉庫連結固定獨立下一列 === */
+.variant-row{grid-template-columns:minmax(150px,1fr) 72px 72px auto 38px auto !important;align-items:center !important}
+.variant-row > .variant-warehouse-link{grid-column:1 / -1 !important;width:100% !important;min-width:0 !important;box-sizing:border-box !important}
+.variant-row > .variant-warehouse-link .variant-warehouse-search,.variant-row > .variant-warehouse-link .variant-warehouse-select{display:block !important;width:100% !important;min-width:0 !important;box-sizing:border-box !important}
+.variant-warehouse-info{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:700px){.variant-row{grid-template-columns:minmax(120px,1fr) 58px 58px auto 34px !important;gap:5px !important}.variant-row > .variant-remove{grid-column:auto !important}.variant-row > .variant-warehouse-link{grid-column:1 / -1 !important}}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -3790,7 +3799,7 @@ async function loadWarehouseCandidates(force=false){
     warehouseCandidates=rows.map(r=>{
       const key=String(r?.key||"");
       const [category,name,variant,gender,candyType]=warehouseParseKey(key);
-      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>({accountId:String(o?.accountId||""),owner:String(o?.label||o?.accountId||""),qty:Math.max(0,Math.floor(Number(o?.qty)||0))}));
+      const owners=(Array.isArray(r?.owners)?r.owners:[]).map(o=>({accountId:String(o?.accountId||""),owner:String(o?.label||o?.accountId||""),number:String(o?.number||""),gameId:String(o?.gameId||""),qty:Math.max(0,Math.floor(Number(o?.qty)||0))}));
       const qty=owners.reduce((n,o)=>n+o.qty,0);
       return {key,item:{category,name,variant,gender,candyType},qty,owners};
     }).filter(x=>x.key&&x.item.name).sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name),"zh-Hant"));
@@ -3801,6 +3810,10 @@ async function loadWarehouseCandidates(force=false){
 const warehouseOwnerMetaCache=new Map();
 async function warehouseOwnerLabel(o){
   const accountId=String(o?.accountId||"");
+  const embeddedNumber=String(o?.number||"").trim();
+  const embeddedGameId=String(o?.gameId||"").trim();
+  const embeddedLabel=[embeddedNumber,embeddedGameId].filter(Boolean).join("｜");
+  if(embeddedLabel)return embeddedLabel;
   if(!accountId)return String(o?.owner||"");
   if(warehouseOwnerMetaCache.has(accountId))return warehouseOwnerMetaCache.get(accountId);
   try{
