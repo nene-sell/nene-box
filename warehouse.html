@@ -696,7 +696,8 @@ function queueStockPublish(){
           if(!i?.name)continue;
           const key=stockKey(i),qty=Math.max(0,Math.floor(Number(i.qty)||0));
           if(!ownersByKey.has(key))ownersByKey.set(key,[]);
-          ownersByKey.get(key).push({accountId,qty});
+          const accountNumber=String(a.number||a.name||"").trim();
+          ownersByKey.get(key).push({accountId,label:accountNumber?`編號 ${accountNumber}`:"未設定編號",qty});
         }
       }
       const inventoryRows=[...ownersByKey].map(([key,owners])=>({key,owners}));
