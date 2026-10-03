@@ -588,7 +588,7 @@
 <div class="field" id="shotGenderWrap" style="display:none"><label>限制</label><select id="shotGender"><option value="限男">限男</option><option value="限女">限女</option></select></div>
 <div id="dropShot" style="border:2px dashed var(--line);border-radius:16px;padding:24px;text-align:center;background:#fff;cursor:pointer">把庫存截圖拖到這裡<br><span class="meta">或點一下選擇 JPG / PNG</span><input id="shotFile" type="file" accept="image/*" hidden></div>
 <div id="shotPreview" style="display:none;margin-top:12px"><img id="shotImg" style="width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#ddd"><div class="note">依 MSTAR 固定道具卡片版型辨識；只讀道具名稱區，不把「查看詳情」、NEW、頁碼等介面文字當成道具。少量或多量道具都可辨識。</div>
-<div style="margin-top:10px;font-weight:800">辨識確認</div><div class="meta">名稱、款式與數量都可在加入前手動修正。</div><div id="recognized" style="margin-top:8px"></div></div>
+<div style="margin-top:10px;font-weight:800">辨識確認</div><div class="meta">名稱、款式、數量與分類都可在加入前手動修正。</div><div id="recognized" style="margin-top:8px"></div></div>
 <div class="actions"><button class="btn" onclick="shotDlg.close()">取消</button><button class="btn primary" id="mockRecognize">辨識這張截圖</button><button class="btn primary" id="confirmRecognized" style="display:none">確認加入庫存</button></div></dialog>
 <dialog id="overviewOwnersDlg" style="width:min(520px,92vw)">
 <div style="text-align:center"><div id="ownerItemName" style="font-size:18px;font-weight:900"></div><div id="ownerItemMeta" class="meta" style="margin-top:4px"></div><div id="ownerSummary" style="font-weight:800;margin-top:10px"></div><div id="ownerList" class="ownerList"></div><div class="actions" style="justify-content:center;margin-top:14px"><button class="btn" id="closeOwners" type="button">關閉</button></div></div>
@@ -1877,16 +1877,26 @@ function cropGridImage(img,index,cols=4){
   ctx.drawImage(img,col*cw,row*ch,cw,ch,0,0,canvas.width,canvas.height);
   return canvas.toDataURL("image/jpeg",.88);
 }
+const RECOGNITION_CATEGORIES=["家具","玩偶","花盆","戒指","作物","寵物"];
 function drawRecognized(){
- $("#recognized").innerHTML=recognizedRows.map((x,i)=>`<div class="recCard">
+ const defaultCat=$("#shotCategory")?.value||"家具";
+ $("#recognized").innerHTML=recognizedRows.map((x,i)=>{
+   const rowCat=RECOGNITION_CATEGORIES.includes(x.category)?x.category:defaultCat;
+   x.category=rowCat;
+   const catOptions=RECOGNITION_CATEGORIES.map(cat=>`<option value="${cat}" ${cat===rowCat?"selected":""}>${cat}</option>`).join("");
+   return `<div class="recCard">
    ${x.image?`<img class="recPic" src="${x.image}" alt="">`:`<div class="recPic" style="display:grid;place-items:center">🎁</div>`}
-   <div><div class="recFields"><input data-k="name" data-i="${i}" value="${e(x.name)}" placeholder="道具名稱" style="padding:8px;border:1px solid var(--line);border-radius:9px"><input data-k="variant" data-i="${i}" value="${e(x.variant)}" placeholder="款式" style="padding:8px;border:1px solid var(--line);border-radius:9px"><input type="number" min="1" step="1" inputmode="numeric" data-k="qty" data-i="${i}" value="${Math.max(1,Number(x.qty)||1)}" title="數量" aria-label="數量" style="padding:8px;border:1px solid var(--line);border-radius:9px"></div></div>
+   <div><div class="recFields"><input data-k="name" data-i="${i}" value="${e(x.name)}" placeholder="道具名稱" style="padding:8px;border:1px solid var(--line);border-radius:9px"><input data-k="variant" data-i="${i}" value="${e(x.variant)}" placeholder="款式" style="padding:8px;border:1px solid var(--line);border-radius:9px"><input type="number" min="1" step="1" inputmode="numeric" data-k="qty" data-i="${i}" value="${Math.max(1,Number(x.qty)||1)}" title="數量" aria-label="數量" style="padding:8px;border:1px solid var(--line);border-radius:9px"><select data-k="category" data-i="${i}" title="分類" aria-label="分類" style="padding:8px;border:1px solid var(--line);border-radius:9px;background:#fff">${catOptions}</select></div></div>
    <button class="btn danger removeRec" data-i="${i}" style="padding:7px">×</button>
- </div>`).join("");
+ </div>`;
+ }).join("");
  document.querySelectorAll("#recognized input").forEach(el=>el.oninput=()=>{
    const row=recognizedRows[+el.dataset.i];
    if(el.dataset.k==="qty") row.qty=Math.max(1,Math.floor(Number(el.value)||1));
    else row[el.dataset.k]=el.value;
+ });
+ document.querySelectorAll('#recognized select[data-k="category"]').forEach(el=>el.onchange=()=>{
+   recognizedRows[+el.dataset.i].category=el.value;
  });
  document.querySelectorAll(".removeRec").forEach(b=>b.onclick=()=>{recognizedRows.splice(+b.dataset.i,1);drawRecognized()});
 }
@@ -2369,16 +2379,19 @@ $("#confirmRecognized").onclick=async()=>{
   const oldText=btn.textContent;
   btn.disabled=true; btn.textContent="加入中…";
   try{
-    const cat=$("#shotCategory").value||"家具";
-    const gen=(cat==="戒指"||cat==="作物")?($("#shotGender").value||recognizedRows[0]?.restriction||"限男"):"";
+    const fallbackCat=$("#shotCategory").value||"家具";
+    let firstSaved=null;
     for(const x of recognizedRows){
+      const cat=RECOGNITION_CATEGORIES.includes(x.category)?x.category:fallbackCat;
+      const gen=(cat==="戒指"||cat==="作物")?(x.restriction||$("#shotGender").value||"限男"):"";
       const item={name:x.name,variant:x.variant||"",category:cat,gender:gen,candyType:"",qty:Number(x.qty)||1,image:x.image||""};
+      if(!firstSaved)firstSaved=item;
       await rememberItemName(item.image,item.name,item.variant);
       const same=a.items.find(y=>y.name===item.name&&(y.variant||"")===item.variant&&(y.category||"")===cat&&(y.gender||"")===gen);
       if(same){same.qty+=item.qty;if(item.image)same.image=item.image}
       else a.items.push(item);
     }
-    activeCategory=cat; activeGender=gen; activeCandy="";
+    activeCategory=firstSaved?.category||fallbackCat; activeGender=firstSaved?.gender||""; activeCandy="";
     const tempSource=recognizingTempShot;
 
     // 這裡只寫目前帳號，不再因為一張截圖重寫全部 600 個帳號。
