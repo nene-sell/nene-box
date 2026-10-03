@@ -2400,6 +2400,22 @@ main.wrap{background:transparent!important}
 }
 </style>
 
+
+<style id="nene-topbar-pill-fix-v16">
+/* 私訊與導覽膠囊統一尺寸；買家不顯示小倉倉 */
+#discordProfileLink,.nene-top-link{
+  width:132px!important;min-width:132px!important;max-width:132px!important;
+  height:38px!important;min-height:38px!important;box-sizing:border-box!important;
+  padding:6px 12px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  border-radius:999px!important;font-size:14px!important;font-weight:900!important;line-height:1!important;
+}
+#discordProfileLink,#discordProfileLink *{color:#fff!important;opacity:1!important}
+#discordProfileLink{background:#b97873!important;border-color:#a86763!important;text-shadow:0 1px 1px rgba(83,45,42,.18)!important}
+#warehouseNavLink.hidden{display:none!important}
+@media(max-width:600px){
+  #discordProfileLink,.nene-top-link{width:104px!important;min-width:104px!important;max-width:104px!important;height:34px!important;min-height:34px!important;font-size:12px!important;padding:5px 8px!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -2415,7 +2431,7 @@ main.wrap{background:transparent!important}
   </div>
   <nav class="nene-top-nav" aria-label="主要導覽">
     <a class="nene-top-link active" href="index.html">販售與收購</a>
-    <a class="nene-top-link" href="warehouse.html">小倉倉</a>
+    <a id="warehouseNavLink" class="nene-top-link hidden" href="warehouse.html">小倉倉</a>
   </nav>
 
   <div class="admin-tools"><button id="backupBtn" class="btn hidden" type="button">完整備份</button><button id="restoreBtn" class="btn hidden" type="button">還原備份</button><input id="restoreFileInput" type="file" accept=".zip,application/zip" class="hidden"><button id="ordersBtn" class="btn hidden" type="button">訂單<span id="ordersBadge" class="orders-badge hidden">0</span></button><button id="adminBtn" class="btn" title="管理員登入" aria-label="管理員登入">⚙️</button></div>
@@ -4934,6 +4950,7 @@ onAuthStateChanged(auth,user=>{
   $("#ordersBtn")?.classList.toggle("hidden",!isAdmin());
   $("#backupBtn")?.classList.toggle("hidden",!isAdmin());
   $("#restoreBtn")?.classList.toggle("hidden",!isAdmin());
+  $("#warehouseNavLink")?.classList.toggle("hidden",!isAdmin());
   startOrdersListener();
   render();
 });
@@ -6220,6 +6237,43 @@ main.wrap{background:transparent!important;}
   .discord-copy{padding:7px 11px!important;font-size:13px!important;white-space:nowrap!important}
 }
 </style>
+
+<style id="nene-final-nav-search-v17">
+/* 最終導覽：私訊緊貼站名；小倉倉僅管理員顯示 */
+.topbar{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:nowrap!important}
+.topbar .brand{display:flex!important;align-items:center!important;gap:10px!important}
+.topbar .brand>div:last-child{display:flex!important;align-items:center!important;gap:10px!important}
+.topbar .brand h1{margin:0!important}
+.topbar .brand small{display:inline-flex!important;margin:0!important}
+#discordProfileLink{margin:0!important}
+#warehouseNavLink.hidden{display:none!important}
+/* 搜尋＋分類改成灰粉藕奶茶，和商品卡同一套色 */
+.toolbar{background:#d8c4bb!important;border-color:#c4a597!important}
+.toolbar .search,#searchInput{background:#f8f1ed!important;border-color:#c9aa9c!important;color:#5a4036!important}
+.toolbar .btn{background:#cdb4a8!important;border-color:#b99484!important;color:#5a4036!important}
+.toolbar .btn.primary,#addBtn{background:#aa7765!important;border-color:#996554!important;color:#fff!important}
+.tabs{background:#cdb3a6!important;border-color:#bb9685!important}
+.tab,.group-tab{background:#eadbd4!important;border-color:#cfb2a5!important;color:#684b40!important}
+.tab.active,.group-tab.active{background:#aa7765!important;border-color:#996554!important;color:#fff!important}
+@media(max-width:700px){
+ .topbar{flex-wrap:wrap!important}
+ .topbar .brand>div:last-child{gap:6px!important}
+}
+</style>
+<script id="nene-admin-warehouse-visibility-v17">
+(function(){
+  function syncWarehouseLink(){
+    const link=document.getElementById('warehouseNavLink');
+    if(!link)return;
+    /* 真正權限仍由原本 Firebase onAuthStateChanged 控制；這裡只避免 CSS 誤把 hidden 蓋掉 */
+    if(link.classList.contains('hidden')) link.setAttribute('aria-hidden','true');
+    else link.removeAttribute('aria-hidden');
+  }
+  new MutationObserver(syncWarehouseLink).observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['class']});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncWarehouseLink);else syncWarehouseLink();
+})();
+</script>
+
 </body>
 </html>
 
