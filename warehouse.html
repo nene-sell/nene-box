@@ -685,8 +685,6 @@ function queueStockPublish(){
       if(link.itemKey)entry.stock=totals[link.itemKey]||0;
       output[id]=entry;
     }
-    const hash=JSON.stringify(output);
-    if(hash===lastPublished)return;
     try{
       const ownersByKey=new Map();
       for(const a of stockAccounts){
@@ -701,6 +699,9 @@ function queueStockPublish(){
         }
       }
       const inventoryRows=[...ownersByKey].map(([key,owners])=>({key,owners}));
+      // 庫存數量沒變、只有帳號編號變更時也必須重發索引；否則會一直留著舊的 UUID／未設定編號。
+      const hash=JSON.stringify({products:output,rows:inventoryRows});
+      if(hash===lastPublished)return;
       await Promise.all([
         setDoc(publicStockRef(),{products:output,updatedAt:new Date().toISOString()}),
         setDoc(doc(db,"adminSettings","warehouseInventoryIndex"),{rows:inventoryRows,updatedAt:new Date().toISOString()})
