@@ -1975,6 +1975,47 @@ document.addEventListener('DOMContentLoaded',()=>{
   .recent-mini img{max-height:105px!important}
 }
 </style>
+
+<style id="nene-mobile-center-card-final-v10">
+/* v10: 手機真正置中 + 主商品卡與背景分層 */
+#grid .card{
+  background:#f0dfcf!important;
+  border:2px solid #c59d7d!important;
+  box-shadow:0 7px 18px rgba(86,55,37,.16)!important;
+}
+#grid .card-media{background:#d3b195!important;border-bottom:1px solid #c59d7d!important}
+#grid .card-body{background:#f0dfcf!important}
+#grid .card-title{color:#432f26!important;-webkit-text-fill-color:#432f26!important}
+#grid .stock,#grid .stock-text{color:#a85f49!important;-webkit-text-fill-color:#a85f49!important;font-weight:800!important}
+#grid select,#grid input[type="number"]{background:#fffaf5!important;border:1px solid #c9a88e!important;color:#49352b!important}
+#grid .buy-actions .add-cart{background:#98664a!important;border-color:#98664a!important;color:#fff!important}
+
+@media(max-width:600px){
+  body{display:block!important}
+  main.wrap{
+    display:block!important;width:100%!important;max-width:100%!important;
+    margin:0 auto!important;padding-left:10px!important;padding-right:10px!important;
+  }
+  .home-feature,.recent-showcase,.usage-guide,.toolbar,main.wrap nav.tabs,.section-head,#grid,#empty{
+    box-sizing:border-box!important;
+    width:100%!important;max-width:100%!important;
+    margin-left:auto!important;margin-right:auto!important;
+    left:auto!important;right:auto!important;transform:none!important;
+  }
+  .home-feature{display:flex!important;flex-direction:column!important;align-items:center!important}
+  .recent-showcase,.usage-guide{align-self:center!important}
+  .recent-mini-grid{margin-left:auto!important;margin-right:auto!important;justify-content:center!important}
+  main.wrap nav.tabs{justify-items:stretch!important}
+  .section-head{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;text-align:center!important}
+  .section-title-row{width:100%!important;display:flex!important;justify-content:center!important;align-items:center!important;text-align:center!important}
+  #sectionTitle,#productCount{width:100%!important;text-align:center!important;margin-left:auto!important;margin-right:auto!important}
+  #grid.grid{
+    display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    justify-content:center!important;align-items:start!important;gap:10px!important;
+  }
+  #grid .card{width:100%!important;max-width:none!important;margin:0!important;justify-self:stretch!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar">
