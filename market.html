@@ -5544,6 +5544,43 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
 
 
 
+<style id="nene-final-color-lock">
+/* NENE FINAL COLOR LOCK 20261003 */
+:root{
+ --n-page:#f2e7e4;--n-page2:#eadbd7;--n-panel:#f8efec;--n-panel2:#f1e1dd;
+ --n-line:#d8bbb3;--n-text:#513c36;--n-muted:#8c716a;--n-active:#aa7062;--n-active2:#966052;
+}
+html,body{background:#f2e7e4!important;color:var(--n-text)!important}
+body{background:linear-gradient(180deg,#f7efec 0%,#eee1dd 100%)!important}
+.wrap{background:transparent!important}
+/* 首頁兩框 */
+.home-feature{background:transparent!important}
+.recent-showcase,.usage-guide{background:#f8efec!important;border:1px solid #d8bbb3!important;box-shadow:0 4px 14px rgba(82,55,48,.05)!important}
+.recent-showcase-head h3,.usage-guide h3,.usage-step b,.usage-trade-note{color:#513c36!important}
+.usage-step{color:#816861!important}.usage-note{color:#927a73!important}
+.usage-step-icon{background:#f1ddd7!important;border-color:#d6b8af!important;color:#90685d!important}
+.usage-steps::before{background:#d8beb6!important}
+.home-recent-card{background:#fbf5f2!important;border-color:#d8bbb3!important}.home-recent-media{background:#e5d0ca!important}.home-recent-body{background:#fbf5f2!important}.home-recent-title{color:#513c36!important}.home-recent-price{color:#92584b!important}.home-recent-stock{color:#8c6b63!important}.home-recent-add{background:#a86e60!important;border-color:#a86e60!important;color:#fff!important}
+/* 搜尋 */
+.toolbar{background:#e4d0cb!important;border-color:#d2b2aa!important;box-shadow:none!important}.search{background:#fffaf8!important;border-color:#d4b7af!important;color:#513c36!important}
+/* 分類：不要橘黃底框 */
+.tabs{background:transparent!important;border:0!important;box-shadow:none!important}.tab,.group-tab{background:#eedbd7!important;border-color:#d1afa6!important;color:#654a43!important}.tab:hover,.group-tab:hover{background:#e5ceca!important}.tab.active,.group-tab.active{background:#a86e60!important;border-color:#a86e60!important;color:#fff!important}.category-menu{background:#fff8f5!important;border-color:#d7bbb3!important}.category-menu button{color:#654a43!important}.category-menu button:hover{background:#efddda!important}
+/* 正式商品卡：灰粉奶茶，不要黃棕 */
+#grid .card{background:#ead8d3!important;border-color:#d0aea5!important;box-shadow:0 3px 10px rgba(82,55,48,.055)!important}
+#grid .card-media{background:#dfc8c2!important}
+#grid .card-body{background:#f5e8e4!important}
+#grid .card-title{color:#4f3933!important}.price{color:#8d5549!important}.stock,.stock-text{color:#96675c!important}.badge{background:#fbf1ed!important;border-color:#d0b0a7!important;color:#654a43!important}.buy-actions .add-cart{background:#9e6557!important;border-color:#9e6557!important;color:#fff!important}
+/* 其它常見舊米黃色塊 */
+.section-head h2,.section-head p{color:#513c36!important}.empty{background:#f8efec!important;border-color:#d8bbb3!important;color:#80665f!important}
+@media(max-width:600px){
+ body{background:#f3e7e3!important}
+ .recent-showcase{display:none!important}
+ .usage-guide{background:#f8efec!important}
+ .toolbar{background:#e4d0cb!important}
+ .tabs{background:transparent!important}
+ #grid.grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+}
+</style>
 </body>
 </html>
 
