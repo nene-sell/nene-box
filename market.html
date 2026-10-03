@@ -3065,6 +3065,34 @@ function dealHintText(p){
 
 
 
+function makeMobileQtyPicker(input){
+  if(!input || !window.matchMedia("(max-width: 600px)").matches)return input;
+  const select=document.createElement("select");
+  select.className=input.className+" mobile-qty-picker";
+  select.setAttribute("aria-label","選擇數量");
+  const max=Math.max(1,Math.floor(Number(input.max)||1));
+  const current=Math.max(1,Math.min(max,Math.floor(Number(input.value)||1)));
+  for(let i=1;i<=max;i++)select.add(new Option(String(i),String(i),false,i===current));
+  select.disabled=input.disabled;
+  input.replaceWith(select);
+  return select;
+}
+function setQtyPickerLimit(control,limit){
+  if(!control)return;
+  const max=Math.max(0,Math.floor(Number(limit)||0));
+  if(control.tagName==="SELECT"){
+    control.innerHTML="";
+    const optionMax=Math.max(1,max);
+    for(let i=1;i<=optionMax;i++)control.add(new Option(String(i),String(i)));
+    control.value="1";
+    control.disabled=max<=0;
+  }else{
+    control.max=Math.max(1,max);
+    control.value=1;
+    control.disabled=max<=0;
+  }
+}
+
 function renderHomeRecent(){
   const host=document.getElementById("homeRecentGrid");
   if(!host)return;
@@ -3078,8 +3106,9 @@ function renderHomeRecent(){
     const limit=variants.length ? variantAvailableStock(p,defaultVariant) : getAvailableStock(p);
     const card=document.createElement("article");card.className="home-recent-card";
     card.innerHTML=`<div class="home-recent-media"><img src="${p.imageData||""}" alt="${esc(p.name)}"></div><div class="home-recent-body"><div class="home-recent-title">${esc(p.name)}</div><div class="home-recent-price">${esc(p.price||"")}</div><div class="home-recent-stock">${sold?"售完":`庫存 ${Math.max(0,limit)}`}</div>${variants.length?`<select class="home-recent-variant">${variants.map(v=>`<option value="${esc(v.name)}" ${variantAvailableStock(p,v.name)<=0?"disabled":""}>${esc(v.name)}</option>`).join("")}</select>`:""}<div class="home-recent-actions"><input class="home-recent-qty" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="${Math.max(1,limit)}" value="1" ${sold||limit<=0?"disabled":""}><button class="btn home-recent-add" type="button" ${sold||limit<=0?"disabled":""}>${sold||limit<=0?"售完":"加入購物車"}</button></div></div>`;
-    const sel=card.querySelector(".home-recent-variant"),qty=card.querySelector(".home-recent-qty"),btn=card.querySelector(".home-recent-add"),img=card.querySelector("img");
-    if(sel){sel.value=defaultVariant;sel.onchange=()=>{const lim=variantAvailableStock(p,sel.value);qty.max=Math.max(1,lim);qty.value=1;qty.disabled=lim<=0;btn.disabled=lim<=0;btn.textContent=lim<=0?"售完":"加入購物車";const v=variants.find(x=>x.name===sel.value);if(img)img.src=v?.imageData||p.imageData||"";};}
+    const sel=card.querySelector(".home-recent-variant"),btn=card.querySelector(".home-recent-add"),img=card.querySelector("img");
+    let qty=makeMobileQtyPicker(card.querySelector(".home-recent-qty"));
+    if(sel){sel.value=defaultVariant;sel.onchange=()=>{const lim=variantAvailableStock(p,sel.value);setQtyPickerLimit(qty,lim);btn.disabled=lim<=0;btn.textContent=lim<=0?"售完":"加入購物車";const v=variants.find(x=>x.name===sel.value);if(img)img.src=v?.imageData||p.imageData||"";};}
     if(img && p.imageData)img.onclick=()=>openPhotoLightbox(p);
     btn.onclick=async()=>{if(btn.disabled)return;let offer="";if(isBuyerOfferProduct(p)){const answer=await openBuyerOfferDialog(p,"");if(answer===null)return;offer=answer;}addToList(p,qty.value||1,"sale",sel?.value||"");if(offer){const target=cart.find(x=>x.id===p.id&&String(x.variant||"")===String(sel?.value||""));if(target)target.offerPrice=offer;renderCart();}render();};
     host.appendChild(card);
@@ -3350,7 +3379,7 @@ $("#productCount").textContent=`${list.length} 件商品`;
       }
     }else{
       const addBtn=card.querySelector(".add-cart");
-      const qtyInput=card.querySelector(".qty");
+      let qtyInput=makeMobileQtyPicker(card.querySelector(".qty"));
       const variantSelect=card.querySelector(".variant-select");
       if(variantSelect){
         variantSelect.value=defaultVariant;
@@ -3369,9 +3398,7 @@ $("#productCount").textContent=`${list.length} 件商品`;
 
         variantSelect.onchange=()=>{
           const lim=isBuy?variantStock(p,variantSelect.value):variantAvailableStock(p,variantSelect.value);
-          qtyInput.max=lim;
-          qtyInput.value=1;
-          qtyInput.disabled=lim===0;
+          setQtyPickerLimit(qtyInput,lim);
           addBtn.disabled=lim===0;
           updateVariantCardImage();
         };
@@ -5650,6 +5677,48 @@ body{background:linear-gradient(180deg,#f7efec 0%,#eee1dd 100%)!important}
  #grid.grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
 }
 </style>
+
+<style id="nene-mobile-qty-picker-v1">
+/* 手機：數量改為直接選擇，並與加入購物車同高 */
+@media (max-width:600px){
+  .buy-actions{
+    grid-template-columns:auto 54px minmax(0,1fr) !important;
+    align-items:stretch !important;
+  }
+  .buy-actions .qty,
+  .buy-actions .mobile-qty-picker,
+  .buy-actions .add-cart{
+    height:38px !important;
+    min-height:38px !important;
+    box-sizing:border-box !important;
+    border-radius:10px !important;
+  }
+  .buy-actions .qty,
+  .buy-actions .mobile-qty-picker{
+    width:54px !important;
+    min-width:54px !important;
+    max-width:54px !important;
+    padding:0 6px !important;
+    text-align:center !important;
+    text-align-last:center !important;
+    font-size:13px !important;
+    line-height:38px !important;
+    background:#fffaf8 !important;
+    border:1px solid #d3b8b0 !important;
+    color:#5d4741 !important;
+  }
+  .buy-actions .add-cart{
+    width:100% !important;
+    padding:0 8px !important;
+    line-height:normal !important;
+  }
+  .home-recent-actions .mobile-qty-picker{
+    height:38px !important;
+    box-sizing:border-box !important;
+  }
+}
+</style>
+
 </body>
 </html>
 
