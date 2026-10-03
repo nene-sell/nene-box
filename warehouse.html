@@ -29,8 +29,9 @@
  #resourceBox>div:nth-child(2){grid-template-columns:repeat(3,minmax(0,1fr))!important}
  .recCard{grid-template-columns:84px minmax(0,1fr) 36px}
  .recPic{width:84px;height:78px}
- .recFields{grid-template-columns:minmax(0,1fr) 64px 90px}
- .recFields input[data-k="name"]{grid-column:1/-1}
+ .recFields{grid-template-columns:minmax(0,1fr) 58px 48px 78px;gap:4px}
+ .recFields input,.recFields select{min-width:0;width:100%;padding:7px 5px!important;font-size:12px}
+ .recFields input[data-k="name"]{grid-column:auto}
  dialog{width:96vw;padding:14px}
 }
 #shotDlg{
