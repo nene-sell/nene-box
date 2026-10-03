@@ -2504,6 +2504,14 @@ footer{display:none!important}
   .tabs{background:transparent!important;border:0!important;box-shadow:none!important;padding-left:0!important;padding-right:0!important;justify-content:flex-start!important;}
 }
 </style>
+
+<style id="nene-category-contrast-v20">
+/* 分類膠囊提高辨識度；桌機無外框靠左，手機保留原排列 */
+main.wrap nav.tabs .tab,main.wrap nav.tabs .group-tab{background:#dfc8c1!important;border:1px solid #b98f82!important;color:#573d35!important;box-shadow:0 1px 2px rgba(78,51,42,.08)!important;font-weight:850!important}
+main.wrap nav.tabs .tab:hover,main.wrap nav.tabs .group-tab:hover{background:#d5b8af!important;border-color:#a97c6d!important}
+main.wrap nav.tabs .tab.active,main.wrap nav.tabs .group-tab.active{background:#95604f!important;border-color:#825040!important;color:#fff!important;box-shadow:0 2px 6px rgba(84,50,40,.18)!important}
+@media(min-width:601px){main.wrap nav.tabs{background:transparent!important;border:0!important;box-shadow:none!important;padding:8px 0!important;justify-content:flex-start!important}}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -5060,6 +5068,7 @@ onAuthStateChanged(auth,user=>{
   $("#adminMenu")?.classList.toggle("hidden",true);
   $("#adminBtn")?.setAttribute("aria-expanded","false");
   $("#warehouseNavLink")?.classList.toggle("hidden",!isAdmin());
+  if($("#adminBtn")){ $("#adminBtn").textContent=isAdmin()?"⚙️ 管理":"管理員登入"; $("#adminBtn").title=isAdmin()?"管理":"管理員登入"; }
   startOrdersListener();
   render();
 });
