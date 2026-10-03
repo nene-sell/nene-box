@@ -1940,6 +1940,7 @@ main.wrap{width:100%!important;max-width:none!important;margin:0!important;paddi
     <button id="addBtn" class="btn primary hidden">＋ 新增商品</button>
     <button id="catalogImageBtn" class="btn hidden" type="button">📷 產生分類圖片</button>
     <button id="categorySettingsBtn" class="btn hidden" type="button">分類顯示</button>
+    <a id="shopDiscordContact" class="btn shop-discord-contact" href="https://discord.com/users/868208720407040060" target="_blank" rel="noopener noreferrer">私訊內內 ♡</a>
     <span id="status" style="display:none!important"></span>
 </section>
 
@@ -2308,6 +2309,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
 let products = [];
+window.__neneGetProducts = ()=>products;
 let productsInitialLoaded=false;
 let activeCategory = "家具";
 let activeGroup = "";
@@ -5567,10 +5569,22 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
     toolbar.insertAdjacentElement('afterend',tabs);
   }
   window.renderRecentShowcase=function(){
-    const box=document.getElementById('recentMiniGrid'); if(!box||typeof products==='undefined')return;
-    let list=(products||[]).filter(p=>p&&(p.recentFeatured===true || (typeof isNewActive==='function' && isNewActive(p)))&&!['收購區','交換區'].includes(String(p.category||'')));
+    const box=document.getElementById('recentMiniGrid'); if(!box)return;
+    const source=(typeof window.__neneGetProducts==='function' ? window.__neneGetProducts() : []) || [];
+    const now=Date.now();
+    const newActive=p=>{
+      if(!p?.isNew) return false;
+      const v=p.newUntil;
+      let until=0;
+      if(v?.toMillis) until=v.toMillis();
+      else if(v?.seconds) until=Number(v.seconds)*1000;
+      else if(typeof v==='number') until=v;
+      else if(typeof v==='string') until=Date.parse(v)||0;
+      return until>now;
+    };
+    let list=source.filter(p=>p&&(p.recentFeatured===true || newActive(p))&&!['收購區','交換區'].includes(String(p.category||'')));
     list.sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
-    if(!list.length) list=(products||[]).filter(p=>p&&!['收購區','交換區'].includes(String(p.category||''))).sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
+    if(!list.length) list=source.filter(p=>p&&!['收購區','交換區'].includes(String(p.category||''))).sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0)));
     list=list.slice(0,4);
     if(!list.length){box.innerHTML='<div class="recent-mini-empty">目前還沒有近期商品</div>';return;}
     const safe=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -5579,6 +5593,14 @@ setTimeout(()=>document.querySelector(".tabs")?.classList.remove("category-setti
   document.addEventListener('DOMContentLoaded',()=>{setupLayout(); setTimeout(()=>window.renderRecentShowcase(),400); setTimeout(()=>window.renderRecentShowcase(),1400);});
 })();
 </script>
+
+<style id="nene-definitive-v7">
+/* v7: 搜尋後分類、清楚標題、常駐 DC 聯絡 */
+.shop-discord-contact{display:inline-flex!important;align-items:center!important;justify-content:center!important;text-decoration:none!important;background:#8f6047!important;border:1px solid #8f6047!important;color:#fff!important;font-weight:900!important;white-space:nowrap!important}
+main.wrap .section-head #sectionTitle{color:#51372a!important;-webkit-text-fill-color:#51372a!important;font-weight:900!important;opacity:1!important}
+main.wrap #productCount{color:#80614e!important;-webkit-text-fill-color:#80614e!important;font-weight:700!important;opacity:1!important}
+@media(max-width:600px){.shop-discord-contact{flex:1 1 auto!important;min-height:40px!important}.toolbar .search,#searchInput{flex-basis:100%!important}}
+</style>
 </body>
 </html>
 
