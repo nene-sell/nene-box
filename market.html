@@ -7520,3 +7520,61 @@ main.wrap{
 </style>
 
 
+
+<style id="nene-mobile-buy-row-fix-20261003">
+/* 手機商品卡：數量與加入購物車嚴格限制在卡片內，不重疊、不超出 */
+@media (max-width:600px){
+  #grid .buy-actions,
+  #grid .offer-actions{
+    display:grid !important;
+    grid-template-columns:44px minmax(0,1fr) !important;
+    column-gap:6px !important;
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    padding:0 !important;
+    margin-top:auto !important;
+    box-sizing:border-box !important;
+    align-items:stretch !important;
+    overflow:hidden !important;
+  }
+  #grid .buy-actions .qty-label,
+  #grid .offer-actions .qty-label{
+    display:none !important;
+  }
+  #grid .buy-actions .qty,
+  #grid .buy-actions .mobile-qty-picker,
+  #grid .offer-actions .qty,
+  #grid .offer-actions .mobile-qty-picker{
+    grid-column:1 !important;
+    width:44px !important;
+    min-width:0 !important;
+    max-width:44px !important;
+    height:38px !important;
+    min-height:38px !important;
+    margin:0 !important;
+    padding:0 4px !important;
+    box-sizing:border-box !important;
+    border-radius:10px !important;
+    text-align:center !important;
+    text-align-last:center !important;
+    font-size:14px !important;
+  }
+  #grid .buy-actions .add-cart,
+  #grid .offer-actions .add-cart{
+    grid-column:2 !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    height:38px !important;
+    min-height:38px !important;
+    margin:0 !important;
+    padding:0 5px !important;
+    box-sizing:border-box !important;
+    border-radius:10px !important;
+    font-size:10px !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+  }
+}
+</style>
