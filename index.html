@@ -8793,3 +8793,34 @@ body{background:var(--nene-page)!important;color:var(--nene-text)!important}
   #adminBtn{min-width:32px!important;width:32px!important;padding:5px!important}
 }
 </style>
+
+<style id="nene-final-desktop-tabs-and-nav-v18">
+/* 桌機分類：移除整條外框，只留膠囊並靠左；手機維持原排版 */
+@media (min-width:601px){
+  main.wrap nav.tabs{
+    width:100%!important;
+    max-width:none!important;
+    margin:0 0 14px!important;
+    padding:8px 0!important;
+    background:transparent!important;
+    border:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    justify-content:flex-start!important;
+    align-items:center!important;
+    flex-wrap:wrap!important;
+    overflow:visible!important;
+  }
+  .nene-top-nav .nene-top-link{
+    width:132px!important;
+    min-width:132px!important;
+    max-width:132px!important;
+    height:38px!important;
+    min-height:38px!important;
+    padding:6px 12px!important;
+    box-sizing:border-box!important;
+  }
+}
+/* 權限仍由 Firebase 登入狀態控制；hidden 時絕不顯示小倉倉 */
+#warehouseNavLink.hidden{display:none!important;}
+</style>
