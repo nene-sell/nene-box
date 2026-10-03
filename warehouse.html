@@ -782,8 +782,26 @@ function stableMemoryId(m,index=0){
   for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
   return "m"+(h>>>0).toString(36)+"_"+index;
 }
-async function readHybridCloud(){
-  const [metaSnap,accountSnap,memorySnap]=await Promise.all([getDoc(metaRef()),getDocs(accountCol()),getDocs(memoryCol())]);
+// === 低讀取快取 ===
+// 小倉倉完整資料放 IndexedDB；每次開頁只先讀 1 份 meta。
+// meta.updated 沒變就直接用本機快取，不再重讀 616 個帳號與所有 items。
+const WAREHOUSE_CACHE_DB="nene-warehouse-cache-v1",WAREHOUSE_CACHE_STORE="state",WAREHOUSE_CACHE_KEY="main";
+function openWarehouseCache(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(WAREHOUSE_CACHE_DB,1);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(WAREHOUSE_CACHE_STORE))db.createObjectStore(WAREHOUSE_CACHE_STORE)};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+  });
+}
+async function getWarehouseCache(){
+  try{const db=await openWarehouseCache();return await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readonly"),r=tx.objectStore(WAREHOUSE_CACHE_STORE).get(WAREHOUSE_CACHE_KEY);r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error)});}catch(e){console.warn("讀取小倉倉本機快取失敗",e);return null}
+}
+async function setWarehouseCache(state,metaUpdated){
+  try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({metaUpdated:String(metaUpdated||""),state,savedAt:Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
+}
+async function readHybridCloud(metaSnap=null){
+  metaSnap=metaSnap||await getDoc(metaRef());
+  const [accountSnap,memorySnap]=await Promise.all([getDocs(accountCol()),getDocs(memoryCol())]);
   const meta=metaSnap.exists()?metaSnap.data():{};
   const accounts=await Promise.all(accountSnap.docs.map(async x=>{
     const raw={id:x.id,...x.data()};
@@ -796,8 +814,15 @@ async function readHybridCloud(){
   return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
 }
 async function loadCloud(){
-  // v3 之後不再在開啟網站時自動搬遷。只做唯讀載入，避免重複掃描／寫入與半套搬遷。
-  d=await readHybridCloud();
+  // 先只讀 1 份 meta；沒有資料變更時直接使用 IndexedDB 快取。
+  const metaSnap=await getDoc(metaRef()),meta=metaSnap.exists()?metaSnap.data():{},metaUpdated=String(meta.updated||"");
+  const cached=await getWarehouseCache();
+  if(cached?.state&&String(cached.metaUpdated||"")===metaUpdated){
+    d=cached.state;
+  }else{
+    d=await readHybridCloud(metaSnap);
+    await setWarehouseCache(d,metaUpdated);
+  }
   migrationReady=true;
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
