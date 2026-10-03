@@ -1890,6 +1890,57 @@ main.wrap{width:100%!important;max-width:none!important;margin:0!important;paddi
 }
 </style>
 
+
+<style id="nene-compact-recent-mobile-center-v5">
+/* 近期上架縮框、手機真正置中、私訊按鈕移入使用說明 */
+.home-feature{
+  align-items:start!important;
+  grid-template-columns:minmax(0,900px) minmax(320px,380px)!important;
+  justify-content:center!important;
+  gap:16px!important;
+}
+.recent-showcase{align-self:start!important;height:auto!important;min-height:0!important;padding:13px 14px 14px!important}
+.recent-mini-grid{grid-template-columns:repeat(auto-fit,minmax(145px,190px))!important;justify-content:start!important;align-items:start!important}
+.recent-mini-empty{min-height:76px!important}
+.shop-discord-contact{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;margin:10px 0 0!important;min-height:42px!important;background:#9b6749!important;border-color:#9b6749!important;color:#fff!important;font-weight:900!important;text-decoration:none!important}
+.usage-guide .shop-discord-contact{margin-top:11px!important}
+@media(max-width:900px){
+  .home-feature{grid-template-columns:minmax(0,720px)!important;justify-content:center!important;width:100%!important}
+}
+@media(max-width:600px){
+  main.wrap{width:100%!important;margin:0 auto!important;padding-left:10px!important;padding-right:10px!important}
+  .home-feature{display:flex!important;flex-direction:column!important;align-items:center!important;width:100%!important;max-width:100%!important;margin:10px auto!important;gap:10px!important}
+  .recent-showcase,.usage-guide,.toolbar,.tabs,.section-head,#grid,#empty{box-sizing:border-box!important}
+  .recent-showcase,.usage-guide{width:100%!important;max-width:100%!important;margin-left:auto!important;margin-right:auto!important}
+  .recent-showcase{padding:10px!important;height:auto!important;min-height:0!important}
+  .recent-showcase-head{margin:0 2px 8px!important}
+  .recent-mini-grid{width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;justify-content:center!important}
+  .recent-mini{width:100%!important;max-width:none!important;margin:0 auto!important;padding:6px!important}
+  .recent-mini img{width:100%!important;aspect-ratio:1/1!important}
+  .recent-mini-empty{min-height:54px!important}
+  .usage-guide{text-align:center!important}
+  .usage-step{text-align:left!important}
+  .toolbar{width:100%!important;margin-left:auto!important;margin-right:auto!important}
+  .tabs{width:100%!important;margin:0 auto!important;padding:10px 0 12px!important}
+  .section-head{text-align:center!important;margin-left:auto!important;margin-right:auto!important}
+  .section-title-row{justify-content:center!important}
+  #productCount{text-align:center!important}
+  #grid.grid{width:100%!important;margin-left:auto!important;margin-right:auto!important}
+}
+</style>
+<script id="nene-move-discord-v5">
+document.addEventListener('DOMContentLoaded',()=>{
+  const moveContact=()=>{
+    const contact=document.getElementById('shopDiscordContact');
+    const guide=document.querySelector('.usage-guide');
+    if(contact&&guide&&contact.parentElement!==guide) guide.appendChild(contact);
+  };
+  moveContact();
+  setTimeout(moveContact,0);
+  setTimeout(moveContact,500);
+});
+</script>
+
 </head>
 <body>
 <header class="topbar">
