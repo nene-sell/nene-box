@@ -2347,6 +2347,9 @@ $("#mockRecognize").onclick=async()=>{
   $("#recognized").innerHTML='<div class="meta">正在依 MSTAR 實際道具格版型定位辨識…</div>';
   $("#confirmRecognized").style.display="none";
 
+  // 這只是每筆辨識結果的預設分類；辨識完成後每一筆仍可各自改分類。
+  // 必須在辨識流程作用域內宣告，避免按下「辨識這張截圖」時因未定義變數而中斷。
+  const recognitionCategory=$("#shotCategory")?.value||activeCategory||"家具";
   let createWorker,worker=null;
   try{
     const mod=await import("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js");
