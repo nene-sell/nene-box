@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>整站備份｜內內選物所</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(#eee3db,#d9c9bd);color:#49372e;font-family:system-ui,"Microsoft JhengHei",sans-serif;display:grid;place-items:center;padding:22px}.card{width:min(680px,100%);background:#fffaf6;border:1px solid #d8c2b3;border-radius:22px;padding:24px;box-shadow:0 14px 40px #60483820}h1{margin:0 0 8px;font-size:25px}p{color:#846d60;line-height:1.7}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:12px;padding:12px 16px;background:#ad8068;color:#fff;font-weight:800;cursor:pointer}.btn.secondary{background:#e3d3c7;color:#59463c}.btn:disabled{opacity:.55;cursor:wait}.status{margin-top:18px;padding:13px 14px;border-radius:12px;background:#f2e8e1;white-space:pre-wrap;line-height:1.6}.small{font-size:12px;color:#947d70;margin-top:12px}.hidden{display:none!important}
+</style></head><body><main class="card"><h1>🤎 整站備份</h1><p>一次備份目前賣場、小倉倉、訂單、商品對應、配貨紀錄、公開設定，以及每個帳號的庫存與臨時截圖。</p><div class="row"><button id="loginBtn" class="btn">管理員登入</button><button id="backupBtn" class="btn hidden">下載整站備份</button><button id="backBtn" class="btn secondary">回到網站</button></div><div id="status" class="status">正在確認管理員狀態…</div><div class="small">備份會讀取整站資料，因此執行一次時 Firestore 讀取數會增加；平常瀏覽網站不會執行這些掃描。</div></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {getAuth,onAuthStateChanged,GoogleAuthProvider,signInWithPopup} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {getFirestore,collection,getDocs,doc,getDoc,Timestamp} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+const firebaseConfig={apiKey:"AIzaSyAA2CR7TLIwJ4vBK-kS6qavj93g3LvgQdU",authDomain:"nene-box.firebaseapp.com",projectId:"nene-box",storageBucket:"nene-box.firebasestorage.app",messagingSenderId:"582362181502",appId:"1:582362181502:web:17f4360f56a6f8a3a80d2f"};
+const ADMIN_UID="zzy1kG02vkft00TTdRtfG6iMbNL2";
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const $=s=>document.querySelector(s),statusEl=$("#status"),loginBtn=$("#loginBtn"),backupBtn=$("#backupBtn");
+const setStatus=t=>statusEl.textContent=t;
+$("#backBtn").onclick=()=>location.href="index.html";
+loginBtn.onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){alert(e?.message||"登入失敗")}};
+onAuthStateChanged(auth,user=>{const ok=user?.uid===ADMIN_UID;loginBtn.classList.toggle("hidden",ok);backupBtn.classList.toggle("hidden",!ok);setStatus(ok?"管理員已登入，可以開始整站備份。":"請先使用管理員 Google 帳號登入。")});
+function ser(v){if(v instanceof Timestamp)return {__type:"timestamp",seconds:v.seconds,nanoseconds:v.nanoseconds};if(v instanceof Date)return {__type:"date",iso:v.toISOString()};if(Array.isArray(v))return v.map(ser);if(v&&typeof v==="object"){const o={};for(const[k,x]of Object.entries(v))o[k]=ser(x);return o}return v}
+async function readCollection(pathParts){const snap=await getDocs(collection(db,...pathParts));return snap.docs.map(x=>({id:x.id,data:ser(x.data())}))}
+async function maybeDoc(pathParts){const s=await getDoc(doc(db,...pathParts));return s.exists()?{id:s.id,data:ser(s.data())}:null}
+async function buildBackup(){
+ const out={format:"nene-box-site-backup",version:1,createdAt:new Date().toISOString(),projectId:firebaseConfig.projectId,topLevel:{},warehouse:{accounts:[],itemMemory:[],inventoryMeta:null}};
+ const topNames=["products","orders","inventoryLinks","orderFulfillments","adminSettings","publicSettings"];
+ for(const name of topNames){setStatus(`備份中：${name}…`);out.topLevel[name]=await readCollection([name])}
+ setStatus("備份中：小倉倉帳號…");
+ const accounts=await readCollection(["users",ADMIN_UID,"accounts"]);
+ for(let i=0;i<accounts.length;i++){
+   const a=accounts[i],id=a.id;setStatus(`備份小倉倉：${i+1}/${accounts.length}（${a.data.number||a.data.name||id}）`);
+   const [items,tempShots]=await Promise.all([readCollection(["users",ADMIN_UID,"accounts",id,"items"]),readCollection(["users",ADMIN_UID,"accounts",id,"tempShots"])]);
+   out.warehouse.accounts.push({id,data:a.data,items,tempShots});
+ }
+ setStatus("備份中：辨識記憶…");out.warehouse.itemMemory=await readCollection(["users",ADMIN_UID,"itemMemory"]);
+ out.warehouse.inventoryMeta=await maybeDoc(["users",ADMIN_UID,"inventory","meta"]);
+ return out;
+}
+backupBtn.onclick=async()=>{
+ if(auth.currentUser?.uid!==ADMIN_UID)return alert("只有管理員可以整站備份");
+ const old=backupBtn.textContent;backupBtn.disabled=true;backupBtn.textContent="備份中…";
+ try{
+   const data=await buildBackup();
+   const zip=new JSZip();zip.file("site-backup.json",JSON.stringify(data,null,2));
+   zip.file("README.txt","內內選物所整站備份\n\n包含：products、orders、inventoryLinks、orderFulfillments、adminSettings、publicSettings，以及小倉倉 accounts/items/tempShots/itemMemory/inventory meta。\n此檔案為資料備份，不會修改 Firebase。\n");
+   const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
+   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`nene-box-site-backup-${new Date().toISOString().slice(0,19).replace(/[T:]/g,"-")}.zip`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+   const itemCount=data.warehouse.accounts.reduce((n,a)=>n+a.items.length,0),shotCount=data.warehouse.accounts.reduce((n,a)=>n+a.tempShots.length,0);
+   setStatus(`整站備份完成 ✓\n帳號：${data.warehouse.accounts.length}\n庫存文件：${itemCount}\n臨時截圖：${shotCount}\n訂單：${data.topLevel.orders.length}\n商品：${data.topLevel.products.length}`);
+ }catch(e){console.error(e);setStatus("備份失敗："+(e?.message||String(e)));alert("整站備份失敗："+(e?.message||String(e)))}finally{backupBtn.disabled=false;backupBtn.textContent=old}
+};
+</script></body></html>
