@@ -5187,7 +5187,7 @@ async function reconcilePublicOrderReservations(orderDocsOverride=null){
   }
 
   // 只從目前仍「預定中」的訂單重建預訂。每張訂單自己保存 allocations，取消別張單不會洗掉它。
-  for(const d of ordersSnap.docs){
+  for(const d of orderDocs){
     const o=d.data()||{};
     if(o.status!=="預定中")continue;
     for(const a of (Array.isArray(o.reservationAllocations)?o.reservationAllocations:[])){
