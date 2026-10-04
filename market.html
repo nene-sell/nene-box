@@ -5041,15 +5041,23 @@ function adjustPublicReservation(products,order,direction,allocations=[],indexRo
   for(const item of (order?.items||[])){
     const id=String(item.id||"");
     let entry=next[id];
-    // 商品若是靠小倉倉名稱自動對應、尚未建立 inventoryLinks，公開庫存原本沒有這筆。
-    // 配貨時直接依實際小倉倉索引補上公開總庫存，才能正確顯示「可購買 X｜預定 Y」。
-    if(!entry && direction>0){
+    // 開始預定時，一律用小倉倉索引重新校正「總庫存」。
+    // 這可修正舊版曾把公開庫存直接扣成可購買數量的資料，例如 20 被寫成 18。
+    // 預定只增加 reserved，不會改小倉倉總庫存；因此應顯示「可購買 18｜預定 2」。
+    if(direction>0){
       const alloc=(allocations||[]).find(a=>String(a.itemId||"")===id && String(a.variant||"")===String(item.variant||""));
       const row=alloc?indexByKey.get(String(alloc.key||"")):null;
       if(row){
         const total=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
-        if(String(item.variant||"")) entry=next[id]={variants:{[String(item.variant)]:total},reservedVariants:{}};
-        else entry=next[id]={stock:total,reserved:0};
+        const variant=String(item.variant||"");
+        if(variant){
+          if(!entry) entry=next[id]={variants:{},reservedVariants:{}};
+          entry.variants={...(entry.variants||{})};
+          entry.variants[variant]=total;
+        }else{
+          if(!entry) entry=next[id]={stock:total,reserved:0};
+          entry.stock=total;
+        }
       }
     }
     if(!entry)continue;
