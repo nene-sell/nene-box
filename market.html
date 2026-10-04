@@ -3203,9 +3203,9 @@ $("#productCount").textContent=`${list.length} 件商品`;
     const isBuy=p.category==="收購區";
     const isExchange=p.category==="交換區";
     const reserved=false; // 舊版整件「已預訂」狀態停用，改由預定數量管理
-    const sold=!isBuy && (syncedEntry(p) ? getStock(p)<=0 : (p.status==="sold" || getStock(p)<=0));
     const totalStock=getStock(p);
     const reservedQty=isBuy?0:getReserved(p);
+    const sold=!isBuy && reservedQty<=0 && (syncedEntry(p) ? totalStock<=0 : (p.status==="sold" || totalStock<=0));
     const limit=isBuy?totalStock:getAvailableStock(p);
     const variants=getVariants(p);
     const defaultVariant=(isBuy?variants.find(v=>v.stock>0):variants.find(v=>variantAvailableStock(p,v.name)>0))?.name||variants[0]?.name||"";
@@ -5111,6 +5111,66 @@ function completePublicReservation(products,order,allocations=[]){
   return next;
 }
 
+// 訂單預訂的唯一來源：orderFulfillments(status=預定中)。
+// 每次配貨／取消後重建公開「預訂」數量，避免舊版直接扣 stock 留下髒資料。
+async function reconcilePublicOrderReservations(){
+  if(auth.currentUser?.uid!==ADMIN_UID)return;
+  const [fulSnap,indexSnap,linkSnap,publicSnap]=await Promise.all([
+    getDocs(collection(db,"orderFulfillments")),
+    getDoc(doc(db,"adminSettings","warehouseInventoryIndex")),
+    getDocs(collection(db,"inventoryLinks")),
+    getDoc(doc(db,"publicSettings","warehouseStock"))
+  ]);
+  const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
+  const indexByKey=new Map(indexRows.map(r=>[String(r?.key||""),r]));
+  const next=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
+
+  // 先把所有公開預訂歸零；總庫存則以小倉倉索引重新校正。
+  for(const entry of Object.values(next)){
+    if(!entry||typeof entry!=="object")continue;
+    entry.reserved=0;
+    entry.reservedVariants={};
+  }
+  // 已建立正式連結的商品，先校正總庫存。
+  for(const d of linkSnap.docs){
+    const link=d.data()||{}, entry=next[d.id]||(next[d.id]={reserved:0,reservedVariants:{}});
+    if(link.itemKey){
+      const row=indexByKey.get(String(link.itemKey));
+      if(row)entry.stock=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+    }
+    entry.variants={...(entry.variants||{})};
+    for(const v of (link.variantLinks||[])){
+      if(!v?.variant||!v?.itemKey)continue;
+      const row=indexByKey.get(String(v.itemKey));
+      if(row)entry.variants[String(v.variant)]=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+    }
+  }
+  // 再從所有仍為預定中的配貨紀錄重建預訂數量；fallback 自動對應商品也能處理。
+  for(const d of fulSnap.docs){
+    const f=d.data()||{};
+    if(f.status!=="預定中")continue;
+    for(const a of (Array.isArray(f.allocations)?f.allocations:[])){
+      const id=String(a?.itemId||""); if(!id)continue;
+      const qty=Math.max(0,Math.floor(Number(a?.qty)||0)); if(!qty)continue;
+      const variant=String(a?.variant||""), key=String(a?.key||"");
+      const entry=next[id]||(next[id]={reserved:0,reservedVariants:{}});
+      if(key){
+        const row=indexByKey.get(key);
+        if(row){
+          const total=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+          if(variant){entry.variants={...(entry.variants||{})};entry.variants[variant]=total;}
+          else entry.stock=total;
+        }
+      }
+      if(variant){entry.reservedVariants={...(entry.reservedVariants||{})};entry.reservedVariants[variant]=Math.max(0,Math.floor(Number(entry.reservedVariants[variant])||0)+qty);}
+      else entry.reserved=Math.max(0,Math.floor(Number(entry.reserved)||0)+qty);
+    }
+  }
+  await setDoc(doc(db,"publicSettings","warehouseStock"),{products:next,updatedAt:new Date().toISOString()},{merge:false});
+  publicWarehouseStock=next;
+  render();renderCart();
+}
+
 async function reserveWarehouseOrder(orderId,btn){
   if(!isAdmin()||!orderId)return;
   btn.disabled=true;btn.textContent="配貨中…";
@@ -5144,9 +5204,8 @@ async function reserveWarehouseOrder(orderId,btn){
       tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
       tx.update(oref,{status:"預定中",reservedAt:serverTimestamp(),warehouseReserved:true});
     });
-    // 交易成功後立即把本機公開庫存同步成同一份資料，不等 onSnapshot 回來才顯示預定。
-    const freshPublic=await getDoc(doc(db,"publicSettings","warehouseStock"));
-    if(freshPublic.exists()) publicWarehouseStock=freshPublic.data()?.products||{};
+    // 以所有「預定中」配貨紀錄重建一次，確保畫面預訂數與實際配貨一致。
+    await reconcilePublicOrderReservations();
     const localOrder=adminOrders.find(o=>o.id===orderId);
     if(localOrder){localOrder.status="預定中";localOrder.warehouseReserved=true;renderOrders();}
     render();renderCart();
@@ -5202,6 +5261,7 @@ async function completeWarehouseReservedOrder(orderId,btn){
       tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
       tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:true});
     });
+    await reconcilePublicOrderReservations();
     toast("交易完成，已從指定帳號扣除庫存");
   }catch(e){console.error(e);alert(e?.message||"完成交易失敗");}
   finally{btn.disabled=false;btn.textContent="完成交易並扣庫存";}
@@ -5221,6 +5281,8 @@ async function cancelWarehouseReservation(orderId){
     tx.set(fref,{status:"已取消",cancelledAt:serverTimestamp()},{merge:true});
     tx.update(oref,{status:"已取消",cancelledAt:serverTimestamp(),warehouseReserved:false});
   });
+  // 取消後重建公開庫存：會把被舊版錯扣的 stock 校正回小倉倉實際總數，並移除本單預訂。
+  await reconcilePublicOrderReservations();
 }
 
 async function publishCompletedOrderStock(order){
