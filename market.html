@@ -5145,6 +5145,22 @@ async function reconcilePublicOrderReservations(){
       if(row)entry.variants[String(v.variant)]=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
     }
   }
+  // 沒有正式 inventoryLinks、但曾經由訂單自動對應成功的商品，也用配貨紀錄的 key
+  // 回到小倉倉索引校正「總庫存」。取消訂單時因此只會清掉預訂，不會把庫存再扣一次。
+  for(const d of fulSnap.docs){
+    const f=d.data()||{};
+    for(const a of (Array.isArray(f.allocations)?f.allocations:[])){
+      const id=String(a?.itemId||""),key=String(a?.key||"");
+      if(!id||!key)continue;
+      const row=indexByKey.get(key); if(!row)continue;
+      const total=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+      const entry=next[id]||(next[id]={reserved:0,reservedVariants:{}});
+      const variant=String(a?.variant||"");
+      if(variant){entry.variants={...(entry.variants||{})};entry.variants[variant]=total;}
+      else entry.stock=total;
+    }
+  }
+
   // 再從所有仍為預定中的配貨紀錄重建預訂數量；fallback 自動對應商品也能處理。
   for(const d of fulSnap.docs){
     const f=d.data()||{};
@@ -5275,14 +5291,18 @@ async function cancelWarehouseReservation(orderId){
     const allocations=Array.isArray(fs.data()?.allocations)?fs.data().allocations:[];
     const entries={...(rs.exists()?(rs.data()?.entries||{}):{})};
     for(const a of allocations){const slot=reservationSlot(a.accountId,a.key);entries[slot]=Math.max(0,Math.floor(Number(entries[slot])||0)-Math.max(0,Math.floor(Number(a.qty)||0)));}
-    const nextProducts=adjustPublicReservation(ps.exists()?(ps.data()?.products||{}):{}, {id:orderId,...os.data()}, -1, allocations);
+
+    // 取消訂單只解除這張訂單的預訂數量。stock 是小倉倉實際總庫存，配貨時沒有扣它，
+    // 因此取消時也不能依賴重新開啟小倉倉來重建索引，更不能加減 stock。
+    const publicProducts=ps.exists()?(ps.data()?.products||{}):{};
+    const nextProducts=adjustPublicReservation(publicProducts,{id:orderId,...os.data()},-1,allocations);
+
     tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
     tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
     tx.set(fref,{status:"已取消",cancelledAt:serverTimestamp()},{merge:true});
     tx.update(oref,{status:"已取消",cancelledAt:serverTimestamp(),warehouseReserved:false});
   });
-  // 取消後重建公開庫存：會把被舊版錯扣的 stock 校正回小倉倉實際總數，並移除本單預訂。
-  await reconcilePublicOrderReservations();
+  // 直接採用剛寫回 publicSettings/warehouseStock 的結果；onSnapshot 也會同步刷新畫面。
 }
 
 async function publishCompletedOrderStock(order){
@@ -6024,6 +6044,20 @@ body{background:linear-gradient(180deg,#f7efec 0%,#eee1dd 100%)!important}
 }
 </style>
 
+
+<style id="nene-order-confirm-graypink-final-20261004">
+/* 商品確認單最終灰粉版：放在檔案最後，避免舊咖啡色樣式覆蓋 */
+body.screenshot-mode{background:#514a49!important}
+body.screenshot-mode #cartDialog{background:#f4e8e4!important;border-color:#d8bbb3!important}
+body.screenshot-mode #cartDialog form{background:#fbf6f4!important;color:#4f3d39!important}
+body.screenshot-mode .screenshot-title{background:linear-gradient(180deg,#ead8d3,#dfc4bd)!important;border-color:#cda69c!important}
+body.screenshot-mode .screenshot-title h3{color:#553d38!important}
+body.screenshot-mode .screenshot-title p,body.screenshot-mode .screenshot-title .order-date{color:#775c55!important}
+body.screenshot-mode .cart-summary{background:#e4ccc5!important;color:#513b36!important}
+body.screenshot-mode .cart-item{border-bottom-color:#dec3bb!important}
+body.screenshot-mode .cart-item-meta{color:#806761!important}
+body.screenshot-mode .cart-line-total{color:#8d5148!important}
+</style>
 </body>
 </html>
 
