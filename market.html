@@ -8185,13 +8185,26 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
   .usage-guide{align-self:stretch!important}
 }
 </style>
-<style id="nene-mobile-category-visibility-20261004">
-/* 手機分類列必須遵守後台「分類顯示」設定；避免手機版 .tab display 覆蓋 .hidden。 */
-.tabs > .tab.hidden,
-.tabs > .category-dropdown.hidden{display:none!important;}
-@media(max-width:600px){
-  .tabs > .tab.hidden,
-  .tabs > .category-dropdown.hidden{display:none!important;}
+
+<style id="nene-wide-desktop-20261004">
+/* 寬螢幕：增加可見商品數量，不把商品卡硬拉胖。手機版不受影響。 */
+@media (min-width:1190px){
+  main.wrap{
+    width:min(1680px,calc(100% - 56px))!important;
+    max-width:none!important;
+  }
+  .home-feature{
+    grid-template-columns:minmax(0,3fr) minmax(300px,.9fr)!important;
+    gap:16px!important;
+  }
+  #grid.grid{
+    grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important;
+    gap:14px!important;
+  }
+}
+@media (min-width:1600px){
+  #grid.grid{
+    grid-template-columns:repeat(auto-fill,minmax(185px,1fr))!important;
+  }
 }
 </style>
-
