@@ -3339,7 +3339,11 @@ $("#productCount").textContent=`${list.length} 件商品`;
 }
           <div class="buy-actions ${isBuy?"offer-actions":""}">
             <span class="qty-label">${isBuy?"提供數量":"數量"}</span>
-            <input class="qty" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="${variants.length?(isBuy?variantStock(p,defaultVariant):variantAvailableStock(p,defaultVariant)):limit}" value="${Math.max(1,selectedQty||1)}" ${(limit===0||reserved||sold)?"disabled":""}>
+            <div class="qty-stepper">
+              <button class="qty-step qty-minus" type="button" aria-label="數量減一" ${(limit===0||reserved||sold)?"disabled":""}>−</button>
+              <input class="qty" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="${variants.length?(isBuy?variantStock(p,defaultVariant):variantAvailableStock(p,defaultVariant)):limit}" value="${Math.max(1,selectedQty||1)}" ${(limit===0||reserved||sold)?"disabled":""}>
+              <button class="qty-step qty-plus" type="button" aria-label="數量加一" ${(limit===0||reserved||sold)?"disabled":""}>＋</button>
+            </div>
             <button class="btn primary add-cart ${(reserved||sold)?"reserved-disabled":""}" ${(limit===0||reserved||sold)?"disabled":""}>${
               sold
                 ? "售完"
@@ -3445,6 +3449,20 @@ $("#productCount").textContent=`${list.length} 件商品`;
     }else{
       const addBtn=card.querySelector(".add-cart");
       let qtyInput=makeMobileQtyPicker(card.querySelector(".qty"));
+      const qtyMinus=card.querySelector(".qty-minus");
+      const qtyPlus=card.querySelector(".qty-plus");
+      const changeQty=(delta)=>{
+        if(!qtyInput || qtyInput.disabled)return;
+        const min=Math.max(1,Math.floor(Number(qtyInput.min)||1));
+        const max=qtyInput.tagName==="SELECT"
+          ? Math.max(1,qtyInput.options.length)
+          : Math.max(min,Math.floor(Number(qtyInput.max)||min));
+        const current=Math.max(min,Math.floor(Number(qtyInput.value)||min));
+        qtyInput.value=String(Math.max(min,Math.min(max,current+delta)));
+        qtyInput.dispatchEvent(new Event("change",{bubbles:true}));
+      };
+      if(qtyMinus)qtyMinus.onclick=()=>changeQty(-1);
+      if(qtyPlus)qtyPlus.onclick=()=>changeQty(1);
       const variantSelect=card.querySelector(".variant-select");
       if(variantSelect){
         variantSelect.value=defaultVariant;
@@ -4130,12 +4148,22 @@ async function loadWarehouseCandidates(force=false){
   })();
   try{return await warehouseLoadPromise;}finally{warehouseLoadPromise=null;}
 }
+function warehouseOwnerNumbers(x){
+  return (x?.owners||[])
+    .filter(o=>Number(o?.qty)>0)
+    .map(o=>String(o?.owner||"").trim())
+    .filter(Boolean);
+}
+function warehouseOwnerText(x){
+  const owners=warehouseOwnerNumbers(x);
+  return owners.length?`｜編號 ${owners.join("、")}`:"";
+}
 function renderVariantWarehouseInfo(row){
   const x=warehouseCandidates.find(x=>x.key===row.dataset.warehouseKey);
   const stockInput=row.querySelector(".variant-stock-input");
   if(stockInput)stockInput.value=x?Math.max(0,Math.floor(Number(x.qty)||0)):0;
   row.querySelector(".variant-warehouse-info").textContent=x
-    ?`已連結：${[x.item.name,x.item.variant].filter(Boolean).join("｜")}｜庫存 ${x.qty}`
+    ?`已連結：${[x.item.name,x.item.variant].filter(Boolean).join("｜")}｜庫存 ${x.qty}${warehouseOwnerText(x)}`
     :"尚未連結";
 }
 function renderVariantWarehousePicker(row){
@@ -4144,9 +4172,9 @@ function renderVariantWarehousePicker(row){
   const chosen=row.dataset.warehouseKey||"";
   sel.replaceChildren(new Option("不連結",""));
   const matches=warehouseCandidates.filter(x=>x.qty>0&&[x.item.name,x.item.variant,x.item.category,x.item.gender].join(" ").toLocaleLowerCase().includes(q));
-  for(const x of matches.slice(0,250))sel.add(new Option([x.item.name,x.item.variant,x.item.category,`共${x.qty}`].filter(Boolean).join("｜"),x.key));
+  for(const x of matches.slice(0,250))sel.add(new Option([x.item.name,x.item.variant,x.item.category,`共${x.qty}`,warehouseOwnerNumbers(x).length?`編號 ${warehouseOwnerNumbers(x).join("、")}`:""].filter(Boolean).join("｜"),x.key));
   const chosenItem=warehouseCandidates.find(x=>x.key===chosen);
-  if(chosenItem&&![...sel.options].some(o=>o.value===chosen))sel.add(new Option(`${chosenItem.item.name}（已選取）`,chosen));
+  if(chosenItem&&![...sel.options].some(o=>o.value===chosen))sel.add(new Option([chosenItem.item.name,chosenItem.item.variant,"已選取",warehouseOwnerNumbers(chosenItem).length?`編號 ${warehouseOwnerNumbers(chosenItem).join("、")}`:""].filter(Boolean).join("｜"),chosen));
   sel.value=chosen;
   renderVariantWarehouseInfo(row);
 }
@@ -4177,7 +4205,7 @@ function showWarehouseInfo(){
   const x=warehouseCandidates.find(x=>x.key===key);
   if($("#productStock") && usesWarehouseStock({category:$("#productCategory").value}))$("#productStock").value=x?Math.max(0,Math.floor(Number(x.qty)||0)):0;
   $("#warehouseItemInfo").textContent=x
-    ? `已連結：${[x.item.name,x.item.variant].filter(Boolean).join("｜")}｜庫存 ${x.qty}`
+    ? `已連結：${[x.item.name,x.item.variant].filter(Boolean).join("｜")}｜庫存 ${x.qty}${warehouseOwnerText(x)}`
     : (warehouseCandidates.length?"尚未連結小倉倉道具":"按「更新小倉倉資料」讀取庫存");
 }
 $("#warehouseItemSearch").addEventListener("input",showWarehouseChoice);
@@ -6219,6 +6247,9 @@ body.screenshot-mode .cart-summary{background:#e2c4c4!important;color:#4d393b!im
 body.screenshot-mode .order-meta{background:#eedddd!important;border-color:#d6b9ba!important;color:#4e3a3c!important}
 body.screenshot-mode .post-submit-review{background:#f3e7e9!important;margin:0 auto!important;padding:16px!important}
 </style>
+
+
+
 </body>
 </html>
 
@@ -8828,5 +8859,23 @@ dialog input,dialog select,dialog textarea{
 }
 #productDialog input[type="checkbox"]{
   accent-color:#c98271!important;
+}
+</style>
+
+<style id="nene-qty-stepper-link39">
+/* 商品卡數量改成融入卡片的 − 1 ＋，不再顯示獨立方框。 */
+#grid .buy-actions,#grid .offer-actions{grid-template-columns:auto auto minmax(0,1fr)!important;}
+#grid .qty-stepper{display:inline-flex!important;align-items:center!important;justify-content:center!important;height:32px!important;border:1px solid #dfc2b5!important;border-radius:999px!important;background:#f4e8df!important;overflow:hidden!important;box-shadow:none!important;}
+#grid .qty-step{width:25px!important;height:30px!important;padding:0!important;border:0!important;background:transparent!important;color:#9a6658!important;font-size:15px!important;font-weight:900!important;line-height:1!important;cursor:pointer!important;}
+#grid .qty-step:hover:not(:disabled){background:#ecd7cd!important;}
+#grid .qty-step:disabled{opacity:.38!important;cursor:default!important;}
+#grid .qty-stepper .qty,#grid .qty-stepper .mobile-qty-picker{width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:#65483f!important;text-align:center!important;text-align-last:center!important;font-size:12px!important;font-weight:800!important;appearance:none!important;-webkit-appearance:none!important;}
+#grid .qty-stepper .qty:focus,#grid .qty-stepper .mobile-qty-picker:focus{outline:none!important;background:transparent!important;box-shadow:none!important;}
+@media(max-width:600px){
+  #grid .buy-actions,#grid .offer-actions{grid-template-columns:auto minmax(0,1fr)!important;gap:6px!important;overflow:visible!important;}
+  #grid .qty-stepper{grid-column:1!important;height:38px!important;}
+  #grid .qty-step{width:24px!important;height:36px!important;}
+  #grid .qty-stepper .qty,#grid .qty-stepper .mobile-qty-picker{grid-column:auto!important;width:27px!important;min-width:27px!important;max-width:27px!important;height:36px!important;min-height:36px!important;font-size:13px!important;}
+  #grid .buy-actions .add-cart,#grid .offer-actions .add-cart{grid-column:2!important;}
 }
 </style>
