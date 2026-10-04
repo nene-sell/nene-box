@@ -8305,3 +8305,43 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
 }
 </style>
 
+<style id="nene-card-actions-centered-20261005">
+/* 管理員商品操作列：固定尺寸、固定間距，整組置中，避免響應式卡寬改變時按鈕看起來飄移。 */
+.card .actions{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:5px!important;
+  flex-wrap:nowrap!important;
+  width:100%!important;
+  padding-left:4px!important;
+  padding-right:4px!important;
+  box-sizing:border-box!important;
+}
+.card .actions .btn{
+  flex:0 0 auto!important;
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  height:34px!important;
+  padding:0 4px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  box-sizing:border-box!important;
+}
+.card .actions .order-up,
+.card .actions .order-down{
+  width:34px!important;
+  min-width:34px!important;
+  max-width:34px!important;
+  padding:0!important;
+}
+@media(max-width:700px){
+  .card .actions{gap:3px!important;padding-left:2px!important;padding-right:2px!important;}
+  .card .actions .btn{width:40px!important;min-width:40px!important;max-width:40px!important;height:32px!important;padding:0 3px!important;font-size:11px!important;}
+  .card .actions .order-up,
+  .card .actions .order-down{width:30px!important;min-width:30px!important;max-width:30px!important;}
+}
+</style>
