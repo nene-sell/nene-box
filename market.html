@@ -5013,16 +5013,15 @@ async function planWarehouseFulfillment(order){
     linkedRows.push({item,key,qty:Math.max(1,Math.floor(Number(item.qty)||1))});
   }
   if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
-  // 配貨可用量只計算「目前仍存在且狀態為預定中」的訂單，避免舊／已刪訂單殘留 reservation 把有貨判成缺貨。
-  const [fulfillmentsSnap,activeOrdersSnap]=await Promise.all([
-    getDocs(collection(db,"orderFulfillments")),
-    getDocs(collection(db,"orders"))
-  ]);
-  const activeReservedOrderIds=new Set(activeOrdersSnap.docs.filter(d=>d.data()?.status==="預定中").map(d=>d.id));
+  // 配貨可用量只認 orderFulfillments 裡仍為「預定中」的配貨紀錄。
+  // 取消／完成都會改掉同一筆 fulfillment status，因此不再額外讀 orders，避免兩邊快照不同步。
+  const fulfillmentsSnap=await getDocs(collection(db,"orderFulfillments"));
   const liveReservedMap={};
   for(const d of fulfillmentsSnap.docs){
     const f=d.data()||{};
-    if(f.status!=="預定中"||!activeReservedOrderIds.has(d.id))continue;
+    // 配貨紀錄本身就是預訂唯一來源；取消／完成都會同步改掉這個 status。
+    // 不再另外依賴 orders 查詢，避免剛更新訂單時兩邊快照不同步造成少算／亂跳。
+    if(f.status!=="預定中")continue;
     for(const a of (Array.isArray(f.allocations)?f.allocations:[])){
       const slot=reservationSlot(a.accountId,a.key);
       liveReservedMap[slot]=(liveReservedMap[slot]||0)+Math.max(0,Math.floor(Number(a.qty)||0));
@@ -5152,14 +5151,12 @@ function completePublicReservation(products,order,allocations=[]){
 // 每次配貨／取消後重建公開「預訂」數量，避免舊版直接扣 stock 留下髒資料。
 async function reconcilePublicOrderReservations(){
   if(auth.currentUser?.uid!==ADMIN_UID)return;
-  const [fulSnap,ordersSnap,indexSnap,linkSnap,publicSnap]=await Promise.all([
+  const [fulSnap,indexSnap,linkSnap,publicSnap]=await Promise.all([
     getDocs(collection(db,"orderFulfillments")),
-    getDocs(collection(db,"orders")),
     getDoc(doc(db,"adminSettings","warehouseInventoryIndex")),
     getDocs(collection(db,"inventoryLinks")),
     getDoc(doc(db,"publicSettings","warehouseStock"))
   ]);
-  const activeReservedOrderIds=new Set(ordersSnap.docs.filter(d=>d.data()?.status==="預定中").map(d=>d.id));
   const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
   const indexByKey=new Map(indexRows.map(r=>[String(r?.key||""),r]));
   const next=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
@@ -5203,7 +5200,9 @@ async function reconcilePublicOrderReservations(){
   // 再從所有仍為預定中的配貨紀錄重建預訂數量；fallback 自動對應商品也能處理。
   for(const d of fulSnap.docs){
     const f=d.data()||{};
-    if(f.status!=="預定中"||!activeReservedOrderIds.has(d.id))continue;
+    // 配貨紀錄本身就是預訂唯一來源；取消／完成都會同步改掉這個 status。
+    // 不再另外依賴 orders 查詢，避免剛更新訂單時兩邊快照不同步造成少算／亂跳。
+    if(f.status!=="預定中")continue;
     for(const a of (Array.isArray(f.allocations)?f.allocations:[])){
       const id=String(a?.itemId||""); if(!id)continue;
       const qty=Math.max(0,Math.floor(Number(a?.qty)||0)); if(!qty)continue;
