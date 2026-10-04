@@ -5252,47 +5252,105 @@ async function completeWarehouseReservedOrder(orderId,btn){
   if(!isAdmin()||!orderId)return;
   const order=adminOrders.find(o=>o.id===orderId);
   if(!order||order.status!=="預定中")return alert("這張訂單目前不是預定中");
-  if(!confirm(`確定完成訂單 ${order.orderNumber||orderId}？\n\n完成後會依已選好的配貨帳號扣除小倉倉實際庫存。`))return;
+  if(!confirm(`確定完成訂單 ${order.orderNumber||orderId}？\n\n完成後會依已選好的配貨帳號一次扣完小倉倉實際庫存。`))return;
   btn.disabled=true;btn.textContent="扣庫存中…";
   try{
+    // 先解析這張訂單實際要扣的 warehouse item refs；真正的數量驗證與扣除仍全部在同一個 transaction 完成。
+    const previewAllocations=Array.isArray(order.reservationAllocations)&&order.reservationAllocations.length
+      ? order.reservationAllocations
+      : [];
+    if(!previewAllocations.length)throw new Error("這張訂單沒有預定配貨資料，未扣除庫存");
+    const previewAccountIds=[...new Set(previewAllocations.map(a=>String(a.accountId||"")).filter(Boolean))];
+    const resolvedRefs=new Map();
+    for(const id of previewAccountIds){
+      const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",id,"items"));
+      for(const d of snap.docs){
+        const key=warehouseIdentity(d.data());
+        const mapKey=`${id}||${key}`;
+        if(!resolvedRefs.has(mapKey))resolvedRefs.set(mapKey,[]);
+        resolvedRefs.get(mapKey).push(d.ref);
+      }
+    }
     await runTransaction(db,async tx=>{
       const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),iref=doc(db,"adminSettings","warehouseInventoryIndex");
       const os=await tx.get(oref),fs=await tx.get(fref),is=await tx.get(iref);
       if(!os.exists()||os.data().status!=="預定中")throw new Error("訂單已處理，未重複扣庫存");
       if(!fs.exists()||fs.data()?.status!=="預定中")throw new Error("找不到這張訂單的預定配貨資料");
-      const allocations=Array.isArray(fs.data()?.allocations)?fs.data().allocations:[];
-      if(!allocations.length)throw new Error("配貨資料是空的，未扣除庫存");
-      const accountIds=[...new Set(allocations.map(a=>String(a.accountId||"")).filter(Boolean))];
-      const accountDocs=new Map();
-      for(const id of accountIds){const ref=doc(db,"users",ADMIN_UID,"accounts",id),snap=await tx.get(ref);if(!snap.exists())throw new Error(`出貨帳號 ${id} 已不存在`);accountDocs.set(id,{ref,snap});}
-      // 交易內只讀已配貨帳號的 items；完成前再次驗證實際數量。
-      const itemRows=new Map();
-      for(const id of accountIds){
-        const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",id,"items"));
-        const wanted=new Set(allocations.filter(a=>String(a.accountId)===id).map(a=>String(a.key)));
-        const rows=[];
-        for(const d of snap.docs)if(wanted.has(warehouseIdentity(d.data()))){const live=await tx.get(d.ref);if(live.exists())rows.push({ref:d.ref,item:{...live.data(),_itemId:d.id}});}
-        itemRows.set(id,rows);
+
+      // 訂單本身保存的 reservationAllocations 是完成交易的唯一扣庫存清單。
+      // 同帳號＋同商品先合併，避免 qty=2 被拆成兩筆時只處理到其中一筆。
+      const raw=Array.isArray(os.data()?.reservationAllocations)?os.data().reservationAllocations:[];
+      if(!raw.length)throw new Error("配貨資料是空的，未扣除庫存");
+      const merged=new Map();
+      for(const a of raw){
+        const accountId=String(a?.accountId||""),key=String(a?.key||""),qty=Math.max(0,Math.floor(Number(a?.qty)||0));
+        if(!accountId||!key||!qty)continue;
+        const mk=`${accountId}||${key}`;
+        const prev=merged.get(mk)||{...a,accountId,key,qty:0};
+        prev.qty+=qty; merged.set(mk,prev);
       }
+      const allocations=[...merged.values()];
+      if(!allocations.length)throw new Error("配貨資料是空的，未扣除庫存");
+
+      const accountIds=[...new Set(allocations.map(a=>a.accountId))];
+      const accountDocs=new Map();
+      for(const id of accountIds){
+        const ref=doc(db,"users",ADMIN_UID,"accounts",id),snap=await tx.get(ref);
+        if(!snap.exists())throw new Error(`出貨帳號 ${id} 已不存在`);
+        accountDocs.set(id,{ref,snap});
+      }
+
+      const liveRows=new Map();
       for(const a of allocations){
-        let remain=Math.max(0,Math.floor(Number(a.qty)||0));
-        for(const row of (itemRows.get(String(a.accountId))||[])){
-          if(warehouseIdentity(row.item)!==String(a.key))continue;
-          const have=Math.max(0,Math.floor(Number(row.item.qty)||0)),take=Math.min(have,remain);row.item.qty=have-take;remain-=take;if(!remain)break;
+        const mk=`${a.accountId}||${a.key}`,refs=resolvedRefs.get(mk)||[];
+        if(!refs.length)throw new Error(`帳號 ${a.label||a.accountId} 找不到已配貨商品，未扣除任何數量`);
+        const rows=[];
+        for(const ref of refs){
+          const snap=await tx.get(ref);
+          if(snap.exists()&&warehouseIdentity(snap.data())===a.key)rows.push({ref,qty:Math.max(0,Math.floor(Number(snap.data()?.qty)||0))});
+        }
+        liveRows.set(mk,rows);
+      }
+
+      // 第一階段只計算與驗證；任一品項不足就 throw，transaction 不會留下半扣狀態。
+      const updates=new Map();
+      for(const a of allocations){
+        const mk=`${a.accountId}||${a.key}`,rows=liveRows.get(mk)||[];
+        let remain=a.qty;
+        for(const row of rows){
+          const current=updates.has(row.ref.path)?updates.get(row.ref.path).qty:row.qty;
+          const take=Math.min(current,remain);
+          updates.set(row.ref.path,{ref:row.ref,qty:current-take});
+          remain-=take;
+          if(!remain)break;
         }
         if(remain)throw new Error(`帳號 ${a.label||a.accountId} 的實際庫存不足，未扣除任何數量`);
       }
-      for(const [id,rows] of itemRows){for(const row of rows)tx.update(row.ref,{qty:Math.max(0,Math.floor(Number(row.item.qty)||0))});tx.update(accountDocs.get(id).ref,{itemsUpdatedAt:Date.now()});}
-      // 同步把管理員配貨索引扣掉，避免完成後在尚未重開小倉倉前又看到舊數量。
+
+      // 全部驗證成功後才一次寫入所有實際庫存。
+      for(const u of updates.values())tx.update(u.ref,{qty:u.qty});
+      for(const id of accountIds)tx.update(accountDocs.get(id).ref,{itemsUpdatedAt:Date.now()});
+
+      // 同一份合併後 allocations 同步扣管理員索引，數量與實際庫存完全一致。
       const rows=Array.isArray(is.data()?.rows)?JSON.parse(JSON.stringify(is.data().rows)):[];
-      for(const a of allocations){const row=rows.find(r=>String(r?.key||"")===String(a.key));if(!row)continue;let remain=Math.max(0,Math.floor(Number(a.qty)||0));for(const owner of (row.owners||[])){if(String(owner.accountId||"")!==String(a.accountId))continue;const have=Math.max(0,Math.floor(Number(owner.qty)||0)),take=Math.min(have,remain);owner.qty=have-take;remain-=take;if(!remain)break;}row.owners=(row.owners||[]).filter(x=>Math.max(0,Math.floor(Number(x.qty)||0))>0);}
+      for(const a of allocations){
+        const row=rows.find(r=>String(r?.key||"")===a.key);if(!row)throw new Error(`配貨索引缺少 ${a.itemName||a.key}，未完成交易`);
+        let remain=a.qty;
+        for(const owner of (row.owners||[])){
+          if(String(owner.accountId||"")!==a.accountId)continue;
+          const have=Math.max(0,Math.floor(Number(owner.qty)||0)),take=Math.min(have,remain);
+          owner.qty=have-take;remain-=take;if(!remain)break;
+        }
+        if(remain)throw new Error(`帳號 ${a.label||a.accountId} 的配貨索引數量不足，未完成交易`);
+        row.owners=(row.owners||[]).filter(x=>Math.max(0,Math.floor(Number(x.qty)||0))>0);
+      }
       tx.set(iref,{rows,updatedAt:new Date().toISOString()},{merge:false});
-      tx.set(fref,{status:"已完成",completedAt:serverTimestamp()},{merge:true});
+      tx.set(fref,{status:"已完成",completedAt:serverTimestamp(),allocations},{merge:true});
       tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
       tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:true,reservationAllocations:[]});
     });
     await reconcilePublicOrderReservations();
-    toast("交易完成，已從指定帳號扣除庫存");
+    toast("交易完成，已一次扣完全部配貨庫存");
   }catch(e){console.error(e);alert(e?.message||"完成交易失敗");}
   finally{btn.disabled=false;btn.textContent="完成交易並扣庫存";}
 }
