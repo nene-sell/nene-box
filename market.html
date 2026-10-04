@@ -3217,7 +3217,7 @@ $("#productCount").textContent=`${list.length} 件商品`;
       ? (p.purchaseQtyText ? `需求 ${p.purchaseQtyText}` : (limit===0 ? "已收齊" : limit<=2 ? `還缺 ${limit}` : `需求 ${limit}`))
       : isExchange
         ? (sold ? "已換出" : reserved ? "交換預定中" : limit===0 ? "已換出" : `可交換 ${limit}`)
-        : (sold ? "售完" : reserved ? "已預訂" : limit===0 ? (reservedQty>0?`可購買 0｜預定 ${reservedQty}`:"已售完") : reservedQty>0 ? `可購買 ${limit}｜預定 ${reservedQty}` : `庫存 ${limit}`);
+        : (sold ? "售完" : reserved ? "已預訂" : limit===0 ? (reservedQty>0?`可購買 0｜預訂 ${reservedQty}`:"已售完") : reservedQty>0 ? `可購買 ${limit}｜預訂 ${reservedQty}` : `庫存 ${limit}`);
 
     card.innerHTML=`
       <div class="card-media">
@@ -3225,7 +3225,7 @@ $("#productCount").textContent=`${list.length} 件商品`;
         ${p.demoVideoPath ? `<button type="button" class="video-badge" title="直接看展示影片"><span class="video-play">▶</span><span class="video-label">展示影片</span></button>` : ""}
       </div>
       <div class="card-body">
-        <div class="badge-row"><span class="badge">${esc(p.category)}</span>${isNewActive(p)?`<span class="new-badge">新品</span>`:""}${reserved?`<span class="reserved-badge">已預訂</span>`:""}${!reserved&&reservedQty>0?`<span class="reserved-qty-note">預定 ${reservedQty}</span>`:""}${sold?`<span class="sold-badge">${isExchange?"已換出":"售完"}</span>`:""}</div>
+        <div class="badge-row"><span class="badge">${esc(p.category)}</span>${isNewActive(p)?`<span class="new-badge">新品</span>`:""}${reserved?`<span class="reserved-badge">已預訂</span>`:""}${!reserved&&reservedQty>0?`<span class="reserved-qty-note">預訂 ${reservedQty}</span>`:""}${sold?`<span class="sold-badge">${isExchange?"已換出":"售完"}</span>`:""}</div>
         ${isExchange ? (()=>{
           const offers=(Array.isArray(p.exchangeOffers)&&p.exchangeOffers.length
             ? p.exchangeOffers
@@ -3286,7 +3286,7 @@ $("#productCount").textContent=`${list.length} 件商品`;
         `:`
           ${isExchange ? `<div class="exchange-note">若要交換請私訊我DC</div>` : `
           ${variants.length
-  ? `<div class="variant-picker"><span>款式</span><select class="variant-select">${variants.map(v=>{const av=isBuy?v.stock:variantAvailableStock(p,v.name), rv=isBuy?0:variantReserved(p,v.name);return `<option value="${esc(v.name)}" ${av===0?"disabled":""}>${esc(v.name)}｜${isBuy?`需求 ${v.stock}`:(rv>0?`可購 ${av}・預定 ${rv}`:`庫存 ${v.stock}`)}</option>`}).join("")}</select></div>`
+  ? `<div class="variant-picker"><span>款式</span><select class="variant-select">${variants.map(v=>{const av=isBuy?v.stock:variantAvailableStock(p,v.name), rv=isBuy?0:variantReserved(p,v.name);return `<option value="${esc(v.name)}" ${av===0?"disabled":""}>${esc(v.name)}｜${isBuy?`需求 ${v.stock}`:(rv>0?`可購 ${av}・預訂 ${rv}`:`庫存 ${v.stock}`)}</option>`}).join("")}</select></div>`
   : `<div class="variant-picker variant-placeholder"><span>款式</span><select class="variant-select" disabled><option>無款式</option></select></div>`
 }
           <div class="buy-actions ${isBuy?"offer-actions":""}">
@@ -3496,7 +3496,7 @@ function catalogVariantRows(p){
 
 function catalogWrapVariantLines(ctx, rows, maxWidth){
   if(!rows.length)return [];
-  const parts=rows.map(v=>v.qty===null ? v.name : (v.reserved>0 ? `${v.name} ×${v.qty}（預定${v.reserved}）` : `${v.name} ×${v.qty}`));
+  const parts=rows.map(v=>v.qty===null ? v.name : (v.reserved>0 ? `${v.name} ×${v.qty}（預訂${v.reserved}）` : `${v.name} ×${v.qty}`));
   const lines=[];
   let line="";
   for(const part of parts){
@@ -3845,7 +3845,7 @@ async function generateProductCatalogImage(selectedFile=null){
               const priceText=group.mode==="freeOffer" ? "自由出價" : productPriceLabel(p);
               const stockText=group.mode==="buy"
                 ? `需求 ×${catalogStock}`
-                : (getReserved(p)>0 && !getVariants(p).length ? `×${catalogStock}・預定${getReserved(p)}` : `×${catalogStock}`);
+                : (getReserved(p)>0 && !getVariants(p).length ? `×${catalogStock}・預訂${getReserved(p)}` : `×${catalogStock}`);
               const priceY=cy+imageH+(hasCatalogVariant?56:44);
 
               ctx.font='700 18px Arial,"Microsoft JhengHei",sans-serif';
@@ -5038,41 +5038,69 @@ function allocationSummary(allocations=[]){return allocations.map(x=>`${x.label|
 function adjustPublicReservation(products,order,direction,allocations=[],indexRows=[]){
   const next=JSON.parse(JSON.stringify(products||{}));
   const indexByKey=new Map((indexRows||[]).map(r=>[String(r?.key||""),r]));
-  for(const item of (order?.items||[])){
-    const id=String(item.id||"");
-    let entry=next[id];
-    // 開始預定時，一律用小倉倉索引重新校正「總庫存」。
-    // 這可修正舊版曾把公開庫存直接扣成可購買數量的資料，例如 20 被寫成 18。
-    // 預定只增加 reserved，不會改小倉倉總庫存；因此應顯示「可購買 18｜預定 2」。
-    if(direction>0){
-      const alloc=(allocations||[]).find(a=>String(a.itemId||"")===id && String(a.variant||"")===String(item.variant||""));
-      const row=alloc?indexByKey.get(String(alloc.key||"")):null;
+  const orderItems=Array.isArray(order?.items)?order.items:[];
+  const itemBySig=new Map(orderItems.map(item=>[
+    `${String(item.id||"")}\u001f${String(item.variant||"")}`,
+    item
+  ]));
+
+  // 訂單配貨以「實際 allocation」為唯一來源。
+  // 同一商品可以拆到多個帳號，因此先按 商品＋款式 合計本張訂單實際預訂數。
+  const groups=new Map();
+  for(const a of (allocations||[])){
+    const id=String(a?.itemId||"");
+    if(!id)continue;
+    const variant=String(a?.variant||"");
+    const sig=`${id}\u001f${variant}`;
+    const qty=Math.max(0,Math.floor(Number(a?.qty)||0));
+    if(!qty)continue;
+    const g=groups.get(sig)||{id,variant,qty:0,keys:new Set()};
+    g.qty+=qty;
+    if(a?.key)g.keys.add(String(a.key));
+    groups.set(sig,g);
+  }
+
+  // 取消預訂時 completion/cancel 可能沒有把 allocations 傳進來，才退回訂單品項數量。
+  if(!groups.size){
+    for(const item of orderItems){
+      const id=String(item.id||""); if(!id)continue;
+      const variant=String(item.variant||"");
+      const sig=`${id}\u001f${variant}`;
+      groups.set(sig,{id,variant,qty:Math.max(1,Math.floor(Number(item.qty)||1)),keys:new Set()});
+    }
+  }
+
+  for(const g of groups.values()){
+    let entry=next[g.id];
+    if(!entry)entry=next[g.id]={};
+
+    // 新增預訂時，用小倉倉索引校正「實際總庫存」。
+    // 若同商品被拆到多帳號，key 仍是同一道具，只取該 key 的 owners 總數。
+    if(direction>0 && g.keys.size){
+      const key=[...g.keys][0];
+      const row=indexByKey.get(key);
       if(row){
-        const total=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
-        const variant=String(item.variant||"");
-        if(variant){
-          if(!entry) entry=next[id]={variants:{},reservedVariants:{}};
+        const total=(Array.isArray(row.owners)?row.owners:[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+        if(g.variant){
           entry.variants={...(entry.variants||{})};
-          entry.variants[variant]=total;
+          entry.variants[g.variant]=total;
         }else{
-          if(!entry) entry=next[id]={stock:total,reserved:0};
           entry.stock=total;
         }
       }
     }
-    if(!entry)continue;
-    const qty=Math.max(1,Math.floor(Number(item.qty)||1)),variant=String(item.variant||"");
-    if(variant){
+
+    if(g.variant){
       entry.reservedVariants={...(entry.reservedVariants||{})};
-      entry.reservedVariants[variant]=Math.max(0,Math.floor(Number(entry.reservedVariants[variant])||0)+direction*qty);
+      entry.reservedVariants[g.variant]=Math.max(0,Math.floor(Number(entry.reservedVariants[g.variant])||0)+direction*g.qty);
     }else{
-      entry.reserved=Math.max(0,Math.floor(Number(entry.reserved)||0)+direction*qty);
+      entry.reserved=Math.max(0,Math.floor(Number(entry.reserved)||0)+direction*g.qty);
     }
   }
   return next;
 }
-function completePublicReservation(products,order){
-  const next=adjustPublicReservation(products,order,-1);
+function completePublicReservation(products,order,allocations=[]){
+  const next=adjustPublicReservation(products,order,-1,allocations);
   for(const item of (order?.items||[])){
     const id=String(item.id||""),entry=next[id];
     if(!entry)continue;
@@ -5092,7 +5120,7 @@ async function reserveWarehouseOrder(orderId,btn){
     const plan=await planWarehouseFulfillment(order);
     if(!plan.allocations.length)throw new Error("這張訂單沒有可連結的小倉倉商品");
     const summary=allocationSummary(plan.allocations);
-    if(!confirm(`確認訂單 ${order.orderNumber||orderId}？\n\n預定配貨：${summary}\n\n確認後賣場可購買數量會先扣除，但小倉倉實際庫存要到「完成交易」才會扣。`))throw new Error("已取消配貨，庫存未變動");
+    if(!confirm(`確認訂單 ${order.orderNumber||orderId}？\n\n預訂配貨：${summary}\n\n確認後賣場可購買數量會先扣除，但小倉倉實際庫存要到「完成交易」才會扣。`))throw new Error("已取消配貨，庫存未變動");
     await runTransaction(db,async tx=>{
       const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),rref=doc(db,"adminSettings","warehouseReservations"),iref=doc(db,"adminSettings","warehouseInventoryIndex"),pref=doc(db,"publicSettings","warehouseStock");
       const os=await tx.get(oref),fs=await tx.get(fref),rs=await tx.get(rref),is=await tx.get(iref),ps=await tx.get(pref);
@@ -5104,7 +5132,7 @@ async function reserveWarehouseOrder(orderId,btn){
       for(const a of plan.allocations){
         const actual=(ownersByKey.get(a.key)||[]).filter(x=>String(x.accountId||"")===String(a.accountId)).reduce((n,x)=>n+Math.max(0,Math.floor(Number(x.qty)||0)),0);
         const slot=reservationSlot(a.accountId,a.key),already=Math.max(0,Math.floor(Number(entries[slot])||0));
-        if(actual-already<a.qty)throw new Error(`帳號 ${a.label||a.accountId} 的可預定庫存已不足，請重新配貨`);
+        if(actual-already<a.qty)throw new Error(`帳號 ${a.label||a.accountId} 的可預訂庫存已不足，請重新配貨`);
         entries[slot]=already+a.qty;
       }
       const liveOrder={id:orderId,...os.data()};
@@ -5122,7 +5150,7 @@ async function reserveWarehouseOrder(orderId,btn){
     const localOrder=adminOrders.find(o=>o.id===orderId);
     if(localOrder){localOrder.status="預定中";localOrder.warehouseReserved=true;renderOrders();}
     render();renderCart();
-    toast("已確認訂單並預定庫存，可按「完成交易並扣庫存」完成訂單");
+    toast("已確認訂單並預訂庫存，可按「完成交易並扣庫存」完成訂單");
   }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"確認配貨失敗");}
   finally{btn.disabled=false;btn.textContent="確認訂單・手動配貨";}
 }
@@ -5166,7 +5194,7 @@ async function completeWarehouseReservedOrder(orderId,btn){
       // 同步把管理員配貨索引扣掉，避免完成後在尚未重開小倉倉前又看到舊數量。
       const rows=Array.isArray(is.data()?.rows)?JSON.parse(JSON.stringify(is.data().rows)):[];
       for(const a of allocations){const row=rows.find(r=>String(r?.key||"")===String(a.key));if(!row)continue;let remain=Math.max(0,Math.floor(Number(a.qty)||0));for(const owner of (row.owners||[])){if(String(owner.accountId||"")!==String(a.accountId))continue;const have=Math.max(0,Math.floor(Number(owner.qty)||0)),take=Math.min(have,remain);owner.qty=have-take;remain-=take;if(!remain)break;}row.owners=(row.owners||[]).filter(x=>Math.max(0,Math.floor(Number(x.qty)||0))>0);}
-      const nextProducts=completePublicReservation(ps.exists()?(ps.data()?.products||{}):{}, {id:orderId,...os.data()});
+      const nextProducts=completePublicReservation(ps.exists()?(ps.data()?.products||{}):{}, {id:orderId,...os.data()}, allocations);
       tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
       tx.set(iref,{rows,updatedAt:new Date().toISOString()},{merge:false});
       tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
@@ -5187,7 +5215,7 @@ async function cancelWarehouseReservation(orderId){
     const allocations=Array.isArray(fs.data()?.allocations)?fs.data().allocations:[];
     const entries={...(rs.exists()?(rs.data()?.entries||{}):{})};
     for(const a of allocations){const slot=reservationSlot(a.accountId,a.key);entries[slot]=Math.max(0,Math.floor(Number(entries[slot])||0)-Math.max(0,Math.floor(Number(a.qty)||0)));}
-    const nextProducts=adjustPublicReservation(ps.exists()?(ps.data()?.products||{}):{}, {id:orderId,...os.data()}, -1);
+    const nextProducts=adjustPublicReservation(ps.exists()?(ps.data()?.products||{}):{}, {id:orderId,...os.data()}, -1, allocations);
     tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
     tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
     tx.set(fref,{status:"已取消",cancelledAt:serverTimestamp()},{merge:true});
