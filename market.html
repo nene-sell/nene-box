@@ -8186,25 +8186,21 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
 }
 </style>
 
-<style id="nene-wide-desktop-20261004">
-/* 寬螢幕：增加可見商品數量，不把商品卡硬拉胖。手機版不受影響。 */
-@media (min-width:1190px){
-  main.wrap{
-    width:min(1680px,calc(100% - 56px))!important;
+<style id="nene-wide-balanced-20261005">
+/* 超寬桌機：內容區跟著視窗延伸，但商品卡維持接近原本尺寸；空間用來增加欄數。 */
+@media (min-width:1450px){
+  .wrap{
+    width:min(1840px,calc(100% - 56px))!important;
     max-width:none!important;
   }
-  .home-feature{
-    grid-template-columns:minmax(0,3fr) minmax(300px,.9fr)!important;
-    gap:16px!important;
-  }
   #grid.grid{
-    grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important;
-    gap:14px!important;
+    grid-template-columns:repeat(auto-fill,minmax(205px,1fr))!important;
+    gap:18px!important;
   }
 }
-@media (min-width:1600px){
+@media (min-width:1750px){
   #grid.grid{
-    grid-template-columns:repeat(auto-fill,minmax(185px,1fr))!important;
+    grid-template-columns:repeat(auto-fill,minmax(210px,1fr))!important;
   }
 }
 </style>
