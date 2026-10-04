@@ -703,6 +703,15 @@ function queueStockPublish(){
       // 庫存數量沒變、只有帳號編號變更時也必須重發索引；否則會一直留著舊的 UUID／未設定編號。
       const hash=JSON.stringify({products:output,rows:inventoryRows});
       if(hash===lastPublished)return;
+      // 小倉倉只負責發布「實際總庫存」；訂單預訂由賣場管理。
+      // 發布前保留 warehouseStock 既有 reserved / reservedVariants，避免切進小倉倉時把預訂洗掉。
+      const currentPublicSnap=await getDoc(publicStockRef());
+      const currentProducts=currentPublicSnap.exists()?(currentPublicSnap.data()?.products||{}):{};
+      for(const [id,entry] of Object.entries(output)){
+        const previous=currentProducts[id]||{};
+        entry.reserved=Math.max(0,Math.floor(Number(previous.reserved)||0));
+        entry.reservedVariants={...(previous.reservedVariants||{})};
+      }
       await Promise.all([
         setDoc(publicStockRef(),{products:output,updatedAt:new Date().toISOString()}),
         setDoc(doc(db,"adminSettings","warehouseInventoryIndex"),{rows:inventoryRows,updatedAt:new Date().toISOString()})
