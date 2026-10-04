@@ -4931,6 +4931,9 @@ function startOrdersListener(){
       if(fresh.length){const first=fresh[0].data()||{};toast(fresh.length===1?`有新訂單：${first.orderNumber||fresh[0].id}`:`有 ${fresh.length} 筆新訂單`);}
     }
     pendingOrderIds=nextIds;pendingReady=true;setOrdersBadgeCount(activeDocs.length);
+    // 這個 listener 登入管理員後一定會啟動；直接用同一份 orders 快照重建公開庫存。
+    // 因此就算不打開「訂單」視窗，已刪除／已取消訂單留下的預訂也會立即清掉。
+    reconcilePublicOrderReservations(snap.docs).catch(e=>{console.error("預訂背景校正失敗",e);});
   },err=>{console.error("待交易訂單提醒讀取失敗",err);setOrdersBadgeCount(0);});
 }
 // 一張訂單一次顯示全部商品的手動配貨，不再逐商品開多個視窗。
@@ -5023,7 +5026,7 @@ async function planWarehouseFulfillment(order){
   // 這樣取消第 3 張待交易訂單不會碰到第 1、2 張的預訂，也不再依賴另一個 collection 的狀態同步。
   const ordersSnap=await getDocs(collection(db,"orders"));
   const liveReservedMap={};
-  for(const d of orderDocs){
+  for(const d of ordersSnap.docs){
     const o=d.data()||{};
     if(o.status!=="預定中")continue;
     for(const a of (Array.isArray(o.reservationAllocations)?o.reservationAllocations:[])){
