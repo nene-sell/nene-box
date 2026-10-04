@@ -2635,15 +2635,28 @@ async function publishPublicWarehouseStockFromCandidates(){
   await setDoc(doc(db,"publicSettings","warehouseStock"),{products:output,updatedAt:new Date().toISOString()});
 }
 
+function usesWarehouseStock(p){
+  // 收購／交換不是賣場出貨庫存；其餘販售商品一律以小倉倉為唯一庫存來源。
+  return p?.category!=="收購區" && p?.category!=="交換區";
+}
 function getVariants(p){
+  const warehouseManaged=usesWarehouseStock(p);
+  const synced=syncedEntry(p);
   return Array.isArray(p?.variants)
     ? p.variants
-        .map(v=>({
-          name:String(v?.name||"").trim(),
-          stock:Math.max(0,Math.floor(Number(syncedEntry(p)?.variants?.[String(v?.name||"")] ?? v?.stock)||0)),
-          reserved:Math.max(0,Math.floor(Number(syncedEntry(p)?.reservedVariants?.[String(v?.name||"")] ?? 0)||0)),
-          imageData:String(v?.imageData||"")
-        }))
+        .map(v=>{
+          const name=String(v?.name||"").trim();
+          const linkedStock=synced?.variants && Object.prototype.hasOwnProperty.call(synced.variants,name)
+            ? synced.variants[name]
+            : 0;
+          return {
+            name,
+            // 販售商品：沒連結小倉倉就一定是 0（售完），不再回退商品表單的手填庫存。
+            stock:Math.max(0,Math.floor(Number(warehouseManaged ? linkedStock : v?.stock)||0)),
+            reserved:Math.max(0,Math.floor(Number(synced?.reservedVariants?.[name] ?? 0)||0)),
+            imageData:String(v?.imageData||"")
+          };
+        })
         .filter(v=>v.name)
     : [];
 }
@@ -2653,8 +2666,15 @@ function getStock(p){
   if(variants.length){
     return variants.reduce((sum,v)=>sum+v.stock,0);
   }
-  const n=Number(syncedEntry(p)?.stock ?? p?.stock);
-  return Number.isFinite(n) && n>=0 ? Math.floor(n) : 1;
+  if(usesWarehouseStock(p)){
+    const synced=syncedEntry(p);
+    // 沒有 inventoryLinks / 公開小倉倉庫存資料時，一律售完。
+    if(!synced || !Object.prototype.hasOwnProperty.call(synced,"stock"))return 0;
+    const n=Number(synced.stock);
+    return Number.isFinite(n)&&n>=0?Math.floor(n):0;
+  }
+  const n=Number(p?.stock);
+  return Number.isFinite(n) && n>=0 ? Math.floor(n) : 0;
 }
 
 function variantStock(p,name){
@@ -3283,12 +3303,17 @@ $("#productCount").textContent=`${list.length} 件商品`;
 
         ${isAdmin()?`
           ${variants.length ? `
-            <div class="variant-admin-tip">此商品有款式，請按「編輯」調整各自庫存</div>
+            <div class="variant-admin-tip">款式庫存由小倉倉連結自動同步</div>
           ` : isBuy ? `
             <div class="stock-quick need-quick direct-need">
               <span>需求數量</span>
               <input class="need-input" type="number" min="0" step="1" value="${limit}">
               <button class="need-save" type="button">儲存</button>
+            </div>
+          ` : usesWarehouseStock(p) ? `
+            <div class="stock-quick arrow-stock warehouse-stock-display">
+              <span>小倉倉庫存</span>
+              <strong>${limit}</strong>
             </div>
           ` : `
             <div class="stock-quick arrow-stock">
@@ -3992,7 +4017,7 @@ function addVariantRow(name="",stock=0,imageData="",reserved=0){
   row.dataset.imageData=imageData||"";
   row.innerHTML=`
     <input class="variant-name" placeholder="例如：黑色" value="${esc(name)}">
-    <input class="variant-stock-input" type="number" min="0" step="1" value="${Math.max(0,Math.floor(Number(stock)||0))}" title="總庫存" placeholder="庫存">
+    <input class="variant-stock-input" type="number" min="0" step="1" value="${Math.max(0,Math.floor(Number(stock)||0))}" title="庫存由小倉倉連結自動帶入" placeholder="庫存" readonly>
     <label class="variant-image-btn" title="款式圖片（選填）">
       <span>圖片</span>
       <input class="variant-image-input" type="file" accept="image/*">
@@ -4046,7 +4071,11 @@ function updateProductFormMode(){
   $("#stockNumberField")?.classList.toggle("hidden",buy);
   $("#reservedNumberField")?.classList.toggle("hidden",buy||exchange);
   $("#purchaseQtyTextField")?.classList.toggle("hidden",!buy);
-  if($("#productStock")) $("#productStock").required=!buy;
+  if($("#productStock")){
+    $("#productStock").required=!buy;
+    $("#productStock").readOnly=usesWarehouseStock({category});
+    $("#productStock").title=usesWarehouseStock({category})?"庫存由小倉倉連結自動帶入":"";
+  }
   const buyerOffer=!!$("#productBuyerOffer")?.checked && !buy && !exchange;
   $("#productPrice").placeholder=buy ? "例如：100 T" : buyerOffer ? "自出價商品可留空" : "例如：80 糖";
   $("#minimumOfferField")?.classList.toggle("hidden",!buyerOffer);
@@ -4103,8 +4132,11 @@ async function loadWarehouseCandidates(force=false){
 }
 function renderVariantWarehouseInfo(row){
   const x=warehouseCandidates.find(x=>x.key===row.dataset.warehouseKey);
+  const stockInput=row.querySelector(".variant-stock-input");
+  if(stockInput)stockInput.value=x?Math.max(0,Math.floor(Number(x.qty)||0)):0;
   row.querySelector(".variant-warehouse-info").textContent=x
-    ?`庫存 ${x.qty}｜${x.owners.map(o=>`${o.owner} ×${o.qty}`).join("、")}`:"尚未連結";
+    ?`已連結：${[x.item.name,x.item.variant].filter(Boolean).join("｜")}｜庫存 ${x.qty}`
+    :"尚未連結";
 }
 function renderVariantWarehousePicker(row){
   const sel=row.querySelector(".variant-warehouse-select");
@@ -4143,8 +4175,9 @@ function showWarehouseInfo(){
   const key=$("#warehouseItemChoice").value;
   $("#warehouseItemChoice").dataset.chosen=key;
   const x=warehouseCandidates.find(x=>x.key===key);
+  if($("#productStock") && usesWarehouseStock({category:$("#productCategory").value}))$("#productStock").value=x?Math.max(0,Math.floor(Number(x.qty)||0)):0;
   $("#warehouseItemInfo").textContent=x
-    ? `總數 ${x.qty}｜持有帳號：${x.owners.map(o=>`${o.owner} ×${o.qty}`).join("、")}`
+    ? `已連結：${[x.item.name,x.item.variant].filter(Boolean).join("｜")}｜庫存 ${x.qty}`
     : (warehouseCandidates.length?"尚未連結小倉倉道具":"按「更新小倉倉資料」讀取庫存");
 }
 $("#warehouseItemSearch").addEventListener("input",showWarehouseChoice);
@@ -4445,9 +4478,9 @@ $("#productForm").addEventListener("submit", async e=>{
       newUntilMs,
       stock:$("#productCategory").value==="收購區"
         ? 1
-        : (variants.length
-          ? variants.reduce((sum,v)=>sum+v.stock,0)
-          : Math.max(0,Math.floor(Number($("#productStock").value)||0))),
+        : (usesWarehouseStock({category:$("#productCategory").value})
+          ? (variants.length ? variants.reduce((sum,v)=>sum+v.stock,0) : Math.max(0,Math.floor(Number($("#productStock").value)||0)))
+          : (variants.length ? variants.reduce((sum,v)=>sum+v.stock,0) : Math.max(0,Math.floor(Number($("#productStock").value)||0)))),
       reservedQty:0,
       purchaseQtyText:$("#productCategory").value==="收購區" ? ($("#purchaseQtyText")?.value||"").trim() : "",
       variants,
@@ -8343,5 +8376,67 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
   .card .actions .btn{width:40px!important;min-width:40px!important;max-width:40px!important;height:32px!important;padding:0 3px!important;font-size:11px!important;}
   .card .actions .order-up,
   .card .actions .order-down{width:30px!important;min-width:30px!important;max-width:30px!important;}
+}
+</style>
+
+<style id="nene-variant-cards-20261005">
+/* 商品新增／編輯：每個款式固定成獨立小卡，有無圖片都不會互相黏在一起。 */
+.variant-editor{
+  background:#eadbd5!important;
+  border-color:#c7a9a1!important;
+}
+.variant-rows{
+  display:grid!important;
+  gap:12px!important;
+}
+.variant-row{
+  display:grid!important;
+  grid-template-columns:minmax(105px,1fr) 72px auto 38px auto!important;
+  align-items:center!important;
+  gap:7px!important;
+  padding:11px!important;
+  border:1px solid #d3b8b1!important;
+  border-radius:12px!important;
+  background:#f7eeeb!important;
+  box-sizing:border-box!important;
+}
+.variant-row .variant-name,
+.variant-row .variant-stock-input{
+  background:#f1e3de!important;
+  border-color:#cbb0a8!important;
+  color:#4f3b36!important;
+}
+.variant-row .variant-image-btn{
+  background:#fff9f7!important;
+  border-color:#cbb0a8!important;
+  color:#604842!important;
+}
+.variant-row .variant-warehouse-link{
+  grid-column:1 / -1!important;
+  width:100%!important;
+  margin:2px 0 0!important;
+  padding:9px!important;
+  box-sizing:border-box!important;
+  background:#fff9f7!important;
+  border:1px solid #e0cbc5!important;
+  border-radius:10px!important;
+}
+.variant-row .variant-warehouse-search,
+.variant-row .variant-warehouse-select{
+  background:#f1e3de!important;
+  border-color:#cbb0a8!important;
+  color:#4f3b36!important;
+}
+.variant-row .variant-remove{
+  align-self:center!important;
+}
+@media(max-width:600px){
+  .variant-rows{gap:10px!important;}
+  .variant-row{
+    grid-template-columns:minmax(0,1fr) 64px auto 34px auto!important;
+    gap:5px!important;
+    padding:9px!important;
+  }
+  .variant-row .variant-warehouse-link{grid-column:1 / -1!important;padding:8px!important;}
 }
 </style>
