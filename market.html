@@ -4151,7 +4151,7 @@ async function loadWarehouseCandidates(force=false){
 function warehouseOwnerNumbers(x){
   return (x?.owners||[])
     .filter(o=>Number(o?.qty)>0)
-    .map(o=>String(o?.owner||"").trim())
+    .map(o=>String(o?.owner||"").trim().replace(/^編號\s*/u, ""))
     .filter(Boolean);
 }
 function warehouseOwnerText(x){
@@ -6249,6 +6249,25 @@ body.screenshot-mode .post-submit-review{background:#f3e7e9!important;margin:0 a
 </style>
 
 
+
+
+<style id="nene-mobile-qty-clean40">
+/* 商品卡底部直接融入卡片：移除舊 action row 的白色長方形底。 */
+#grid .buy-actions,
+#grid .offer-actions{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+@media(max-width:600px){
+  #grid .buy-actions,
+  #grid .offer-actions{
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+  }
+}
+</style>
 
 </body>
 </html>
