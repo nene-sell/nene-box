@@ -1961,6 +1961,20 @@ body{background:linear-gradient(180deg,#f6ece8 0%,#efe2de 100%)!important}
 #ordersDialog .order-actions .btn.primary:hover,#ordersDialog .order-admin-save.btn.primary:hover{background:#986052!important}
 #ordersDialog .order-delete{background:#f1e4e1!important;border-color:#d9bbb5!important;color:#8a5d57!important}
 </style>
+
+<style id="nene-order-confirm-graypink-20261004">
+/* 只調整商品確認單配色：灰粉／乾燥玫瑰，排版與內容不變 */
+.screenshot-mode{background:#4b4544!important}
+.screenshot-mode #cartDialog form{background:#fbf6f4!important;color:#4f3d39!important}
+.screenshot-title{background:linear-gradient(180deg,#e8d4ce,#dcc0b8)!important;border-color:#c79f95!important}
+.screenshot-title h3{color:#553d38!important}
+.screenshot-title p,.screenshot-title .order-date{color:#775c55!important}
+.cart-summary{background:#e3cbc3!important;color:#513b36!important}
+.screenshot-mode .cart-item{border-bottom-color:#dec3bb!important}
+.screenshot-mode .cart-item-meta{color:#806761!important}
+.screenshot-mode .cart-line-total{color:#8d5148!important}
+.order-reserved-tip{margin-top:10px;padding:9px 11px;border:1px solid #d7b7ae;border-radius:10px;background:#f3e3df;color:#79564e;font-size:12px;font-weight:800;line-height:1.5}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -4842,6 +4856,7 @@ function renderOrders(){
       ${o.tradeId?`<div class="order-extra"><b>交易 ID：</b>${esc(o.tradeId)}</div>`:""}
       ${o.note?`<div class="order-extra"><b>留言：</b>${esc(o.note)}</div>`:""}
       <div class="order-items">${itemText||"—"}</div>
+      ${reservedOrder?`<div class="order-reserved-tip">✓ 已完成手動配貨｜交易完成後請按下方「完成交易並扣庫存」</div>`:""}
       <div class="order-total">原訂單金額：${total}${o.actualAmount!==undefined&&o.actualAmount!==null&&String(o.actualAmount)!==""?`　｜　實際交易金額：${esc(String(o.actualAmount))}`:""}</div>
       <div class="order-admin-edit">
         <div class="order-admin-row"><label>實際交易金額</label><input class="order-admin-input" type="number" min="0" step="1" inputmode="numeric" data-order-amount="${esc(o.id)}" value="${esc(o.actualAmount!==undefined&&o.actualAmount!==null?String(o.actualAmount):String(total))}"></div>
@@ -4963,23 +4978,30 @@ async function planWarehouseFulfillment(order){
   const linkIds=[...new Set(items.map(x=>String(x.id||"")))];
   const linkSnaps=await Promise.all(linkIds.map(id=>getDoc(doc(db,"inventoryLinks",id))));
   const links=new Map(linkIds.map((id,i)=>[id,linkSnaps[i].exists()?linkSnaps[i].data():null]));
-  const linkedRows=[];
-  for(const item of items){
-    const link=links.get(String(item.id||""));
-    if(!link)continue;
-    const key=String(item.variant||"")
-      ?String((link.variantLinks||[]).find(v=>v.variant===item.variant)?.itemKey||"")
-      :String(link.itemKey||"");
-    if(!key)throw new Error(`「${item.name||"商品"}」尚未連結此款式的小倉倉道具`);
-    linkedRows.push({item,key,qty:Math.max(1,Math.floor(Number(item.qty)||1))});
-  }
-  if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
-
-  // 只讀一份管理員配貨索引，不使用 collectionGroup，也不掃 616 個帳號。
+  // 只讀一份管理員配貨索引，不使用 collectionGroup，也不掃全部帳號。
+  // 每一個訂單品項都必須進入配貨流程；若商品尚未建立 inventoryLinks，
+  // 會先嘗試用小倉倉相同的「分類／名稱／款式／限制／糖果類型」精確比對。
   const indexSnap=await getDoc(doc(db,"adminSettings","warehouseInventoryIndex"));
   if(!indexSnap.exists())throw new Error("小倉倉配貨索引尚未建立，請先開啟一次小倉倉後再試");
   const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
   const ownersByKey=new Map(indexRows.map(r=>[String(r?.key||""),Array.isArray(r?.owners)?r.owners:[]]));
+  const linkedRows=[];
+  for(const item of items){
+    const link=links.get(String(item.id||""));
+    let key="";
+    if(link){
+      key=String(item.variant||"")
+        ?String((link.variantLinks||[]).find(v=>v.variant===item.variant)?.itemKey||"")
+        :String(link.itemKey||"");
+    }
+    if(!key){
+      const exactKey=warehouseIdentity(item);
+      if(ownersByKey.has(exactKey))key=exactKey;
+    }
+    if(!key)throw new Error(`「${item.name||"商品"}${item.variant?"／"+item.variant:""}」找不到小倉倉對應道具，請先在商品管理設定庫存連結`);
+    linkedRows.push({item,key,qty:Math.max(1,Math.floor(Number(item.qty)||1))});
+  }
+  if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
   // 已確認但尚未完成的訂單先佔住指定帳號數量，避免同一件庫存被重複配給下一張訂單。
   const reservationsSnap=await getDoc(doc(db,"adminSettings","warehouseReservations"));
   const reservedMap=reservationsSnap.exists()?(reservationsSnap.data()?.entries||{}):{};
@@ -5069,7 +5091,9 @@ async function reserveWarehouseOrder(orderId,btn){
       tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
       tx.update(oref,{status:"預定中",reservedAt:serverTimestamp(),warehouseReserved:true});
     });
-    toast("已確認訂單並預定庫存");
+    const localOrder=adminOrders.find(o=>o.id===orderId);
+    if(localOrder){localOrder.status="預定中";localOrder.warehouseReserved=true;renderOrders();}
+    toast("已確認訂單並預定庫存，可按「完成交易並扣庫存」完成訂單");
   }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"確認配貨失敗");}
   finally{btn.disabled=false;btn.textContent="確認訂單・手動配貨";}
 }
