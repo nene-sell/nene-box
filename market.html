@@ -2618,7 +2618,7 @@ function getVariants(p){
         .map(v=>({
           name:String(v?.name||"").trim(),
           stock:Math.max(0,Math.floor(Number(syncedEntry(p)?.variants?.[String(v?.name||"")] ?? v?.stock)||0)),
-          reserved:Math.max(0,Math.floor(Number(syncedEntry(p)?.reservedVariants?.[String(v?.name||"")] ?? v?.reserved ?? v?.reservedQty)||0)),
+          reserved:Math.max(0,Math.floor(Number(syncedEntry(p)?.reservedVariants?.[String(v?.name||"")] ?? 0)||0)),
           imageData:String(v?.imageData||"")
         }))
         .filter(v=>v.name)
@@ -2641,7 +2641,7 @@ function variantStock(p,name){
 function getReserved(p){
   const variants=getVariants(p);
   if(variants.length) return variants.reduce((sum,v)=>sum+Math.min(v.stock,v.reserved||0),0);
-  const n=Number(syncedEntry(p)?.reserved ?? p?.reservedQty ?? p?.reserved);
+  const n=Number(syncedEntry(p)?.reserved ?? 0);
   return Number.isFinite(n) && n>0 ? Math.min(getStock(p),Math.floor(n)) : 0;
 }
 function getAvailableStock(p){
@@ -3203,7 +3203,7 @@ $("#productCount").textContent=`${list.length} 件商品`;
     const isBuy=p.category==="收購區";
     const isExchange=p.category==="交換區";
     const reserved=false; // 舊版整件「已預訂」狀態停用，改由預定數量管理
-    const sold=!isBuy && (p.status==="sold" || getStock(p)<=0);
+    const sold=!isBuy && (syncedEntry(p) ? getStock(p)<=0 : (p.status==="sold" || getStock(p)<=0));
     const totalStock=getStock(p);
     const reservedQty=isBuy?0:getReserved(p);
     const limit=isBuy?totalStock:getAvailableStock(p);
@@ -5116,8 +5116,12 @@ async function reserveWarehouseOrder(orderId,btn){
       tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
       tx.update(oref,{status:"預定中",reservedAt:serverTimestamp(),warehouseReserved:true});
     });
+    // 交易成功後立即把本機公開庫存同步成同一份資料，不等 onSnapshot 回來才顯示預定。
+    const freshPublic=await getDoc(doc(db,"publicSettings","warehouseStock"));
+    if(freshPublic.exists()) publicWarehouseStock=freshPublic.data()?.products||{};
     const localOrder=adminOrders.find(o=>o.id===orderId);
     if(localOrder){localOrder.status="預定中";localOrder.warehouseReserved=true;renderOrders();}
+    render();renderCart();
     toast("已確認訂單並預定庫存，可按「完成交易並扣庫存」完成訂單");
   }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"確認配貨失敗");}
   finally{btn.disabled=false;btn.textContent="確認訂單・手動配貨";}
@@ -5755,6 +5759,26 @@ $("#backupBtn")?.addEventListener("click",createFullBackup);
 $("#restoreBtn")?.addEventListener("click",()=>$("#restoreFileInput")?.click());
 $("#restoreFileInput")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)restoreFullBackup(f);});
 
+// 舊版手動預定欄位已停用：管理員載入時只清除 products 裡的舊 reserved/reservedQty/款式 reserved。
+// 訂單配貨使用 publicSettings/warehouseStock 的 reserved，不受這個清理影響。
+let legacyReservationCleanupDone=false;
+async function clearLegacyManualReservations(){
+  if(legacyReservationCleanupDone||auth.currentUser?.uid!==ADMIN_UID)return;
+  legacyReservationCleanupDone=true;
+  try{
+    const snap=await getDocs(collection(db,"products"));
+    const jobs=[];
+    for(const d of snap.docs){
+      if(d.id===CATEGORY_SETTING_DOC_ID)continue;
+      const data=d.data()||{};
+      const variants=Array.isArray(data.variants)?data.variants.map(v=>({...v,reserved:0,reservedQty:0})):data.variants;
+      const hasLegacy=(Number(data.reservedQty)||0)>0||(Number(data.reserved)||0)>0||(Array.isArray(data.variants)&&data.variants.some(v=>(Number(v?.reserved)||0)>0||(Number(v?.reservedQty)||0)>0));
+      if(hasLegacy)jobs.push(updateDoc(d.ref,{reservedQty:0,reserved:0,...(Array.isArray(variants)?{variants}:{}),updatedAt:serverTimestamp()}));
+    }
+    if(jobs.length)await Promise.all(jobs);
+  }catch(e){console.error("清除舊手動預定失敗",e);legacyReservationCleanupDone=false;}
+}
+
 onSnapshot(
   collection(db,"products"),
   snap=>{
@@ -5766,6 +5790,7 @@ onSnapshot(
     products=snap.docs
       .filter(d=>d.id!==CATEGORY_SETTING_DOC_ID)
       .map(d=>({id:d.id,...d.data()}));
+    clearLegacyManualReservations();
     ensureActiveCategoryVisible();
     $("#status").textContent="已連線";
     render();
