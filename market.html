@@ -4828,7 +4828,7 @@ function renderOrders(){
   const box=$("#ordersList"), empty=$("#ordersEmpty");
   if(!box)return;
   const pending=adminOrders.filter(o=>o.status==="待交易"||o.status==="預定中");
-  const history=adminOrders.filter(o=>o.status!=="待交易"&&o.status!=="預定中");
+  const history=adminOrders.filter(o=>o.status!=="待交易"&&o.status!=="預定中"&&o.status!=="已取消");
   $("#pendingOrdersCount").textContent=String(pending.length);
   $("#historyOrdersCount").textContent=String(history.length);
   for(const [tab,selected] of [["#pendingOrdersTab",ordersView==="pending"],["#historyOrdersTab",ordersView==="history"]]){
