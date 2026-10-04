@@ -4897,6 +4897,7 @@ let ordersListenerReady=false;
 let pendingOrderIds=new Set();
 let stopPendingOrdersListener=null;
 let stopOrdersDataListener=null;
+let ghostReservationRepairDone=false;
 function setOrdersBadgeCount(count){
   count=Math.max(0,Number(count)||0);
   const badge=$("#ordersBadge");
@@ -4910,6 +4911,12 @@ function startOrdersDataListener(){
   stopOrdersDataListener=onSnapshot(collection(db,"orders"),snap=>{
     adminOrders=snap.docs.map(d=>({id:d.id,...d.data()}));
     ordersListenerReady=true;renderOrders();
+    // 管理員每次開站只做一次完整校正：以小倉倉實際庫存 + 目前仍存在的「預定中」訂單重建公開庫存。
+    // 可自動清掉已刪除測試單遺留的 reserved，不需要手動改賣場庫存。
+    if(!ghostReservationRepairDone){
+      ghostReservationRepairDone=true;
+      reconcilePublicOrderReservations().catch(e=>{console.error("幽靈預訂自動校正失敗",e);ghostReservationRepairDone=false;});
+    }
   },err=>{console.error(err);toast("訂單讀取失敗");});
 }
 function startOrdersListener(){
@@ -5556,10 +5563,9 @@ async function deleteOrder(orderId,btn){
         await cancelWarehouseReservation(orderId);
       }
       await deleteDoc(doc(db,"orders",orderId));
-      // 立即更新本機顯示，不必再進一次小倉倉才看到庫存回來。
-      const stockSnap=await getDoc(doc(db,"publicSettings","warehouseStock"));
-      publicWarehouseStock=stockSnap.exists()?(stockSnap.data()?.products||{}):{};
-      render();renderCart();
+      // 訂單真正刪除後再重建一次：任何已不存在的訂單都不可能繼續留下幽靈預訂。
+      await reconcilePublicOrderReservations();
+      // reconcile 已同步 publicWarehouseStock 與畫面，不再直接沿用舊的 reserved 數字。
     }
     toast(fulfilled?"訂單已刪除，配貨紀錄與實際庫存均已保留":(order?.status==="預定中"?"訂單已刪除，預訂已立即釋放":"訂單已刪除"));
   }catch(e){console.error(e);alert(e?.message||"刪除訂單失敗");}
