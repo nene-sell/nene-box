@@ -4911,12 +4911,11 @@ function startOrdersDataListener(){
   stopOrdersDataListener=onSnapshot(collection(db,"orders"),snap=>{
     adminOrders=snap.docs.map(d=>({id:d.id,...d.data()}));
     ordersListenerReady=true;renderOrders();
-    // 管理員每次開站只做一次完整校正：以小倉倉實際庫存 + 目前仍存在的「預定中」訂單重建公開庫存。
-    // 可自動清掉已刪除測試單遺留的 reserved，不需要手動改賣場庫存。
-    if(!ghostReservationRepairDone){
-      ghostReservationRepairDone=true;
-      reconcilePublicOrderReservations().catch(e=>{console.error("幽靈預訂自動校正失敗",e);ghostReservationRepairDone=false;});
-    }
+    // 訂單清單每次變動都用「這一份最新快照」重建預訂。
+    // 不再只在開站時校正一次；刪除／取消後 Firestore 快照一到，幽靈預訂會立即歸零。
+    // 直接沿用本次 orders snapshot，避免為了校正再多讀一次整個 orders collection。
+    ghostReservationRepairDone=true;
+    reconcilePublicOrderReservations(snap.docs).catch(e=>{console.error("預訂即時校正失敗",e);});
   },err=>{console.error(err);toast("訂單讀取失敗");});
 }
 function startOrdersListener(){
@@ -5024,7 +5023,7 @@ async function planWarehouseFulfillment(order){
   // 這樣取消第 3 張待交易訂單不會碰到第 1、2 張的預訂，也不再依賴另一個 collection 的狀態同步。
   const ordersSnap=await getDocs(collection(db,"orders"));
   const liveReservedMap={};
-  for(const d of ordersSnap.docs){
+  for(const d of orderDocs){
     const o=d.data()||{};
     if(o.status!=="預定中")continue;
     for(const a of (Array.isArray(o.reservationAllocations)?o.reservationAllocations:[])){
@@ -5154,14 +5153,16 @@ function completePublicReservation(products,order,allocations=[]){
 
 // 訂單預訂的唯一來源：orderFulfillments(status=預定中)。
 // 每次配貨／取消後重建公開「預訂」數量，避免舊版直接扣 stock 留下髒資料。
-async function reconcilePublicOrderReservations(){
+async function reconcilePublicOrderReservations(orderDocsOverride=null){
   if(auth.currentUser?.uid!==ADMIN_UID)return;
-  const [ordersSnap,indexSnap,linkSnap,publicSnap]=await Promise.all([
-    getDocs(collection(db,"orders")),
+  const [indexSnap,linkSnap,publicSnap]=await Promise.all([
     getDoc(doc(db,"adminSettings","warehouseInventoryIndex")),
     getDocs(collection(db,"inventoryLinks")),
     getDoc(doc(db,"publicSettings","warehouseStock"))
   ]);
+  const orderDocs=Array.isArray(orderDocsOverride)
+    ? orderDocsOverride
+    : (await getDocs(collection(db,"orders"))).docs;
   const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
   const indexByKey=new Map(indexRows.map(r=>[String(r?.key||""),r]));
   const next=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
@@ -5621,8 +5622,9 @@ async function deleteOrder(orderId,btn){
         await cancelWarehouseReservation(orderId);
       }
       await deleteDoc(doc(db,"orders",orderId));
-      // 訂單真正刪除後再重建一次：任何已不存在的訂單都不可能繼續留下幽靈預訂。
-      await reconcilePublicOrderReservations();
+      // 立即以「目前訂單－剛刪除這張」重建，不等 listener；因此刪除後畫面會立刻釋放完整預訂。
+      const remainingOrders=adminOrders.filter(o=>o.id!==orderId).map(o=>({data:()=>o}));
+      await reconcilePublicOrderReservations(remainingOrders);
       // reconcile 已同步 publicWarehouseStock 與畫面，不再直接沿用舊的 reserved 數字。
     }
     toast(fulfilled?"訂單已刪除，配貨紀錄與實際庫存均已保留":(order?.status==="預定中"?"訂單已刪除，預訂已立即釋放":"訂單已刪除"));
