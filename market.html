@@ -4981,7 +4981,7 @@ function chooseFulfillmentAccounts(order,rows){
     const submit=()=>{
       const allocations=[];
       for(const g of groups){
-        const picked=g.inputs.map(({account,input})=>({accountId:account.id,key:g.row.key,qty:Number(input.value),label:account.label,itemName:g.row.item.name||"商品",variant:g.row.item.variant||""})).filter(x=>x.qty>0);
+        const picked=g.inputs.map(({account,input})=>({accountId:account.id,key:g.row.key,itemId:String(g.row.item.id||""),qty:Number(input.value),label:account.label,itemName:g.row.item.name||"商品",variant:g.row.item.variant||""})).filter(x=>x.qty>0);
         if(picked.some(x=>!Number.isSafeInteger(x.qty))||picked.reduce((n,x)=>n+x.qty,0)!==g.row.qty)return;
         allocations.push(...picked);
       }
@@ -5035,10 +5035,23 @@ async function planWarehouseFulfillment(order){
 const reservationSlot=(accountId,key)=>encodeURIComponent(String(accountId))+"|"+encodeURIComponent(String(key));
 const cleanReservationEntries=entries=>{const out={};for(const [k,v] of Object.entries(entries||{})){const n=Math.max(0,Math.floor(Number(v)||0));if(n>0)out[k]=n;}return out;};
 function allocationSummary(allocations=[]){return allocations.map(x=>`${x.label||x.accountId}：${x.qty}`).join("、");}
-function adjustPublicReservation(products,order,direction){
+function adjustPublicReservation(products,order,direction,allocations=[],indexRows=[]){
   const next=JSON.parse(JSON.stringify(products||{}));
+  const indexByKey=new Map((indexRows||[]).map(r=>[String(r?.key||""),r]));
   for(const item of (order?.items||[])){
-    const id=String(item.id||""),entry=next[id];
+    const id=String(item.id||"");
+    let entry=next[id];
+    // 商品若是靠小倉倉名稱自動對應、尚未建立 inventoryLinks，公開庫存原本沒有這筆。
+    // 配貨時直接依實際小倉倉索引補上公開總庫存，才能正確顯示「可購買 X｜預定 Y」。
+    if(!entry && direction>0){
+      const alloc=(allocations||[]).find(a=>String(a.itemId||"")===id && String(a.variant||"")===String(item.variant||""));
+      const row=alloc?indexByKey.get(String(alloc.key||"")):null;
+      if(row){
+        const total=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+        if(String(item.variant||"")) entry=next[id]={variants:{[String(item.variant)]:total},reservedVariants:{}};
+        else entry=next[id]={stock:total,reserved:0};
+      }
+    }
     if(!entry)continue;
     const qty=Math.max(1,Math.floor(Number(item.qty)||1)),variant=String(item.variant||"");
     if(variant){
@@ -5089,7 +5102,7 @@ async function reserveWarehouseOrder(orderId,btn){
       const liveOrder={id:orderId,...os.data()};
       const publicProducts=ps.exists()?(ps.data()?.products||{}):{};
       // 配貨後保留總庫存，另外增加「預定」數量；可購買數量由總庫存－預定自動計算。
-      const nextProducts=adjustPublicReservation(publicProducts,liveOrder,+1);
+      const nextProducts=adjustPublicReservation(publicProducts,liveOrder,+1,plan.allocations,indexRows);
       tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
       tx.set(fref,{orderId,status:"預定中",allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-manual-reservation"},{merge:false});
       tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
