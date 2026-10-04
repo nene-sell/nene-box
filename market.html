@@ -8204,3 +8204,27 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
   }
 }
 </style>
+
+<style id="nene-responsive-product-grid-20261005">
+/* 正式商品區：依買家實際視窗寬度自動增加欄數；卡片維持舒服尺寸。手機固定兩欄。 */
+@media (min-width:701px){
+  #grid.grid{
+    grid-template-columns:repeat(auto-fit,minmax(190px,220px))!important;
+    justify-content:start!important;
+    align-items:start!important;
+    gap:16px!important;
+  }
+}
+@media (min-width:1450px){
+  #grid.grid{
+    grid-template-columns:repeat(auto-fit,minmax(190px,220px))!important;
+    gap:16px!important;
+  }
+}
+@media (max-width:700px){
+  #grid.grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    justify-content:stretch!important;
+  }
+}
+</style>
