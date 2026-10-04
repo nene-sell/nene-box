@@ -3137,7 +3137,7 @@ function renderHomeRecent(){
   const host=document.getElementById("homeRecentGrid");
   if(!host)return;
   if(!productsInitialLoaded){host.innerHTML="";return;}
-  const list=products.filter(p=>p?.recentFeatured===true && !["收購區","交換區"].includes(String(p.category||""))).sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0))).slice(0,6);
+  const list=products.filter(p=>p?.recentFeatured===true && !["收購區","交換區"].includes(String(p.category||""))).sort((a,b)=>((b?.createdAt?.seconds||0)-(a?.createdAt?.seconds||0))).slice(0,8);
   host.innerHTML="";
   list.forEach(p=>{
     const sold=p.status==="sold" || getStock(p)<=0;
@@ -8276,6 +8276,32 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
   .tabs [data-category-hidden="true"],
   .tabs [hidden],
   .tabs .hidden{display:none!important;}
+}
+</style>
+<style id="nene-recent-single-row-20261005">
+/* 近期上架：最多 8 張，依桌機視窗寬度增加顯示數量；永遠維持單排。 */
+@media (min-width:701px){
+  .home-recent-grid{display:grid!important;gap:10px!important;align-items:stretch!important;overflow:hidden!important;}
+  .home-recent-card{display:flex!important;min-width:0!important;}
+}
+@media (min-width:701px) and (max-width:1189px){
+  .home-recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;}
+  .home-recent-card:nth-child(n+5){display:none!important;}
+}
+@media (min-width:1190px) and (max-width:1399px){
+  .home-recent-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;}
+  .home-recent-card:nth-child(n+6){display:none!important;}
+}
+@media (min-width:1400px) and (max-width:1599px){
+  .home-recent-grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;}
+  .home-recent-card:nth-child(n+7){display:none!important;}
+}
+@media (min-width:1600px) and (max-width:1799px){
+  .home-recent-grid{grid-template-columns:repeat(7,minmax(0,1fr))!important;}
+  .home-recent-card:nth-child(n+8){display:none!important;}
+}
+@media (min-width:1800px){
+  .home-recent-grid{grid-template-columns:repeat(8,minmax(0,1fr))!important;}
 }
 </style>
 
