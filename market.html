@@ -8185,3 +8185,13 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
   .usage-guide{align-self:stretch!important}
 }
 </style>
+<style id="nene-mobile-category-visibility-20261004">
+/* 手機分類列必須遵守後台「分類顯示」設定；避免手機版 .tab display 覆蓋 .hidden。 */
+.tabs > .tab.hidden,
+.tabs > .category-dropdown.hidden{display:none!important;}
+@media(max-width:600px){
+  .tabs > .tab.hidden,
+  .tabs > .category-dropdown.hidden{display:none!important;}
+}
+</style>
+
