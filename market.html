@@ -5577,9 +5577,18 @@ async function deleteOrder(orderId,btn){
         tx.delete(oref);
       });
     }else{
+      // 尚未完成但已進入「預定中」的訂單，刪除前必須先釋放這張單的預訂。
+      // 否則訂單消失了，publicSettings/warehouseStock 仍會留下 reserved 數量。
+      if(order?.status==="預定中"){
+        await cancelWarehouseReservation(orderId);
+      }
       await deleteDoc(doc(db,"orders",orderId));
+      // 立即更新本機顯示，不必再進一次小倉倉才看到庫存回來。
+      const stockSnap=await getDoc(doc(db,"publicSettings","warehouseStock"));
+      publicWarehouseStock=stockSnap.exists()?(stockSnap.data()?.products||{}):{};
+      render();renderCart();
     }
-    toast(fulfilled?"訂單已刪除，配貨紀錄與實際庫存均已保留":"訂單已刪除");
+    toast(fulfilled?"訂單已刪除，配貨紀錄與實際庫存均已保留":(order?.status==="預定中"?"訂單已刪除，預訂已立即釋放":"訂單已刪除"));
   }catch(e){console.error(e);alert(e?.message||"刪除訂單失敗");}
   finally{btn.disabled=false;}
 }
@@ -6082,6 +6091,34 @@ body.screenshot-mode .cart-summary{background:#e4ccc5!important;color:#513b36!im
 body.screenshot-mode .cart-item{border-bottom-color:#dec3bb!important}
 body.screenshot-mode .cart-item-meta{color:#806761!important}
 body.screenshot-mode .cart-line-total{color:#8d5148!important}
+</style>
+
+<style id="nene-final-rose-ui-20261004-v7">
+/* 最終灰粉版：放在檔案最後，避免任何舊咖啡色樣式再次覆蓋 */
+#fulfillmentDialog.fulfillment-dialog{background:#f4e9eb!important;border:1px solid #d8bfc3!important;color:#4f3d40!important}
+#fulfillmentDialog .fulfillment-panel{background:#f4e9eb!important}
+#fulfillmentDialog .fulfillment-item-section{background:#fbf5f6!important;border-color:#dfc9cc!important}
+#fulfillmentDialog .fulfillment-choice{background:#fffafb!important;border-color:#dfc9cc!important}
+#fulfillmentDialog .fulfillment-choice input{background:#ead9d9!important;border-color:#bd9697!important;color:#49383a!important}
+#fulfillmentDialog #fulfillmentCancel{background:#e6d9d9!important;border-color:#cdb7b8!important;color:#5f4d4f!important}
+#fulfillmentDialog #fulfillmentConfirm{background:#c58f8d!important;border-color:#b77f7d!important;color:#fff!important}
+#fulfillmentDialog #fulfillmentConfirm:disabled{background:#dcc6c4!important;color:#8c7372!important;opacity:1!important}
+#cartDialog:not([data-screenshot-only]){background:#f4e9eb!important;border-color:#d8bfc3!important}
+#cartDialog:not([data-screenshot-only])>form{background:#f4e9eb!important;color:#4e3b3e!important}
+#cartDialog .cart-item{background:#fffafa!important;border-color:#dfc8c9!important}
+#cartDialog .cart-summary{background:#e4c8c8!important;color:#4f3b3d!important}
+#cartDialog #checkoutInfo{background:#f8f0f1!important;border-color:#dfc9cc!important}
+#cartDialog .checkout-details-box{background:#fffafa!important;border-color:#dfc9cc!important}
+#cartDialog .checkout-field{background:#fffafa!important;border-color:#e2cdcf!important}
+#cartDialog .checkout-options label:has(input:checked){background:#dfc3c2!important;border-color:#c59b99!important}
+#cartDialog .cart-actions .primary{background:#c58f8d!important;border-color:#b77f7d!important;color:#fff!important}
+body.screenshot-mode{background:#f3e7e9!important;padding:0!important;min-height:100vh!important}
+body.screenshot-mode #cartDialog{width:100%!important;max-width:none!important;min-height:100vh!important;margin:0!important;border-radius:0!important;background:#fbf7f7!important;box-shadow:none!important}
+body.screenshot-mode #cartDialog form{width:min(760px,100%)!important;min-height:calc(100vh - 72px)!important;margin:0 auto!important;background:#fbf7f7!important}
+body.screenshot-mode .screenshot-title{background:linear-gradient(180deg,#ead4d5,#dfc1c1)!important;border-color:#c99f9f!important}
+body.screenshot-mode .cart-summary{background:#e2c4c4!important;color:#4d393b!important}
+body.screenshot-mode .order-meta{background:#eedddd!important;border-color:#d6b9ba!important;color:#4e3a3c!important}
+body.screenshot-mode .post-submit-review{background:#f3e7e9!important;margin:0 auto!important;padding:16px!important}
 </style>
 </body>
 </html>
@@ -7941,4 +7978,121 @@ main.wrap{
     overflow:hidden !important;
   }
 }
+</style>
+
+<style id="nene-final-graypink-ui-20261004">
+/* 最終覆寫：配貨視窗統一灰粉／乾燥玫瑰；必須位於所有舊樣式之後 */
+#fulfillmentDialog.fulfillment-dialog{
+  background:#eee4e4 !important;
+  border-color:#cfb4b5 !important;
+  color:#4f3f40 !important;
+}
+#fulfillmentDialog::backdrop{background:rgba(54,48,48,.58) !important;backdrop-filter:blur(5px)}
+#fulfillmentDialog .fulfillment-panel{background:#eee4e4 !important}
+#fulfillmentDialog .fulfillment-panel h3{color:#49393a !important}
+#fulfillmentDialog #fulfillmentDescription{color:#806d6e !important}
+#fulfillmentDialog .fulfillment-item-section{
+  background:#f7eeee !important;
+  border-color:#dbc3c3 !important;
+}
+#fulfillmentDialog .fulfillment-item-head{color:#553e40 !important}
+#fulfillmentDialog .fulfillment-item-count{color:#a15e62 !important}
+#fulfillmentDialog .fulfillment-choice{
+  background:#fcf8f7 !important;
+  border-color:#dcc4c4 !important;
+}
+#fulfillmentDialog .fulfillment-choice-name{color:#4d3a3b !important}
+#fulfillmentDialog .fulfillment-choice-id,
+#fulfillmentDialog .fulfillment-choice-available{color:#876d6e !important}
+#fulfillmentDialog .fulfillment-choice input{
+  background:#f3e8e5 !important;
+  border-color:#c9aaa7 !important;
+  color:#4d3939 !important;
+}
+#fulfillmentDialog .fulfillment-choice input:focus{outline-color:#a96f72 !important;border-color:#a96f72 !important}
+#fulfillmentDialog .fulfillment-footer{border-top-color:#d9c2c2 !important}
+#fulfillmentDialog #fulfillmentCount{color:#805b5d !important}
+#fulfillmentDialog #fulfillmentCount.fulfillment-error,
+#fulfillmentDialog .fulfillment-error{color:#b34e52 !important}
+#fulfillmentDialog #fulfillmentCancel{background:#e1d3d0 !important;border-color:#c8afac !important;color:#604e4d !important}
+#fulfillmentDialog #fulfillmentConfirm{background:#cfaeaa !important;border-color:#c39d99 !important;color:#493636 !important}
+#fulfillmentDialog #fulfillmentConfirm:not(:disabled):hover{background:#c49e9a !important}
+
+/* 送出訂單後的商品確認單：只留下確認單，背景完整鋪滿，不再露出首頁橫幅／近期上架／使用說明 */
+body.screenshot-mode{
+  margin:0 !important;
+  padding:24px 12px !important;
+  min-height:100vh !important;
+  background:#514b4b !important;
+}
+body.screenshot-mode > header,
+body.screenshot-mode > main,
+body.screenshot-mode > footer,
+body.screenshot-mode .cart-fab{
+  display:none !important;
+}
+body.screenshot-mode #cartDialog{
+  display:block !important;
+  position:static !important;
+  width:min(720px,calc(100vw - 24px)) !important;
+  max-height:none !important;
+  margin:0 auto !important;
+  border:0 !important;
+  border-radius:20px !important;
+  background:#fbf7f6 !important;
+  box-shadow:0 20px 70px rgba(0,0,0,.24) !important;
+  overflow:hidden !important;
+}
+body.screenshot-mode #cartDialog form{
+  padding:28px !important;
+  gap:14px !important;
+  background:#fbf7f6 !important;
+  color:#4d3c3d !important;
+}
+body.screenshot-mode .screenshot-title{
+  display:block !important;
+  background:linear-gradient(180deg,#ead7d5,#dfc4c2) !important;
+  border:1px solid #cba5a3 !important;
+  color:#4d393a !important;
+}
+body.screenshot-mode .screenshot-title h3{color:#4d393a !important}
+body.screenshot-mode .screenshot-title p,
+body.screenshot-mode .screenshot-title .order-date{color:#755b5c !important}
+body.screenshot-mode .cart-item{border-bottom-color:#dec6c5 !important}
+body.screenshot-mode .cart-item-meta{color:#806a6a !important}
+body.screenshot-mode .cart-line-total{color:#96534f !important}
+body.screenshot-mode .cart-summary{background:#e5cecb !important;color:#503b3c !important}
+body.screenshot-mode .order-meta{background:#eee0dd !important;border-color:#d6bbb7 !important;color:#503d3d !important}
+body.screenshot-mode .post-submit-review{color:#756465 !important}
+@media(max-width:600px){
+  body.screenshot-mode{padding:10px 6px !important}
+  body.screenshot-mode #cartDialog{width:calc(100vw - 12px) !important;border-radius:16px !important}
+  body.screenshot-mode #cartDialog form{padding:18px !important}
+}
+</style>
+<style id="nene-absolute-final-rose-ui-20261004-v7">
+/* 絕對最後覆寫：避免舊版附加樣式蓋回咖啡色 */
+#fulfillmentDialog.fulfillment-dialog,#fulfillmentDialog .fulfillment-panel{background:#f4e9eb!important;border-color:#d8bfc3!important;color:#4f3d40!important}
+#fulfillmentDialog .fulfillment-item-section{background:#fbf5f6!important;border-color:#dfc9cc!important}
+#fulfillmentDialog .fulfillment-choice{background:#fffafb!important;border-color:#dfc9cc!important}
+#fulfillmentDialog .fulfillment-choice input{background:#ead9d9!important;border-color:#bd9697!important;color:#49383a!important}
+#fulfillmentDialog #fulfillmentCancel{background:#e6d9d9!important;border-color:#cdb7b8!important;color:#5f4d4f!important}
+#fulfillmentDialog #fulfillmentConfirm{background:#c58f8d!important;border-color:#b77f7d!important;color:#fff!important}
+#fulfillmentDialog #fulfillmentConfirm:disabled{background:#dcc6c4!important;color:#8c7372!important;opacity:1!important}
+#cartDialog{background:#f4e9eb!important;border-color:#d8bfc3!important}
+#cartDialog>form{background:#f4e9eb!important;color:#4e3b3e!important}
+#cartDialog .cart-item{background:#fffafa!important;border-color:#dfc8c9!important}
+#cartDialog .cart-summary{background:#e4c8c8!important;color:#4f3b3d!important}
+#cartDialog #checkoutInfo{background:#f8f0f1!important;border-color:#dfc9cc!important}
+#cartDialog .checkout-details-box,#cartDialog .checkout-field{background:#fffafa!important;border-color:#dfc9cc!important}
+#cartDialog .checkout-options label:has(input:checked){background:#dfc3c2!important;border-color:#c59b99!important}
+#cartDialog .cart-actions .primary{background:#c58f8d!important;border-color:#b77f7d!important;color:#fff!important}
+body.screenshot-mode{background:#f3e7e9!important;padding:0!important;min-height:100vh!important}
+body.screenshot-mode #cartDialog{width:100%!important;max-width:none!important;min-height:100vh!important;margin:0!important;border-radius:0!important;background:#fbf7f7!important;box-shadow:none!important}
+body.screenshot-mode #cartDialog form{width:min(760px,100%)!important;min-height:calc(100vh - 72px)!important;margin:0 auto!important;background:#fbf7f7!important}
+body.screenshot-mode .screenshot-title{background:linear-gradient(180deg,#ead4d5,#dfc1c1)!important;border-color:#c99f9f!important}
+body.screenshot-mode .cart-summary{background:#e2c4c4!important;color:#4d393b!important}
+body.screenshot-mode .order-meta{background:#eedddd!important;border-color:#d6b9ba!important;color:#4e3a3c!important}
+body.screenshot-mode .post-submit-review{background:#f3e7e9!important;margin:0 auto!important;padding:16px!important}
+@media(max-width:600px){body.screenshot-mode{padding:0!important}body.screenshot-mode #cartDialog{width:100%!important;border-radius:0!important}}
 </style>
