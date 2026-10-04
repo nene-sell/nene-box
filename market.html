@@ -2453,8 +2453,31 @@ function ensureActiveCategoryVisible(){
 function applyCategoryVisibility(){
   CATEGORY_LABELS.forEach(name=>{
     const el=categoryNavElement(name);
-    if(el)el.classList.toggle("hidden",!isCategoryVisible(name));
+    if(!el)return;
+    const shouldHide=!isCategoryVisible(name);
+    el.classList.toggle("hidden",shouldHide);
+    el.toggleAttribute("hidden",shouldHide);
+    el.toggleAttribute("data-category-hidden",shouldHide);
+    if(shouldHide){
+      el.style.setProperty("display","none","important");
+    }else{
+      el.style.removeProperty("display");
+    }
   });
+
+  // 同一份分類設定直接產生 CSS 鎖定，避免手機版後段樣式把 hidden 分類重新顯示。
+  let runtimeStyle=document.getElementById("category-visibility-runtime");
+  if(!runtimeStyle){
+    runtimeStyle=document.createElement("style");
+    runtimeStyle.id="category-visibility-runtime";
+    document.head.appendChild(runtimeStyle);
+  }
+  const selectors=hiddenCategories.map(name=>{
+    if(name==="戒指" || name==="作物")return `.tabs .category-dropdown:has(.group-tab[data-group="${name}"])`;
+    return `.tabs > .tab[data-category="${name}"]`;
+  });
+  runtimeStyle.textContent=selectors.length ? `${selectors.join(",\n")}{display:none!important}` : "";
+
   ensureActiveCategoryVisible();
 }
 
@@ -5980,6 +6003,7 @@ onSnapshot(
     ensureActiveCategoryVisible();
     $("#status").textContent="已連線";
     render();
+    applyCategoryVisibility();
     revealCategoryTabs();
     renderCart();
   },
@@ -8228,3 +8252,30 @@ body.screenshot-mode .post-submit-review{margin:12px auto 18px!important;padding
   }
 }
 </style>
+<style id="nene-auto-responsive-grid-20261005">
+/* 正式商品區：真正依可用寬度自動決定欄數，不強迫固定 7/9/10 欄。 */
+.tabs [data-category-hidden="true"],
+.tabs [hidden],
+.tabs .hidden{display:none!important;}
+
+@media (min-width:701px){
+  main.wrap{
+    width:calc(100% - clamp(24px,3vw,56px))!important;
+    max-width:none!important;
+  }
+  #grid.grid{
+    grid-template-columns:repeat(auto-fill,minmax(155px,190px))!important;
+    gap:12px!important;
+    justify-content:start!important;
+    align-items:stretch!important;
+  }
+}
+@media (max-width:700px){
+  main.wrap{width:calc(100% - 18px)!important;max-width:none!important;}
+  #grid.grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;}
+  .tabs [data-category-hidden="true"],
+  .tabs [hidden],
+  .tabs .hidden{display:none!important;}
+}
+</style>
+
