@@ -5152,12 +5152,14 @@ function completePublicReservation(products,order,allocations=[]){
 // 每次配貨／取消後重建公開「預訂」數量，避免舊版直接扣 stock 留下髒資料。
 async function reconcilePublicOrderReservations(){
   if(auth.currentUser?.uid!==ADMIN_UID)return;
-  const [fulSnap,indexSnap,linkSnap,publicSnap]=await Promise.all([
+  const [fulSnap,ordersSnap,indexSnap,linkSnap,publicSnap]=await Promise.all([
     getDocs(collection(db,"orderFulfillments")),
+    getDocs(collection(db,"orders")),
     getDoc(doc(db,"adminSettings","warehouseInventoryIndex")),
     getDocs(collection(db,"inventoryLinks")),
     getDoc(doc(db,"publicSettings","warehouseStock"))
   ]);
+  const activeReservedOrderIds=new Set(ordersSnap.docs.filter(d=>d.data()?.status==="預定中").map(d=>d.id));
   const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
   const indexByKey=new Map(indexRows.map(r=>[String(r?.key||""),r]));
   const next=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
@@ -5201,7 +5203,7 @@ async function reconcilePublicOrderReservations(){
   // 再從所有仍為預定中的配貨紀錄重建預訂數量；fallback 自動對應商品也能處理。
   for(const d of fulSnap.docs){
     const f=d.data()||{};
-    if(f.status!=="預定中")continue;
+    if(f.status!=="預定中"||!activeReservedOrderIds.has(d.id))continue;
     for(const a of (Array.isArray(f.allocations)?f.allocations:[])){
       const id=String(a?.itemId||""); if(!id)continue;
       const qty=Math.max(0,Math.floor(Number(a?.qty)||0)); if(!qty)continue;
@@ -5236,27 +5238,20 @@ async function reserveWarehouseOrder(orderId,btn){
     const plannedOrder=plan.order||order;
     if(!confirm(`確認訂單 ${plannedOrder.orderNumber||orderId}？\n\n預訂配貨：${summary}\n\n確認後賣場可購買數量會先扣除，但小倉倉實際庫存要到「完成交易」才會扣。`))throw new Error("已取消配貨，庫存未變動");
     await runTransaction(db,async tx=>{
-      const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),rref=doc(db,"adminSettings","warehouseReservations"),iref=doc(db,"adminSettings","warehouseInventoryIndex"),pref=doc(db,"publicSettings","warehouseStock");
-      const os=await tx.get(oref),fs=await tx.get(fref),rs=await tx.get(rref),is=await tx.get(iref),ps=await tx.get(pref);
+      const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),iref=doc(db,"adminSettings","warehouseInventoryIndex");
+      const os=await tx.get(oref),fs=await tx.get(fref),is=await tx.get(iref);
       if(!os.exists()||os.data().status!=="待交易")throw new Error("訂單已處理，未重複預定");
       if(fs.exists()&&fs.data()?.status!=="已取消")throw new Error("這張訂單已有配貨紀錄");
       const indexRows=Array.isArray(is.data()?.rows)?is.data().rows:[];
       const ownersByKey=new Map(indexRows.map(r=>[String(r?.key||""),Array.isArray(r?.owners)?r.owners:[]]));
       // 以剛剛從「仍存在且預訂中」訂單重建的有效預訂為基準，忽略舊測試／已刪訂單殘留的 reservation。
-      const entries={...(plan.liveReservationEntries||{})};
       for(const a of plan.allocations){
         const actual=(ownersByKey.get(a.key)||[]).filter(x=>String(x.accountId||"")===String(a.accountId)).reduce((n,x)=>n+Math.max(0,Math.floor(Number(x.qty)||0)),0);
-        const slot=reservationSlot(a.accountId,a.key),already=Math.max(0,Math.floor(Number(entries[slot])||0));
+        const already=Math.max(0,Math.floor(Number((plan.liveReservationEntries||{})[reservationSlot(a.accountId,a.key)])||0));
         if(actual-already<a.qty)throw new Error(`帳號 ${a.label||a.accountId} 的可預訂庫存已不足，請重新配貨`);
-        entries[slot]=already+a.qty;
       }
-      const liveOrder={id:orderId,...os.data()};
-      const publicProducts=ps.exists()?(ps.data()?.products||{}):{};
-      // 配貨後保留總庫存，另外增加「預定」數量；可購買數量由總庫存－預定自動計算。
-      const nextProducts=adjustPublicReservation(publicProducts,liveOrder,+1,plan.allocations,indexRows);
-      tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
+      // 配貨只寫訂單與配貨紀錄；公開可售／預訂數量統一由 reconcilePublicOrderReservations() 重建。
       tx.set(fref,{orderId,status:"預定中",allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-manual-reservation"},{merge:false});
-      tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
       tx.update(oref,{status:"預定中",reservedAt:serverTimestamp(),warehouseReserved:true});
     });
     // 以所有「預定中」配貨紀錄重建一次，確保畫面預訂數與實際配貨一致。
@@ -5276,8 +5271,8 @@ async function completeWarehouseReservedOrder(orderId,btn){
   btn.disabled=true;btn.textContent="扣庫存中…";
   try{
     await runTransaction(db,async tx=>{
-      const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),rref=doc(db,"adminSettings","warehouseReservations"),iref=doc(db,"adminSettings","warehouseInventoryIndex"),pref=doc(db,"publicSettings","warehouseStock");
-      const os=await tx.get(oref),fs=await tx.get(fref),rs=await tx.get(rref),is=await tx.get(iref),ps=await tx.get(pref);
+      const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),iref=doc(db,"adminSettings","warehouseInventoryIndex");
+      const os=await tx.get(oref),fs=await tx.get(fref),is=await tx.get(iref);
       if(!os.exists()||os.data().status!=="預定中")throw new Error("訂單已處理，未重複扣庫存");
       if(!fs.exists()||fs.data()?.status!=="預定中")throw new Error("找不到這張訂單的預定配貨資料");
       const allocations=Array.isArray(fs.data()?.allocations)?fs.data().allocations:[];
@@ -5303,15 +5298,10 @@ async function completeWarehouseReservedOrder(orderId,btn){
         if(remain)throw new Error(`帳號 ${a.label||a.accountId} 的實際庫存不足，未扣除任何數量`);
       }
       for(const [id,rows] of itemRows){for(const row of rows)tx.update(row.ref,{qty:Math.max(0,Math.floor(Number(row.item.qty)||0))});tx.update(accountDocs.get(id).ref,{itemsUpdatedAt:Date.now()});}
-      const entries={...(rs.exists()?(rs.data()?.entries||{}):{})};
-      for(const a of allocations){const slot=reservationSlot(a.accountId,a.key);entries[slot]=Math.max(0,Math.floor(Number(entries[slot])||0)-Math.max(0,Math.floor(Number(a.qty)||0)));}
       // 同步把管理員配貨索引扣掉，避免完成後在尚未重開小倉倉前又看到舊數量。
       const rows=Array.isArray(is.data()?.rows)?JSON.parse(JSON.stringify(is.data().rows)):[];
       for(const a of allocations){const row=rows.find(r=>String(r?.key||"")===String(a.key));if(!row)continue;let remain=Math.max(0,Math.floor(Number(a.qty)||0));for(const owner of (row.owners||[])){if(String(owner.accountId||"")!==String(a.accountId))continue;const have=Math.max(0,Math.floor(Number(owner.qty)||0)),take=Math.min(have,remain);owner.qty=have-take;remain-=take;if(!remain)break;}row.owners=(row.owners||[]).filter(x=>Math.max(0,Math.floor(Number(x.qty)||0))>0);}
-      const nextProducts=completePublicReservation(ps.exists()?(ps.data()?.products||{}):{}, {id:orderId,...os.data()}, allocations);
-      tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
       tx.set(iref,{rows,updatedAt:new Date().toISOString()},{merge:false});
-      tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
       tx.set(fref,{status:"已完成",completedAt:serverTimestamp()},{merge:true});
       tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
       tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:true});
@@ -5323,25 +5313,16 @@ async function completeWarehouseReservedOrder(orderId,btn){
 }
 async function cancelWarehouseReservation(orderId){
   await runTransaction(db,async tx=>{
-    const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),rref=doc(db,"adminSettings","warehouseReservations"),pref=doc(db,"publicSettings","warehouseStock");
-    const os=await tx.get(oref),fs=await tx.get(fref),rs=await tx.get(rref),ps=await tx.get(pref);
+    const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId);
+    const os=await tx.get(oref),fs=await tx.get(fref);
     if(!os.exists()||os.data().status!=="預定中")throw new Error("訂單狀態已變更");
     if(!fs.exists()||fs.data()?.status!=="預定中")throw new Error("找不到預定配貨資料");
-    const allocations=Array.isArray(fs.data()?.allocations)?fs.data().allocations:[];
-    const entries={...(rs.exists()?(rs.data()?.entries||{}):{})};
-    for(const a of allocations){const slot=reservationSlot(a.accountId,a.key);entries[slot]=Math.max(0,Math.floor(Number(entries[slot])||0)-Math.max(0,Math.floor(Number(a.qty)||0)));}
-
-    // 取消訂單只解除這張訂單的預訂數量。stock 是小倉倉實際總庫存，配貨時沒有扣它，
-    // 因此取消時也不能依賴重新開啟小倉倉來重建索引，更不能加減 stock。
-    const publicProducts=ps.exists()?(ps.data()?.products||{}):{};
-    const nextProducts=adjustPublicReservation(publicProducts,{id:orderId,...os.data()},-1,allocations);
-
-    tx.set(rref,{entries:cleanReservationEntries(entries),updatedAt:serverTimestamp()},{merge:false});
-    tx.set(pref,{products:nextProducts,updatedAt:new Date().toISOString()},{merge:false});
+    // 取消只改訂單／配貨狀態，不直接加減任何庫存。
     tx.set(fref,{status:"已取消",cancelledAt:serverTimestamp()},{merge:true});
     tx.update(oref,{status:"已取消",cancelledAt:serverTimestamp(),warehouseReserved:false});
   });
-  // 直接採用剛寫回 publicSettings/warehouseStock 的結果；onSnapshot 也會同步刷新畫面。
+  // 唯一同步入口：依小倉倉實際庫存 + 目前仍存在的預訂中訂單重建公開數字。
+  await reconcilePublicOrderReservations();
 }
 
 async function publishCompletedOrderStock(order){
