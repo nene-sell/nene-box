@@ -2625,10 +2625,20 @@ async function publishPublicWarehouseStockFromCandidates(){
   for(const d of linkSnap.docs){
     const link=d.data()||{};
     const variants={};
-    for(const v of (link.variantLinks||[])) if(v.variant&&v.itemKey) variants[v.variant]=totals[v.itemKey]||0;
     const previous=publicWarehouseStock[d.id]||{};
+    for(const v of (link.variantLinks||[])){
+      if(!v.variant||!v.itemKey)continue;
+      // 索引暫時缺少該 key 時保留上一筆公開庫存；只有索引明確存在 key=0 才真的發布 0。
+      variants[v.variant]=Object.prototype.hasOwnProperty.call(totals,v.itemKey)
+        ? totals[v.itemKey]
+        : Math.max(0,Math.floor(Number(previous?.variants?.[v.variant])||0));
+    }
     const entry={variants,reservedVariants:{...(previous.reservedVariants||{})}};
-    if(link.itemKey) entry.stock=totals[link.itemKey]||0;
+    if(link.itemKey){
+      entry.stock=Object.prototype.hasOwnProperty.call(totals,link.itemKey)
+        ? totals[link.itemKey]
+        : Math.max(0,Math.floor(Number(previous.stock)||0));
+    }
     entry.reserved=Math.max(0,Math.floor(Number(previous.reserved)||0));
     output[d.id]=entry;
   }
@@ -4193,15 +4203,24 @@ function showWarehouseChoice(){
   }
   if(chosen&&!matches.some(x=>x.key===chosen)){
     const found=warehouseCandidates.find(x=>x.key===chosen);
-    if(found)sel.add(new Option([found.item.name,found.item.variant,"已選取"].filter(Boolean).join("｜"),chosen));
+    if(found){
+      sel.add(new Option([found.item.name,found.item.variant,"已選取"].filter(Boolean).join("｜"),chosen));
+    }else{
+      // 已儲存的連結不能因為小倉倉索引一時尚未載到該項目就被洗成「不連結」。
+      const [,name,variant]=warehouseParseKey(chosen);
+      sel.add(new Option([name,variant,"已連結（等待小倉倉資料）"].filter(Boolean).join("｜"),chosen));
+    }
   }
   sel.value=chosen&&[...sel.options].some(o=>o.value===chosen)?chosen:"";
-  sel.dataset.chosen=sel.value;
+  // 保留原本已儲存的 key；只有管理員真的在下拉選單改成「不連結」時才清空。
+  sel.dataset.chosen=chosen||sel.value;
   showWarehouseInfo();
 }
-function showWarehouseInfo(){
-  const key=$("#warehouseItemChoice").value;
-  $("#warehouseItemChoice").dataset.chosen=key;
+function showWarehouseInfo(ev=null){
+  const sel=$("#warehouseItemChoice");
+  const key=sel.value;
+  // change 事件代表管理員真的改了選項；一般重繪則不要把既有連結洗掉。
+  if(ev?.type==="change") sel.dataset.chosen=key;
   const x=warehouseCandidates.find(x=>x.key===key);
   if($("#productStock") && usesWarehouseStock({category:$("#productCategory").value}))$("#productStock").value=x?Math.max(0,Math.floor(Number(x.qty)||0)):0;
   $("#warehouseItemInfo").textContent=x
@@ -4241,7 +4260,8 @@ async function loadWarehouseLinkForProduct(id){
   }
 }
 async function saveWarehouseLink(id,variantLinks=[]){
-  const key=variantLinks.length?"":$("#warehouseItemChoice").value;
+  const linkSelect=$("#warehouseItemChoice");
+  const key=variantLinks.length?"":(linkSelect.value||linkSelect.dataset.chosen||"");
   const ref=doc(db,"inventoryLinks",id);
   const links=variantLinks.filter(v=>v.variant&&v.itemKey).map(v=>({variant:v.variant,itemKey:v.itemKey}));
   if(key){
