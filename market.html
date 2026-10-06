@@ -5436,7 +5436,12 @@ async function completeWarehouseReservedOrder(orderId,btn){
       }
 
       // 全部驗證成功後才一次寫入所有實際庫存。
-      for(const u of updates.values())tx.update(u.ref,{qty:u.qty});
+      // 小倉倉本身不保留 0 庫存卡片：扣到 0 時直接刪除該 item 文件，
+      // 避免完成訂單後帳號裡仍殘留一張看起來像「還有 1 個」的舊卡片。
+      for(const u of updates.values()){
+        if(u.qty<=0)tx.delete(u.ref);
+        else tx.update(u.ref,{qty:u.qty});
+      }
       for(const id of accountIds)tx.update(accountDocs.get(id).ref,{itemsUpdatedAt:Date.now()});
 
       // 同一份合併後 allocations 同步扣管理員索引，數量與實際庫存完全一致。
