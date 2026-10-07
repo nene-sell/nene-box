@@ -2483,6 +2483,9 @@ $("#confirmRecognized").onclick=async()=>{
   try{
     const fallbackCat=$("#shotCategory").value||"家具";
     let firstSaved=null;
+    // 記住加入前的本機辨識記憶；這次只同步真正新增／變更的記憶，
+    // 不再每張截圖都把 Firestore 整個 itemMemory collection 讀回來。
+    const memoryBefore=(d.itemMemory||[]).map(m=>structuredClone(m));
     for(const x of recognizedRows){
       const cat=RECOGNITION_CATEGORIES.includes(x.category)?x.category:fallbackCat;
       const gen=(cat==="戒指"||cat==="作物")?(x.restriction||$("#shotGender").value||"限男"):"";
@@ -2501,18 +2504,25 @@ $("#confirmRecognized").onclick=async()=>{
     await persistAccount(a);
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
 
-    // 只補上雲端缺少的辨識記憶，不刪掉整包重建。
-    const remoteMemSnap=await getDocs(memoryCol());
-    const remoteKeys=new Set(remoteMemSnap.docs.map(ds=>{
-      const m=ds.data()||{};
-      return JSON.stringify([m.sig||[],m.shapeSig||[],m.colorSig||[],m.name||"",m.variant||""]);
-    }));
-    const missing=(d.itemMemory||[]).filter(m=>!remoteKeys.has(JSON.stringify([m.sig||[],m.shapeSig||[],m.colorSig||[],m.name||"",m.variant||""])));
-    for(let i=0;i<missing.length;i+=350){
+    // 只同步「這次加入」造成的辨識記憶差異。
+    // d.itemMemory 已在登入／快取載入完成，因此不需要再次 getDocs(memoryCol())。
+    const memoryAfter=d.itemMemory||[];
+    const changedMemory=[];
+    const maxMemory=Math.max(memoryBefore.length,memoryAfter.length);
+    for(let i=0;i<maxMemory;i++){
+      const before=memoryBefore[i],after=memoryAfter[i];
+      if(!after)continue;
+      if(!before||JSON.stringify(before)!==JSON.stringify(after))changedMemory.push({index:i,before,after});
+    }
+    for(let i=0;i<changedMemory.length;i+=350){
       const batch=writeBatch(db);
-      missing.slice(i,i+350).forEach((m,j)=>{
-        const idx=(d.itemMemory||[]).indexOf(m);
-        batch.set(memoryRef(stableMemoryId(m,idx<0?i+j:idx)),m);
+      changedMemory.slice(i,i+350).forEach(({index,before,after})=>{
+        const newId=stableMemoryId(after,index);
+        batch.set(memoryRef(newId),after);
+        if(before){
+          const oldId=stableMemoryId(before,index);
+          if(oldId!==newId)batch.delete(memoryRef(oldId));
+        }
       });
       await batch.commit();
     }
