@@ -694,6 +694,7 @@ function queueStockPublish(){
         for(const i of (a.items||[])){
           if(!i?.name)continue;
           const key=stockKey(i),qty=Math.max(0,Math.floor(Number(i.qty)||0));
+          if(qty<=0)continue;
           if(!ownersByKey.has(key))ownersByKey.set(key,[]);
           const accountNumber=String(a.number||a.name||"").trim();
           ownersByKey.get(key).push({accountId,label:accountNumber?`編號 ${accountNumber}`:"未設定編號",qty});
@@ -720,8 +721,13 @@ function queueStockPublish(){
           return Object.keys(a).length===Object.keys(b).length
             && Object.entries(a).every(([variant,qty])=>Math.max(0,Math.floor(Number(b[variant])||0))===qty);
         });
-      // 庫存沒變也可能是配貨帳號更新；索引 hash 仍須檢查。
-      if(hash===lastPublished&&stockMatches)return;
+      // 同步成功後的本機 hash 不能證明雲端帳號索引仍正確；
+      // 若其他操作或舊版頁面留下過期 owners，必須重新發布。
+      if(hash===lastPublished&&stockMatches){
+        const indexSnap=await getDoc(doc(db,"adminSettings","warehouseInventoryIndex"));
+        const cloudRows=indexSnap.exists()?(indexSnap.data()?.rows||[]):null;
+        if(cloudRows&&JSON.stringify(cloudRows)===JSON.stringify(inventoryRows))return;
+      }
       await Promise.all([
         setDoc(publicStockRef(),{products:output,updatedAt:new Date().toISOString()}),
         setDoc(doc(db,"adminSettings","warehouseInventoryIndex"),{rows:inventoryRows,updatedAt:new Date().toISOString()})
