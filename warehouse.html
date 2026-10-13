@@ -702,9 +702,8 @@ function queueStockPublish(){
       const inventoryRows=[...ownersByKey].map(([key,owners])=>({key,owners}));
       // 庫存數量沒變、只有帳號編號變更時也必須重發索引；否則會一直留著舊的 UUID／未設定編號。
       const hash=JSON.stringify({products:output,rows:inventoryRows});
-      if(hash===lastPublished)return;
-      // 小倉倉只負責發布「實際總庫存」；訂單預訂由賣場管理。
-      // 發布前保留 warehouseStock 既有 reserved / reservedVariants，避免切進小倉倉時把預訂洗掉。
+      // 即使本機 hash 未變，也要核對雲端公開庫存，修復其他頁面留下的舊數量。
+      // 只讀公開彙總文件，不重掃所有帳號與 items。
       const currentPublicSnap=await getDoc(publicStockRef());
       const currentProducts=currentPublicSnap.exists()?(currentPublicSnap.data()?.products||{}):{};
       for(const [id,entry] of Object.entries(output)){
@@ -712,6 +711,17 @@ function queueStockPublish(){
         entry.reserved=Math.max(0,Math.floor(Number(previous.reserved)||0));
         entry.reservedVariants={...(previous.reservedVariants||{})};
       }
+      const stockMatches=Object.keys(currentProducts).length===Object.keys(output).length
+        && Object.entries(output).every(([id,entry])=>{
+          const existing=currentProducts[id];
+          if(!existing)return false;
+          if(linkedItems.get(id)?.itemKey && Math.max(0,Math.floor(Number(existing.stock)||0))!==entry.stock)return false;
+          const a=entry.variants||{},b=existing.variants||{};
+          return Object.keys(a).length===Object.keys(b).length
+            && Object.entries(a).every(([variant,qty])=>Math.max(0,Math.floor(Number(b[variant])||0))===qty);
+        });
+      // 庫存沒變也可能是配貨帳號更新；索引 hash 仍須檢查。
+      if(hash===lastPublished&&stockMatches)return;
       await Promise.all([
         setDoc(publicStockRef(),{products:output,updatedAt:new Date().toISOString()}),
         setDoc(doc(db,"adminSettings","warehouseInventoryIndex"),{rows:inventoryRows,updatedAt:new Date().toISOString()})
