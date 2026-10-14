@@ -860,6 +860,28 @@ async function loadCloud(){
   setTimeout(()=>backfillInventoryMemory(),300);
 }
 
+// 訂單在賣場完成時會直接修改 Firestore items；小倉倉不可一直顯示開頁時的舊快照。
+// 只監聽「目前選取帳號」的 items，不掃描全部帳號，也不將讀到的資料反向發布。
+let liveItemUnsubscribe=null,liveItemAccountId="",liveItemGeneration=0;
+function watchActiveAccountItems(){
+  const id=currentUser&&migrationReady&&active?String(active):"";
+  if(id===liveItemAccountId)return;
+  if(liveItemUnsubscribe){liveItemUnsubscribe();liveItemUnsubscribe=null;}
+  liveItemAccountId=id;
+  const generation=++liveItemGeneration;
+  if(!id)return;
+  liveItemUnsubscribe=onSnapshot(itemCol(id),snap=>{
+    if(generation!==liveItemGeneration||!currentUser||String(active)!==id)return;
+    // 本機寫入中不覆蓋正在編輯的表單；寫入後由下次快照／切換頁面刷新。
+    if(saving||accountWriteChains.has(id))return;
+    const account=d.accounts.find(a=>String(a.id)===id);
+    if(!account)return;
+    account.items=snap.docs.map(x=>({...x.data(),_itemId:String(x.id)}));
+    // 這是讀取雲端最新庫存，絕不能觸發 publish，否則可能把訂單扣除洗回去。
+    refreshStockFromLocal(false);
+    render();
+  },err=>console.error("即時更新小倉倉道具失敗",err));
+}
 async function cleanupRemovedMaterials(){
   // 「材料」分類已從網站移除：把舊帳號文件內殘留的材料物品真正刪掉，避免總覽重新讀回。
   const changed=[];
@@ -919,6 +941,7 @@ async function syncTempShotCount(accountId,count){
   try{await setDoc(accountRef(String(accountId)),{tempShotCount:n},{merge:true})}catch(err){console.error("tempShotCount sync failed",err)}
 }
 function render(){
+  queueMicrotask(watchActiveAccountItems);
   migrateCategories();
   sortAccountsNaturally();
   let a=cur();
@@ -2905,7 +2928,7 @@ $("#saveOverviewJpg").onclick=async()=>{
 onAuthStateChanged(auth,async user=>{
   currentUser=user&&user.uid===ADMIN_UID?user:null;
   if(!currentUser){
-    $("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();return;
+    $("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();watchActiveAccountItems();return;
   }
   $("#userLabel").textContent=currentUser.email||"已登入";
   $("#authGate").classList.add("hidden");$("#app").style.visibility="visible";
