@@ -2628,7 +2628,7 @@ async function publishPublicWarehouseStockFromCandidates(){
     const previous=publicWarehouseStock[d.id]||{};
     for(const v of (link.variantLinks||[])){
       if(!v.variant||!v.itemKey)continue;
-      // 完整索引中沒有此 key，表示已刪除或歸零；不得沿用舊公開庫存。
+      // A missing item key means no owner has that item: stock must be zero.
       variants[v.variant]=totals[v.itemKey]||0;
     }
     const entry={variants,reservedVariants:{...(previous.reservedVariants||{})}};
@@ -4269,8 +4269,8 @@ async function saveWarehouseLink(id,variantLinks=[]){
     const existing=await getDoc(ref);
     if(existing.exists())await deleteDoc(ref);
   }
-  // 重新取得最新的倉庫索引，避免使用編輯視窗開啟時的過期候選資料。
-  await loadWarehouseCandidates(true);
+  // Reuse the inventory data already loaded for the admin picker; no automatic
+  // all-account rescan is started here.
   await publishPublicWarehouseStockFromCandidates();
 }
 
