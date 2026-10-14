@@ -2458,6 +2458,9 @@ $("#confirmRecognized").onclick=async()=>{
   try{
     const fallbackCat=$("#shotCategory").value||"家具";
     let firstSaved=null;
+    const touched=new Map();
+    const previousMemoryCount=(d.itemMemory||[]).length;
+    const previousMemoryById=new Map((d.itemMemory||[]).map((m,i)=>[stableMemoryId(m,i),JSON.stringify(m)]));
     for(const x of recognizedRows){
       const cat=RECOGNITION_CATEGORIES.includes(x.category)?x.category:fallbackCat;
       const gen=(cat==="戒指"||cat==="作物")?(x.restriction||$("#shotGender").value||"限男"):"";
@@ -2465,32 +2468,41 @@ $("#confirmRecognized").onclick=async()=>{
       if(!firstSaved)firstSaved=item;
       await rememberItemName(item.image,item.name,item.variant);
       const same=a.items.find(y=>y.name===item.name&&(y.variant||"")===item.variant&&(y.category||"")===cat&&(y.gender||"")===gen);
-      if(same){same.qty+=item.qty;if(item.image)same.image=item.image}
-      else a.items.push(item);
+      if(same){same.qty=(Number(same.qty)||0)+item.qty;if(item.image)same.image=item.image; touched.set(ensureItemId(same),same)}
+      else {ensureItemId(item);a.items.push(item);touched.set(item._itemId,item)}
     }
     activeCategory=firstSaved?.category||fallbackCat; activeGender=firstSaved?.gender||""; activeCandy="";
     const tempSource=recognizingTempShot;
 
-    // 這裡只寫目前帳號，不再因為一張截圖重寫全部 600 個帳號。
-    d.updated=new Date().toISOString();
-    await persistAccount(a);
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    // OCR 匯入只批次寫入本次新增／改變的道具，絕不掃描或重寫帳號其餘道具。
+    // 同帳號寫入沿用序列佇列，避免和手動編輯同時覆蓋。
+    const accountId=String(a.id);
+    const snapshot=[...touched.values()].map(item=>({...item}));
+    const prior=accountWriteChains.get(accountId)||Promise.resolve();
+    const task=prior.catch(()=>{}).then(async()=>{
+      await clearWarehouseCache();
+      for(let i=0;i<snapshot.length;i+=350){
+        const batch=writeBatch(db);
+        snapshot.slice(i,i+350).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
+        await batch.commit();
+      }
+      await setDoc(accountRef(accountId),accountMetaData(a),{merge:false});
+      d.updated=new Date().toISOString();
+      await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    });
+    accountWriteChains.set(accountId,task);
+    try{await task}finally{if(accountWriteChains.get(accountId)===task)accountWriteChains.delete(accountId)}
 
-    // 只補上雲端缺少的辨識記憶，不刪掉整包重建。
-    const remoteMemSnap=await getDocs(memoryCol());
-    const remoteKeys=new Set(remoteMemSnap.docs.map(ds=>{
-      const m=ds.data()||{};
-      return JSON.stringify([m.sig||[],m.shapeSig||[],m.colorSig||[],m.name||"",m.variant||""]);
-    }));
-    const missing=(d.itemMemory||[]).filter(m=>!remoteKeys.has(JSON.stringify([m.sig||[],m.shapeSig||[],m.colorSig||[],m.name||"",m.variant||""])));
-    for(let i=0;i<missing.length;i+=350){
+    // 只儲存本次新增或更新的辨識記憶，避免每次讀取整個 itemMemory 集合。
+    const changedMem=(d.itemMemory||[]).map((m,i)=>({m,id:stableMemoryId(m,i)}))
+      .filter(({m,id})=>previousMemoryById.get(id)!==JSON.stringify(m));
+    for(let i=0;i<changedMem.length;i+=350){
       const batch=writeBatch(db);
-      missing.slice(i,i+350).forEach((m,j)=>{
-        const idx=(d.itemMemory||[]).indexOf(m);
-        batch.set(memoryRef(stableMemoryId(m,idx<0?i+j:idx)),m);
-      });
+      changedMem.slice(i,i+350).forEach(({m,id})=>batch.set(memoryRef(id),m));
       await batch.commit();
     }
+    refreshStockFromLocal();
+    $("#su").textContent=d.updated;
 
     render();
     shotDlg.close();
