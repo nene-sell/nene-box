@@ -770,16 +770,22 @@ async function persistAccount(a){
 }
 async function persistAccountNow(a){
   if(!a?.id)return;
+  await clearWarehouseCache();
   const accountId=String(a.id), items=Array.isArray(a.items)?a.items:[];
   items.forEach(ensureItemId);
   const old=await getDocs(itemCol(accountId));
   const localIds=new Set(items.map(ensureItemId));
 
-  // 安全順序：先把全部道具文件寫好，再更新帳號主文件，最後才清除已不存在的舊道具文件。
-  // 中途若失敗，帳號主文件的舊 items[] 仍會保留，不會因半套搬遷而失去救援來源。
-  for(let i=0;i<items.length;i+=300){
+  // 只寫入新增或真正改變的道具；其餘不重寫，降低 Firestore 寫入量。
+  // 仍讀取此帳號的既有文件以確認刪除，避免影響其他帳號。
+  const remoteItems=new Map(old.docs.map(x=>[x.id,x.data()]));
+  const changed=items.filter(item=>{
+    const id=ensureItemId(item),remote=remoteItems.get(id);
+    return !remote||JSON.stringify({...remote,_itemId:id})!==JSON.stringify({...item,_itemId:id});
+  });
+  for(let i=0;i<changed.length;i+=300){
     const batch=writeBatch(db);
-    items.slice(i,i+300).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
+    changed.slice(i,i+300).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
     await batch.commit();
   }
   await setDoc(accountRef(accountId),accountMetaData(a),{merge:false});
@@ -794,6 +800,7 @@ async function persistAccountNow(a){
 }
 async function persistAccounts(accounts){ for(const a of accounts)await persistAccount(a); }
 async function deleteAccountDeep(accountId){
+  await clearWarehouseCache();
   const items=await getDocs(itemCol(accountId));
   for(let i=0;i<items.docs.length;i+=350){const batch=writeBatch(db);items.docs.slice(i,i+350).forEach(x=>batch.delete(x.ref));await batch.commit();}
   await deleteDoc(accountRef(String(accountId)));
@@ -829,6 +836,9 @@ function openWarehouseCache(){
 async function getWarehouseCache(){
   try{const db=await openWarehouseCache();return await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readonly"),r=tx.objectStore(WAREHOUSE_CACHE_STORE).get(WAREHOUSE_CACHE_KEY);r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error)});}catch(e){console.warn("讀取小倉倉本機快取失敗",e);return null}
 }
+async function clearWarehouseCache(){
+  try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).delete(WAREHOUSE_CACHE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}catch(err){console.warn("清除快取失敗",err)}
+}
 async function setWarehouseCache(state,metaUpdated){
   try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({metaUpdated:String(metaUpdated||""),state,savedAt:Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
 }
@@ -848,8 +858,17 @@ async function readHybridCloud(metaSnap=null){
   return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
 }
 async function loadCloud(){
-  // Cloud item documents are authoritative. Never restore deleted items from an IndexedDB snapshot.
-  d=await readHybridCloud();
+  // 只用雲端 meta 的版本號驗證快取。訂單扣庫存也會更新此版本號。
+  // 不符合時完整讀取 Firestore；快取絕不反向寫回雲端。
+  const metaSnap=await getDoc(metaRef());
+  const remoteVersion=String(metaSnap.exists()?(metaSnap.data()?.updated||""):"");
+  const cached=await getWarehouseCache();
+  if(cached?.state&&remoteVersion&&cached.metaUpdated===remoteVersion){
+    d=cached.state;
+  }else{
+    d=await readHybridCloud(metaSnap);
+    await setWarehouseCache(d,remoteVersion);
+  }
   migrationReady=true;
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
@@ -876,7 +895,12 @@ function watchActiveAccountItems(){
     if(saving||accountWriteChains.has(id))return;
     const account=d.accounts.find(a=>String(a.id)===id);
     if(!account)return;
-    account.items=snap.docs.map(x=>({...x.data(),_itemId:String(x.id)}));
+    const freshItems=snap.docs.map(x=>({...x.data(),_itemId:String(x.id)}));
+    const before=JSON.stringify((account.items||[]).map(x=>[x._itemId,x.qty,x.name,x.variant] ).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
+    const after=JSON.stringify(freshItems.map(x=>[x._itemId,x.qty,x.name,x.variant]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
+    if(before===after)return;
+    account.items=freshItems;
+    void clearWarehouseCache();
     // 這是讀取雲端最新庫存，絕不能觸發 publish，否則可能把訂單扣除洗回去。
     refreshStockFromLocal(false);
     render();
@@ -892,12 +916,13 @@ async function cleanupRemovedMaterials(){
   }
   if(!changed.length)return;
   await persistAccounts(changed);
-  d.updated=new Date().toLocaleString("zh-TW");
+  d.updated=new Date().toISOString();
   await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,materialsRemoved:true,materialsRemovedAt:new Date().toISOString(),updated:d.updated},{merge:true});
 }
 async function save(){
   if(!currentUser||!migrationReady)return;
-  d.updated=new Date().toLocaleString("zh-TW"); saving=true;
+  await clearWarehouseCache();
+  d.updated=new Date().toISOString(); saving=true;
   try{
     const remote=await getDocs(accountCol());
     const localIds=new Set((d.accounts||[]).map(a=>String(a.id)));
@@ -1016,7 +1041,7 @@ function render(){
     render();
     try{
       await persistAccount(a);
-      d.updated=new Date().toLocaleString("zh-TW");
+      d.updated=new Date().toISOString();
       await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
       $("#su").textContent=d.updated;
     }catch(err){
@@ -1084,7 +1109,7 @@ $("#transferItemConfirm").onclick=async()=>{
   render();
   try{
     await persistAccounts([source,target]);
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
     transferItemDlg.close();
@@ -1117,7 +1142,7 @@ $("#editItemSave").onclick=async()=>{
 
   try{
     // 修改單一道具只儲存目前帳號，不再為一個修改重寫全部帳號。
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await persistAccount(a);
     await setDoc(metaRef(),{
       schemaVersion:MIGRATION_VERSION,
@@ -1374,7 +1399,7 @@ $("#swapAccountConfirm").onclick=async()=>{
     await persistAccounts([a,b]);
     tempShotsCache.set(String(a.id),bShots.map(x=>({id:x.id,...x.data})));
     tempShotsCache.set(String(b.id),aShots.map(x=>({id:x.id,...x.data})));
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     render();
     if(active===String(a.id)||active===String(b.id))renderTempShots(active);
     try{await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});}
@@ -1431,7 +1456,7 @@ $("#is").onclick=async()=>{
   // 只儲存目前帳號，避免每新增一件物品都重寫數百個帳號與整份圖片記憶。
   try{
     await persistAccount(a);
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated||"尚未";
   }catch(err){
@@ -1445,7 +1470,7 @@ $("#saveLoginRecord").onclick=async()=>{
   if(!v)return alert("請輸入登入日期或文字");
   a.lastLogin=v; $("#loginRecordInput").value="";
   await persistAccount(a);
-  d.updated=new Date().toLocaleString("zh-TW");
+  d.updated=new Date().toISOString();
   await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
   render();
 };
@@ -1499,7 +1524,7 @@ $("#batchLoginSave").onclick=async()=>{
       chosen.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),accountMetaData(a)));
       await batch.commit();
     }
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     batchLoginDlg.close();
     render();
@@ -1533,7 +1558,7 @@ function renderRodResources(){
     ensureRodResources(a).splice(Number(btn.dataset.i),1);
     renderRodResources();
     await persistAccount(a);
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
   });
@@ -1550,7 +1575,7 @@ $("#addRodResource").onclick=async()=>{
   $("#rodNameInput").value=""; $("#rodQtyInput").value="";
   renderRodResources();
   await persistAccount(a);
-  d.updated=new Date().toLocaleString("zh-TW");
+  d.updated=new Date().toISOString();
   await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
   $("#su").textContent=d.updated;
 };
@@ -1573,7 +1598,7 @@ async function persistResourceAccount(accountId){
   const seq=++resourceSaveSeq;
   try{
     await persistAccount(a);
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     if(seq===resourceSaveSeq)$("#su").textContent=d.updated;
   }catch(err){
@@ -1707,7 +1732,7 @@ $("#eas").onclick=async()=>{
   // 修改帳號只儲存目前這一個帳號，避免 save() 重寫全部帳號造成延遲。
   try{
     await persistAccount(a);
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
   }catch(err){
@@ -2293,6 +2318,7 @@ async function backfillInventoryMemory(){
   inventoryMemoryBackfillRunning=true;
   try{
     const metaSnap=await getDoc(metaRef()),meta=metaSnap.exists()?metaSnap.data():{};
+    if(Number(meta.inventoryMemoryBackfillVersion||0)>=INVENTORY_MEMORY_BACKFILL_VERSION)return;
     // v4：搬家後即使舊 meta 說補建完成，也實際檢查現有庫存圖片，
     // 把缺少的「圖片 → 名稱／款式」記憶重新補回新 Firebase。
     const candidates=[];
@@ -2446,7 +2472,7 @@ $("#confirmRecognized").onclick=async()=>{
     const tempSource=recognizingTempShot;
 
     // 這裡只寫目前帳號，不再因為一張截圖重寫全部 600 個帳號。
-    d.updated=new Date().toLocaleString("zh-TW");
+    d.updated=new Date().toISOString();
     await persistAccount(a);
     await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
 
