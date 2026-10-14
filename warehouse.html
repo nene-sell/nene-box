@@ -717,6 +717,14 @@ function queueStockPublish(){
         entry.reserved=Math.max(0,Math.floor(Number(previous.reserved)||0));
         entry.reservedVariants={...(previous.reservedVariants||{})};
       }
+      // Orders update inventory/meta independently. Never publish an old local snapshot over that update.
+      const freshMeta=await getDoc(metaRef());
+      const remoteRevision=String(freshMeta.exists()?(freshMeta.data()?.updated||""):"");
+      if(remoteRevision!==String(d?.updated||"")){
+        console.warn("雲端庫存已有其他更新，略過舊畫面的庫存發布；請重新整理小倉倉");
+        return;
+      }
+      if(revision!==stockPublishRevision)return;
       // Publish index first, then stock. A newer edit queues another serialized publish.
       await setDoc(doc(db,"adminSettings","warehouseInventoryIndex"),{rows:inventoryRows,updatedAt:new Date().toISOString()});
       await setDoc(publicStockRef(),{products:output,updatedAt:new Date().toISOString()});
@@ -732,15 +740,15 @@ onAuthStateChanged(auth,user=>{
   linkedItemsReady=false;stockAccountsReady=false;
   if(user?.uid!==ADMIN_UID)return;
   stopPublicSync.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
-    linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));linkedItemsReady=true;queueStockPublish();
+    linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));linkedItemsReady=true;
   },err=>console.error("讀取商品連結失敗",err)));
   // 帳號庫存直接使用小倉倉已載入的本機狀態，不再每次帳號異動就重新掃描所有 items 子集合。
   // 這可避免大量重複讀取把 Firestore 每日免費額度迅速耗盡。
 });
-function refreshStockFromLocal(){
+function refreshStockFromLocal(publish=true){
   stockAccounts=Array.isArray(d?.accounts)?d.accounts:[];
   stockAccountsReady=true;
-  queueStockPublish();
+  if(publish)queueStockPublish();
 }
 const itemCol=accountId=>collection(db,"users",ADMIN_UID,"accounts",String(accountId),"items");
 const itemRef=(accountId,itemId)=>doc(db,"users",ADMIN_UID,"accounts",String(accountId),"items",String(itemId));
@@ -846,7 +854,8 @@ async function loadCloud(){
   if(!Array.isArray(d.accounts))d.accounts=[];
   if(!Array.isArray(d.itemMemory))d.itemMemory=[];
   active=d.accounts[0]?.id||null;
-  refreshStockFromLocal();
+  // Loading a warehouse page must never overwrite stock updated by a completed order.
+  refreshStockFromLocal(false);
   render();
   setTimeout(()=>backfillInventoryMemory(),300);
 }
