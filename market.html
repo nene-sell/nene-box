@@ -5279,13 +5279,13 @@ async function reconcilePublicOrderReservations(orderDocsOverride=null){
     const link=d.data()||{}, entry=next[d.id]||(next[d.id]={reserved:0,reservedVariants:{}});
     if(link.itemKey){
       const row=indexByKey.get(String(link.itemKey));
-      if(row)entry.stock=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+      entry.stock=row?(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0):0;
     }
     entry.variants={...(entry.variants||{})};
     for(const v of (link.variantLinks||[])){
       if(!v?.variant||!v?.itemKey)continue;
       const row=indexByKey.get(String(v.itemKey));
-      if(row)entry.variants[String(v.variant)]=(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0);
+      entry.variants[String(v.variant)]=row?(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0):0;
     }
   }
 
@@ -5378,6 +5378,8 @@ async function completeWarehouseReservedOrder(orderId,btn){
     await runTransaction(db,async tx=>{
       const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),iref=doc(db,"adminSettings","warehouseInventoryIndex");
       const os=await tx.get(oref),fs=await tx.get(fref),is=await tx.get(iref);
+      const publicRef=doc(db,"publicSettings","warehouseStock");
+      const publicSnap=await tx.get(publicRef);
       if(!os.exists()||os.data().status!=="預定中")throw new Error("訂單已處理，未重複扣庫存");
       if(!fs.exists()||fs.data()?.status!=="預定中")throw new Error("找不到這張訂單的預定配貨資料");
 
@@ -5453,6 +5455,25 @@ async function completeWarehouseReservedOrder(orderId,btn){
         if(remain)throw new Error(`帳號 ${a.label||a.accountId} 的配貨索引數量不足，未完成交易`);
         row.owners=(row.owners||[]).filter(x=>Math.max(0,Math.floor(Number(x.qty)||0))>0);
       }
+      // Update public stock atomically with the actual item deductions and inventory index.
+      // This prevents an order from being marked complete while public stock still shows the old quantity.
+      const publicProducts=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
+      const totalsByKey=new Map(rows.map(r=>[String(r?.key||""),(r.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0)]));
+      const linkIds=[...new Set(allocations.map(a=>String(a.itemId||"")).filter(Boolean))];
+      // Use the fulfilled allocations to decrement the existing public entry, while the
+      // post-transaction reconciliation will rebuild every linked product from the index.
+      for(const a of allocations){
+        const itemId=String(a.itemId||"");if(!itemId)continue;
+        const entry=publicProducts[itemId]||(publicProducts[itemId]={});
+        const variant=String(a.variant||"");
+        const total=totalsByKey.get(a.key);
+        if(variant){entry.variants={...(entry.variants||{})};entry.variants[variant]=total==null?Math.max(0,Number(entry.variants[variant]||0)-a.qty):total;}
+        else entry.stock=total==null?Math.max(0,Number(entry.stock||0)-a.qty):total;
+        // Reserved quantities are rebuilt from live pending orders after the transaction.
+        if(variant){entry.reservedVariants={...(entry.reservedVariants||{})};entry.reservedVariants[variant]=Math.max(0,Number(entry.reservedVariants[variant]||0)-a.qty);}
+        else entry.reserved=Math.max(0,Number(entry.reserved||0)-a.qty);
+      }
+      tx.set(publicRef,{products:publicProducts,updatedAt:new Date().toISOString()},{merge:false});
       tx.set(iref,{rows,updatedAt:new Date().toISOString()},{merge:false});
       tx.set(fref,{status:"已完成",completedAt:serverTimestamp(),allocations},{merge:true});
       tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
