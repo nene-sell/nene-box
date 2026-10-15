@@ -828,11 +828,14 @@ function stableMemoryId(m,index=0){
 const WAREHOUSE_CACHE_DB="nene-warehouse-cache-v1",WAREHOUSE_CACHE_STORE="state",WAREHOUSE_CACHE_KEY="main";
 // 30 分鐘內重開頁面不因其他頁面更新 meta 而掃描所有帳號；當前帳號由即時監聽校正。
 const WAREHOUSE_CACHE_TTL=30*60*1000;
+// 雲端版本未變時不因時間到期而重新下載所有帳號。
 let warehouseCacheWriteTimer=null,warehouseFullSyncAt=0;
 function scheduleWarehouseCacheWrite(){
   clearTimeout(warehouseCacheWriteTimer);
   warehouseCacheWriteTimer=setTimeout(()=>{
-    if(currentUser&&migrationReady)void setWarehouseCache(d,d.updated||"");
+    if(currentUser&&migrationReady)void getWarehouseCache().then(c=>{
+      if(c?.state) return setWarehouseCache(d,String(c.metaUpdated||""));
+    });
   },700);
 }
 function openWarehouseCache(){
@@ -873,14 +876,15 @@ async function loadCloud(){
   const remoteVersion=String(metaSnap.exists()?(metaSnap.data()?.updated||""):"");
   const cached=await getWarehouseCache();
   const cacheLastFullSync=Number(cached?.fullSyncedAt||cached?.savedAt||0);
-  const cacheFresh=!!(cached?.state&&Number.isFinite(cacheLastFullSync)&&
-    Date.now()-cacheLastFullSync>=0&&Date.now()-cacheLastFullSync<WAREHOUSE_CACHE_TTL);
-  if(cacheFresh){
-    // 避免 meta 每次寫入都讓 617 個帳號 + 全部 items 重新下載。
-    // 雲端的目前帳號道具仍由 watchActiveAccountItems 即時更新。
+  // 版本相同才可重用快取；不能只靠 30 分鐘期限判斷。
+  // 雲端版本未變時，即使過了 30 分鐘也不讀取 617 個帳號的 items。
+  const cacheValid=!!(cached?.state&&Array.isArray(cached.state.accounts)&&
+    String(cached.metaUpdated||"")===remoteVersion);
+  if(cacheValid){
     d=cached.state;
-    warehouseFullSyncAt=cacheLastFullSync;
+    warehouseFullSyncAt=Date.now();
   }else{
+    // 首次使用／版本確實改變時才完整校正，避免漏掉賣場直接扣除的庫存。
     d=await readHybridCloud(metaSnap);
     warehouseFullSyncAt=Date.now();
     await setWarehouseCache(d,remoteVersion);
@@ -2993,7 +2997,6 @@ async function automaticWarehouseSync(){
     const cached=await getWarehouseCache();
     if(cached?.state&&String(cached.metaUpdated||"")===remoteVersion){
       warehouseFullSyncAt=Date.now();
-      await setWarehouseCache(d,remoteVersion);
       return;
     }
     const fresh=await readHybridCloud(metaSnap);
