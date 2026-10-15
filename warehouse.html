@@ -1060,16 +1060,23 @@ async function readHybridCloud(metaSnap=null,previousState=null,options={}){
 }
 
 async function ensureWarehouseIndex(){
+  warehouseMigrationEvidence=null;
   const ref=syncIndexRef(),probe=await getDoc(ref),old=probe.data()||{};
   if(old.rowLayout===6&&old.reservationSchemaVersion===2&&old.itemDocumentIds===true){linkedItems=new Map(Object.entries(old.links||{}));linkedItemsReady=true;return;}
   // One-time migration only: verify both old reservation sources and the authoritative links.
-  const [ls,activeOrders,activeFulfillments]=await Promise.all([getDocs(collection(db,'inventoryLinks')),getDocs(query(collection(db,'orders'),where('status','in',['預定中','待交易']))),getDocs(query(collection(db,'orderFulfillments'),where('status','==','預定中')))]);
+  const [ls,activeOrders,activeFulfillments,legacyLedger]=await Promise.all([getDocs(collection(db,'inventoryLinks')),getDocs(query(collection(db,'orders'),where('status','in',['預定中','待交易']))),getDocs(query(collection(db,'orderFulfillments'),where('status','==','預定中'))),getDoc(doc(db,'adminSettings','warehouseReservations'))]);
+  const legacyEntries=legacyLedger.data()?.entries||{};
   const orderMap=new Map(activeOrders.docs.map(s=>[s.id,s])),fulfillmentMap=new Map(activeFulfillments.docs.map(s=>[s.id,s]));
   for(const id of new Set([...fulfillmentMap.keys(),...Object.keys(old.reservations||{})]))if(!orderMap.has(id)){const s=await getDoc(doc(db,'orders',id));if(s.exists())orderMap.set(id,s);}
   for(const [id,s] of orderMap)if((s.data().status==='預定中'||s.data().warehouseReserved===true||s.data().reservationAllocations?.length)&&!fulfillmentMap.has(id)){const f=await getDoc(doc(db,'orderFulfillments',id));if(f.exists())fulfillmentMap.set(id,f);}
   const os={docs:[...orderMap.values()]},fs={docs:[...fulfillmentMap.values()]};
   const links=Object.fromEntries(ls.docs.map(s=>[s.id,{...s.data(),itemKey:syncKey(s.data().itemKey),variantLinks:(s.data().variantLinks||[]).map(v=>({...v,itemKey:syncKey(v.itemKey)}))}]));
-  const migrated=syncLegacyReservations(os.docs.map(s=>({id:s.id,data:s.data()})),fs.docs.filter(s=>s.id!=='_reservationLedger').map(s=>({id:s.id,data:s.data()})),old.reservations||{},links);
+  const legacyOrders=os.docs.map(s=>({id:s.id,data:s.data()})),legacyFulfillments=fs.docs.filter(s=>s.id!=='_reservationLedger').map(s=>({id:s.id,data:s.data()}));
+  warehouseMigrationEvidence={indexReservations:syncClone(old.reservations||{}),legacyLedger:legacyLedger.data()||{},orders:legacyOrders,fulfillments:legacyFulfillments,links};
+  const cases=warehouseLegacyCases(legacyOrders,legacyFulfillments,old.reservations||{},legacyEntries);
+  if(cases.length){const err=new Error('發現 '+cases.length+' 筆缺少訂單的舊預訂／配貨；尚未建立新索引，未變更庫存數量。');err.code='warehouse/legacy-review';err.legacyCases=cases;throw err;}
+  const migrated=syncLegacyReservations(legacyOrders,legacyFulfillments,old.reservations||{},links);
+  warehouseValidateLegacyLedger(legacyEntries,migrated.reservations);
   const grouped=new Map();
   for(const a of accountBaselines.values())for(const i of a.items||[]){if(!i._itemId)throw new Error(`帳號 ${a.number||a.id} 的舊物品缺少文件 ID，未建立不完整索引。`);const key=syncIdentity(i);if(!grouped.has(key))grouped.set(key,{key,owners:[]});grouped.get(key).owners.push({accountId:String(a.id),itemId:String(i._itemId),label:`編號 ${a.number||a.name||'未設定'}`,qty:syncQty(i.qty)});}
   const fingerprint=JSON.stringify(syncStable([validatedMetaVersion,old,links,migrated.reservations]));
@@ -1081,7 +1088,8 @@ async function ensureWarehouseIndex(){
   const staged=syncIndexDocuments(index);
   for(let n=0;n<staged.shards.length;n+=20){const batch=writeBatch(db);for(const shard of staged.shards.slice(n,n+20))batch.set(syncShardRef(shard.id),shard.data);await batch.commit();}
   const committed=await runTransaction(db,async tx=>{
-    const ms=await tx.get(metaRef()),is=await tx.get(ref),ps=await tx.get(publicStockRef());
+    const ms=await tx.get(metaRef()),is=await tx.get(ref),ps=await tx.get(publicStockRef()),ll=await tx.get(doc(db,'adminSettings','warehouseReservations'));
+    if(!syncEqual(ll.data()||{},legacyLedger.data()||{}))throw new Error('舊預訂帳本在初始化期間變更，未啟用過期索引。');
     if(is.data()?.rowLayout===6&&is.data()?.reservationSchemaVersion===2)return;
     if(syncMetaVersion(ms.data())!==validatedMetaVersion||!syncEqual(is.data()||{},old))throw new Error('建立新索引期間雲端資料有變更；新分片尚未啟用，請重新整理重試。');
     for(const s of [...ls.docs,...os.docs,...fs.docs]){const live=await tx.get(s.ref);if(!live.exists()||!syncEqual(live.data(),s.data()))throw new Error('舊訂單或商品連結在初始化期間變更，未啟用過期索引。');}
@@ -1098,6 +1106,94 @@ async function ensureWarehouseIndex(){
   if(committed){validatedMetaVersion=syncMetaVersion(committed);validatedVersions=syncClone(committed.accountVersions);validatedMetaDescriptor=warehouseMetaDescriptor(committed);d.updated=committed.updated;}
   const fresh=await getDoc(ref);linkedItems=new Map(Object.entries(fresh.data()?.links||{}));linkedItemsReady=true;
 }
+// Unresolved legacy references stay read-only until individually reviewed by the administrator.
+let warehouseReviewState=null,warehouseReviewPanel=null,warehouseReviewGuardInstalled=false,warehouseMigrationEvidence=null;
+function warehouseLegacyCases(orders,fulfillments,prior,legacy){
+  const known=new Map(orders.map(x=>[x.id,x.data])),fs=new Map(fulfillments.map(x=>[x.id,x.data])),ids=new Set();
+  for(const [id,f] of fs)if(f.status==='預定中'&&!known.has(id))ids.add(id);
+  for(const id of Object.keys(prior||{}))if(!known.has(id))ids.add(id);
+  return [...ids].sort().map(id=>{
+    const f=fs.get(id),rootReference=Object.prototype.hasOwnProperty.call(prior||{},id),ledgerReference=Object.keys(legacy||{}).length>0;
+    let valid=false;try{syncDocumentAllocations(f?.allocations,'待核對配貨');valid=true;}catch{}
+    const eligible=(!f?.orderId||String(f.orderId)===id)&&f?.status==='預定中'&&f.kind==='warehouse-manual-reservation'&&valid&&!rootReference&&!ledgerReference;
+    return {id,fulfillment:f||null,rootReference,ledgerReference,eligible,
+      reason:eligible?'訂單不存在；手動預訂仍待管理員確認是否為已刪除測試／已不需要的配貨。':rootReference||ledgerReference?'其他預訂來源仍引用此 ID，不能單獨結束配貨。':'來源、狀態或配貨欄位無法安全判定，保留待核對。'};
+  });
+}
+function warehouseValidateLegacyLedger(entries,reservations){
+  // The old entries map may contain aggregate reservation slots, not order IDs.
+  const totals=new Map();
+  for(const list of Object.values(reservations))for(const a of list){const slot=encodeURIComponent(String(a.accountId))+'|'+encodeURIComponent(syncKey(a.key));totals.set(slot,(totals.get(slot)||0)+syncQty(a.qty));}
+  const reported=new Map();
+  for(const [slot,qty] of Object.entries(entries)){
+    if(typeof qty!=='number'||!Number.isSafeInteger(qty)||qty<0)throw new Error('舊預訂帳本格式無法安全判定，未將 entries 當成訂單或清除數量。');
+    let parts;try{parts=slot.split('|').map(decodeURIComponent);}catch{throw new Error('舊預訂帳本欄位無法辨識，原資料保留。');}
+    if(parts.length!==2)throw new Error('舊預訂帳本欄位無法辨識，原資料保留。');
+    const key=encodeURIComponent(parts[0])+'|'+encodeURIComponent(syncKey(parts[1]));reported.set(key,(reported.get(key)||0)+qty);
+  }
+  for(const [key,qty] of reported)if(qty!==(totals.get(key)||0))throw new Error('舊預訂帳本與有效訂單數量不同，原資料保留，請下載報告核對。');
+}
+async function warehouseConfirmOrphan(review,typedId,acknowledged){
+  if(currentUser?.uid!==ADMIN_UID)throw new Error('僅管理員可以處理舊配貨。');
+  if(!review?.eligible||typedId!==review.id||acknowledged!==true)throw new Error('必須逐筆確認此為已不需要的舊配貨，並輸入完整 ID。');
+  const id=review.id,fr=doc(db,'orderFulfillments',id),or=doc(db,'orders',id),lr=doc(db,'adminSettings','warehouseReservations');
+  return runTransaction(db,async tx=>{
+    const os=await tx.get(or),fs=await tx.get(fr),is=await tx.get(syncIndexRef()),ls=await tx.get(lr);
+    if(os.exists())throw new Error('訂單已出現，不能當作孤兒配貨處理；請重新核對。');
+    if(!fs.exists()||!syncEqual(fs.data(),review.fulfillment))throw new Error('配貨已變更或已被處理，請重新載入核對清單。');
+    const live=warehouseLegacyCases([],[{id,data:fs.data()}],is.data()?.reservations||{},ls.data()?.entries||{}).find(x=>x.id===id);
+    if(!live?.eligible)throw new Error('預訂來源仍引用此配貨，或狀態不允許；未修改任何資料。');
+    // Preserve allocations and all original fields. No item, index, ledger or public quantity writes.
+    tx.set(fr,{status:'已取消',legacyOrphanResolution:{version:1,decision:'admin-confirmed-obsolete',reason:'管理員確認為已刪除測試訂單或已不需要的孤兒配貨',confirmedBy:currentUser.uid,confirmedAt:new Date().toISOString(),originalStatus:fs.data().status,inventoryQuantityChanged:false}},{merge:true});
+    return id;
+  });
+}
+function warehouseReviewReadOnlyEvent(event){
+  if(!warehouseReviewState)return;
+  const app=document.querySelector('#app');if(!app?.contains(event.target)&&!event.target.closest?.('dialog'))return;
+  const allowed=event.target.closest?.('.acc,.accountTypeTab,.genderTab,.catTab,.candyTab,#q,#go,#accountSearch,#accountSearchBtn');
+  if(allowed&&!['drop','dragstart','submit'].includes(event.type))return;
+  event.preventDefault();event.stopImmediatePropagation();
+}
+function warehouseDisableReviewControls(){
+  if(!warehouseReviewState)return;
+  for(const control of document.querySelectorAll('#app button,#app input,#app select,#app textarea,dialog button,dialog input,dialog select,dialog textarea')){
+    if(control.matches('.accountTypeTab,.genderTab,.catTab,.candyTab,#q,#go,#accountSearch,#accountSearchBtn'))continue;
+    if(!warehouseReviewDisabled.has(control))warehouseReviewDisabled.set(control,control.disabled);control.disabled=true;
+  }
+}
+const warehouseReviewDisabled=new Map();
+function warehouseShowReview(error){
+  warehouseReviewState={message:error.message,cases:error.legacyCases||[],evidence:warehouseMigrationEvidence,loadedAt:new Date().toISOString()};
+  if(!warehouseReviewGuardInstalled){for(const type of ['click','dblclick','input','change','keydown','submit','drop','dragstart'])document.addEventListener(type,warehouseReviewReadOnlyEvent,true);warehouseReviewGuardInstalled=true;}
+  warehouseReviewPanel?.remove();const panel=document.createElement('section');warehouseReviewPanel=panel;panel.className='box';panel.style.margin='12px';
+  const title=document.createElement('h3');title.textContent='舊配貨待核對｜庫存已載入，暫以唯讀模式顯示';panel.append(title);
+  const note=document.createElement('p');note.textContent='可搜尋及切換帳號。新增、修改、刪除與背景儲存暫停；下方數量尚未完成預訂校正，不能視為可售數量。'+error.message;panel.append(note);
+  const button=(text,action,parent=panel)=>{const b=document.createElement('button');b.className='btn';b.textContent=text;b.onclick=action;parent.append(b);return b;};
+  button('下載核對報告與庫存快照',()=>{const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify({...warehouseReviewState,inventorySnapshot:d},null,2)],{type:'application/json'}));a.href=url;a.download='小倉倉-舊配貨核對.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+  button('重新核對／繼續初始化',async()=>{try{await loadCloud();}catch(err){warehouseShowReview(err);}});
+  for(const item of warehouseReviewState.cases){
+    const row=document.createElement('div');row.className='panel';row.style.marginTop='10px';
+    const heading=document.createElement('b');heading.textContent=`配貨 ${item.id}｜${item.fulfillment?.status||'無配貨文件'}｜${item.fulfillment?.kind||'來源不明'}`;row.append(heading);
+    const detail=document.createElement('pre');detail.style.whiteSpace='pre-wrap';detail.textContent=item.reason+'\n'+(item.fulfillment?.allocations||[]).map(a=>{const account=d.accounts.find(x=>String(x.id)===String(a.accountId));return `帳號 ${account?.number||account?.name||a.accountId}｜${String(a.key||'').split('\u001f').join('／')}｜數量 ${a.qty}`;}).join('\n');row.append(detail);
+    if(item.eligible){
+      const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';label.append(check,document.createTextNode(' 我已確認這筆不再需要預訂；只結束配貨狀態，不調整實際庫存。'));row.append(label);
+      const input=document.createElement('input');input.placeholder='輸入完整配貨 ID 確認';row.append(input);
+      const b=button('確認結束這筆舊配貨',async()=>{
+        if(!check.checked||input.value!==item.id){alert('請勾選確認並輸入完整配貨 ID。');return;}
+        if(!confirm(`確認結束 ${item.id}？\n保留配貨與 allocations，不刪除文件、不扣除或補回物品。\n完成後會重新核對其餘預訂；不保證其他衝突已解決。`))return;
+        b.disabled=true;let saved=false;
+        try{await warehouseConfirmOrphan(item,input.value,check.checked);saved=true;await loadCloud();alert(`已結束配貨 ${item.id}；實際物品數量未變。`);}
+        catch(err){alert((saved?`配貨 ${item.id} 已結束，但後續核對尚未完成：`:'本次處理未確認成功，請重新核對狀態後再操作：')+err.message);if(saved)warehouseShowReview(err);}
+        finally{b.disabled=false;}
+      },row);
+    }else{const text=document.createElement('p');text.textContent='此筆不提供直接清除。請下載報告保留待核對，先使用唯讀查詢；核對報告包含原配貨及預訂來源，無須到 Firestore 手動刪除或改數量。本頁不猜測建立缺失訂單或釋放來源不明的預訂。';row.append(text);}
+    panel.append(row);
+  }
+  document.querySelector('#app').before(panel);warehouseDisableReviewControls();
+}
+function warehouseClearReview(){for(const [control,disabled] of warehouseReviewDisabled)control.disabled=disabled;warehouseReviewDisabled.clear();warehouseReviewState=null;warehouseReviewPanel?.remove();warehouseReviewPanel=null;}
+
 let syncRetryTimer=null;
 function requestMetaSync(){syncPending=true;clearTimeout(syncRetryTimer);syncRetryTimer=setTimeout(()=>void synchronizeWarehouse(),250);}
 function warehouseHasDraft(){return (d.accounts||[]).some(a=>{const b=accountBaselines.get(String(a.id));if(!b)return true;const c=accountDiff(a,b);return c.edits.length||Object.keys(c.patch).length});}
@@ -1149,7 +1245,15 @@ async function loadCloud(){
   const check=await getDoc(metaRef());
   if(warehouseMetaNeedsSync(check.data()||{}))throw new Error('讀取期間庫存有變更，請重新整理以載入完整最新資料。');
   memoryBaseline=JSON.stringify(syncStable(d.itemMemory||[]));memoryDocumentBaseline=new Map((d.itemMemory||[]).map((m,i)=>[stableMemoryId(m,i),JSON.stringify(syncStable(m))]));
-  rememberBaselines();await ensureWarehouseIndex();migrationReady=true;warehouseFullSyncAt=Date.now();active=d.accounts[0]?.id||null;
+  rememberBaselines();
+  try{await ensureWarehouseIndex();}
+  catch(err){
+    // Show acknowledged inventory without enabling any writes or silently releasing a hold.
+    active=d.accounts.some(a=>String(a.id)===String(active))?active:(d.accounts[0]?.id||null);
+    if(metaStop){metaStop();metaStop=null;}syncPending=false;
+    await setWarehouseCache(d,validatedMetaVersion);refreshStockFromLocal(false);render();warehouseShowReview(err);return;
+  }
+  warehouseClearReview();migrationReady=true;warehouseFullSyncAt=Date.now();active=d.accounts[0]?.id||null;
   await setWarehouseCache(d,validatedMetaVersion);refreshStockFromLocal(false);render();
   if(metaStop)metaStop();metaStop=onSnapshot(metaRef(),snap=>{if(snap.metadata?.hasPendingWrites||snap.metadata?.fromCache)return;const meta=snap.data()||{};if(warehouseMetaNeedsSync(meta))requestMetaSync();},err=>console.error('庫存版本監聽失敗',err));
   restoreShowInterruptedNotice();setTimeout(()=>backfillInventoryMemory(),300);
@@ -1214,6 +1318,7 @@ async function syncTempShotCount(accountId,count){
   try{if(a)await persistAccount(a)}catch(err){console.error("tempShotCount sync failed",err)}
 }
 function render(){
+  if(warehouseReviewState)queueMicrotask(warehouseDisableReviewControls);
   queueMicrotask(watchActiveAccountItems);
   migrateCategories();
   sortAccountsNaturally();
@@ -1223,7 +1328,7 @@ function render(){
   $("#accounts").innerHTML=shownAccounts.length?shownAccounts.map(x=>`<div class="acc ${x.id===active?"active":""}" data-id="${x.id}"><span>${e(x.number||x.name||"未命名")} ${x.gameId?`｜${e(x.gameId)}`:""}${accountHasTempShots(x)?`<i class="accTempDot" title="有臨時截圖"></i>`:""}<br><small>${e(x.accountType||"主要培養")}${x.accountGender?`｜${e(x.accountGender)}`:""}</small></span><span style="display:flex;align-items:center;gap:6px"><small>${(x.items||[]).filter(i=>!noQuantityCategories.has(i.category)).reduce((n,i)=>n+(Number(i.qty)||0),0)}件</small></span></div>`).join(""):'<div class="empty">這個分類目前沒有帳號</div>';
   document.querySelectorAll(".acc").forEach(x=>x.onclick=()=>{
     const oldAccount=cur();
-    if(oldAccount){captureResourceInputs(oldAccount);clearTimeout(resourceSaveTimer);persistResourceAccount(String(oldAccount.id));}
+    if(oldAccount&&!warehouseReviewState){captureResourceInputs(oldAccount);clearTimeout(resourceSaveTimer);persistResourceAccount(String(oldAccount.id));}
     active=x.dataset.id;render();
   });
   $("#title").textContent=a?`帳號 ${a.number||a.name||""}${a.gameId?`｜${a.gameId}`:""}｜物品庫`:"請先選擇帳號";
@@ -1834,6 +1939,7 @@ function captureResourceInputs(a){
   a.resources[`fragment${month}`]=Math.max(0,Math.floor(Number($("#resFragmentQty").value)||0));
 }
 async function persistResourceAccount(accountId){
+  if(warehouseReviewState||!migrationReady)return;
   const a=d.accounts.find(x=>String(x.id)===String(accountId));
   if(!a)return;
   const seq=++resourceSaveSeq;
@@ -3222,7 +3328,7 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden)void autom
 onAuthStateChanged(auth,async user=>{
   currentUser=user&&user.uid===ADMIN_UID?user:null;
   if(!currentUser){
-    $("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();watchActiveAccountItems();return;
+    warehouseClearReview();$("#authGate").classList.remove("hidden");$("#app").style.visibility="hidden";d={accounts:[]};active=null;tempShotsCache.clear();watchActiveAccountItems();return;
   }
   $("#userLabel").textContent=currentUser.email||"已登入";
   $("#authGate").classList.add("hidden");$("#app").style.visibility="visible";
