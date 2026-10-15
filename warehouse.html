@@ -613,7 +613,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, onSnapshot, query, where, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyAA2CR7TLIwJ4vBK-kS6qavj93g3LvgQdU",
@@ -625,6 +625,125 @@ const firebaseConfig={
 };
 const ADMIN_UID="zzy1kG02vkft00TTdRtfG6iMbNL2";
 const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app);
+// nene-sync-v6: shared identity, index and projection rules (inline, no extra deployment file).
+const syncCategory=c=>c==="玩偶"?"家具":String(c||"");
+const syncKey=k=>{const p=String(k||"").split("\u001f");p[0]=syncCategory(p[0]);return p.join("\u001f")};
+const syncIdentity=i=>[syncCategory(i?.category),i?.name||"",i?.variant||"",i?.gender||"",i?.candyType||""].map(String).join("\u001f");
+const syncClone=x=>JSON.parse(JSON.stringify(x));
+const syncStable=x=>x&&typeof x==="object"?(Array.isArray(x)?x.map(syncStable):Object.fromEntries(Object.keys(x).sort().filter(k=>x[k]!==undefined).map(k=>[k,syncStable(x[k])]))):x;
+const syncEqual=(a,b)=>JSON.stringify(syncStable(a))===JSON.stringify(syncStable(b));
+const syncMetaVersion=m=>m?.syncRevision?String(m.syncRevision)+"|"+String(m.updated||""):String(m?.updated||"");
+const syncQty=x=>Math.max(0,Math.floor(Number(x)||0));
+function syncRows(rows=[]){
+  const merged=new Map();
+  for(const r of rows){const key=syncKey(r.key);if(!merged.has(key))merged.set(key,{key,owners:[]});merged.get(key).owners.push(...syncClone(r.owners||[]));}
+  return [...merged.values()];
+}
+function syncProjection(index,links,previous={}){
+  if(index.syncLinksVersion===1)links=new Map(Object.entries(index.links||{}));
+  const totals=new Map(syncRows(index.rows||[]).map(r=>[r.key,r.owners.reduce((n,o)=>n+syncQty(o.qty),0)]));
+  const reserved=new Map();
+  for(const list of Object.values(index.reservations||{}))for(const a of list){const k=syncKey(a.key);reserved.set(k,(reserved.get(k)||0)+syncQty(a.qty));}
+  const out={};
+  for(const [id,l] of links){const p=previous[id]||{},entry={variants:{},reservedVariants:{}};
+    if(l.itemKey){const k=syncKey(l.itemKey);entry.stock=index._partial&&!(index._loadedShardIds||[]).includes(syncShardId(k,index.rowGeneration||""))?syncQty(p.stock):(totals.get(k)||0);entry.reserved=index.reservationSchemaVersion>=1?(reserved.get(k)||0):syncQty(p.reserved);}
+    for(const v of l.variantLinks||[])if(v.variant&&v.itemKey){const k=syncKey(v.itemKey);entry.variants[v.variant]=index._partial&&!(index._loadedShardIds||[]).includes(syncShardId(k,index.rowGeneration||""))?syncQty(p.variants?.[v.variant]):(totals.get(k)||0);entry.reservedVariants[v.variant]=index.reservationSchemaVersion>=1?(reserved.get(k)||0):syncQty(p.reservedVariants?.[v.variant]);}
+    out[id]=entry;
+  }
+  return out;
+}
+// 256 deterministic buckets. Only touched buckets participate in normal inventory transactions.
+const syncShardId=(key,generation="")=>{let h=2166136261;for(const c of syncKey(key)){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return 'warehouseInventoryRows6_'+(generation?generation+'_':'')+((h>>>0)&255).toString(16).padStart(2,'0')};
+const syncIndexRef=()=>doc(db,'adminSettings','warehouseInventoryIndex');
+const syncShardRef=id=>doc(db,'adminSettings',id);
+const syncChangedVersions=(a={},b={})=>[...new Set([...Object.keys(a),...Object.keys(b)])].filter(id=>String(a[id]||'')!==String(b[id]||''));
+function syncCompactVersions(versions={}){return Object.fromEntries(Object.entries(versions).filter(([id,v])=>!String(v).startsWith('deleted:')));}
+function syncMetaWrite(tx,ref,meta,versions,version){
+  const data={...meta,updated:new Date().toISOString(),syncRevision:version,accountVersions:syncCompactVersions(versions),syncProtocol:6};
+  syncCheckDocument(data,'帳號版本表',180000);tx.set(ref,data);return data;
+}
+const syncStringBytes=s=>new TextEncoder().encode(String(s)).length+1;
+function syncFieldBytes(v){if(v==null)return 1;if(typeof v==='string')return syncStringBytes(v);if(typeof v==='number')return 8;if(typeof v==='boolean')return 1;if(v instanceof Date||typeof v?.toMillis==='function')return 8;if(v instanceof Uint8Array)return v.byteLength;if(Array.isArray(v))return v.reduce((n,x)=>n+syncFieldBytes(x),0);return 32+Object.entries(v).reduce((n,[k,x])=>n+syncStringBytes(k)+syncFieldBytes(x),0);}
+function syncCheckDocument(data,label='庫存文件',limit=760000){
+  const bytes=Math.max(new TextEncoder().encode(JSON.stringify(data)).length,syncFieldBytes(data))+4096;
+  if(bytes>limit)throw new Error(`${label}估算 ${bytes} bytes，超過安全界限 ${limit}；這次未提交，未截斷任何資料。`);
+  return bytes;
+}
+function syncCheckTransaction(parts,count){if(count>450)throw new Error(`本次交易需要 ${count} 筆寫入，超過安全界限，未提交任何資料。`);const bytes=parts.reduce((n,x)=>n+new TextEncoder().encode(JSON.stringify(x??null)).length,0)+count*4096;if(bytes>8*1024*1024)throw new Error('本次交易資料超過 8 MiB 安全界限，未提交，請分批處理。');}
+async function syncReadIndex(tx,snapshot,keys=null){
+  const raw=snapshot.data()||{};
+  if(raw.rowLayout!==6)return {...raw,rows:syncRows(raw.rows||[])};
+  const ids=keys===null?[...(raw.rowShardIds||[])]:[...new Set(keys.filter(Boolean).map(k=>syncShardId(k,raw.rowGeneration||"")))];
+  const before={},rows=[];
+  for(const id of ids){const s=await tx.get(syncShardRef(id)),data=s.exists()?s.data():null;before[id]=data;rows.push(...(data?.rows||[]));}
+  return {...raw,rows:syncRows(rows),_partial:keys!==null,_loadedShardIds:ids,_beforeShards:before};
+}
+async function syncFetchIndex(keys=null){const s=await getDoc(syncIndexRef());return syncReadIndex({get:getDoc},s,keys);}
+function syncIndexDocuments(index){
+  const root={...index};for(const k of ['rows','_partial','_loadedShardIds','_beforeShards'])delete root[k];
+  if(index.rowLayout!==6)return {root:syncClone(index),shards:[]};
+  const grouped=new Map((index._loadedShardIds||[]).map(id=>[id,[]]));
+  for(const row of index.rows||[]){const id=syncShardId(row.key,index.rowGeneration||"");if(!grouped.has(id))throw new Error('索引交易缺少必要分片，未寫入。');grouped.get(id).push(row);}
+  const ids=new Set(root.rowShardIds||[]),shards=[];
+  for(const [id,rows] of grouped){rows.sort((a,b)=>a.key.localeCompare(b.key));const data=rows.length?{rows,layout:6}:null;const old=index._beforeShards?.[id]||null;
+    if(data)ids.add(id);else ids.delete(id);if(!syncEqual(data,old))shards.push({id,data});}
+  root.rowShardIds=[...ids].sort();if(shards.length)root.rowsRevision=crypto.randomUUID();
+  syncCheckDocument(root,'庫存索引主文件',360000);
+  for(const s of shards)if(s.data)syncCheckDocument(s.data,'庫存索引分片 '+s.id,360000);
+  return {root,shards};
+}
+function syncWriteIndex(tx,ref,index){const {root,shards}=syncIndexDocuments(index);for(const s of shards)s.data?tx.set(syncShardRef(s.id),s.data):tx.delete(syncShardRef(s.id));tx.set(ref,root);}
+function syncCheckSize(value){if(value?.rowLayout===6){syncIndexDocuments(value);return;}syncCheckDocument(value);}
+function syncIndexOwner(rows,key,accountId,itemId){return rows.find(r=>r.key===syncKey(key))?.owners.find(o=>String(o.accountId)===String(accountId)&&String(o.itemId)===String(itemId));}
+function syncDocumentAllocations(list,source){
+  if(!Array.isArray(list)||!list.length)throw new Error(`${source} 缺少配貨資料；已保留原資料，請先檢查舊訂單。`);
+  return list.map(a=>{if(!a?.accountId||!a?.key||!Number.isSafeInteger(Number(a.qty))||Number(a.qty)<=0)throw new Error(`${source} 配貨欄位不完整，尚未轉換。`);return {...a,accountId:String(a.accountId),key:syncKey(a.key),qty:Number(a.qty)};});
+}
+// Migration reads both sources, detects conflicts, and never turns a completed order back into a reservation.
+function syncLegacyReservations(orders,fulfillments,prior={},links={}){
+  const byOrder=new Map(orders.map(o=>[o.id,o.data])),byFulfillment=new Map(fulfillments.map(o=>[o.id,o.data])),reservations={},repairs=[];
+  function normalize(list,o,id){return syncDocumentAllocations(list,`舊訂單 ${id}`).map(a=>{if(!a.itemId){const matches=(o.items||[]).filter(item=>{const l=links[String(item.id)],v=String(item.variant||'');return (syncKey(v?(l?.variantLinks||[]).find(x=>x.variant===v)?.itemKey:l?.itemKey)||syncIdentity(item))===a.key;});if(matches.length!==1)throw new Error(`舊訂單 ${id} 的配貨缺少商品 ID 且無法唯一對應，未猜測轉換。`);a.itemId=String(matches[0].id);a.variant=String(matches[0].variant||'');}return a;});}
+  function signature(list){const groups=new Map();for(const a of list){const key=JSON.stringify([a.accountId,syncKey(a.key),String(a.itemId||''),String(a.variant||'')]);groups.set(key,(groups.get(key)||0)+syncQty(a.qty));}return [...groups].sort((a,b)=>a[0].localeCompare(b[0]));}
+  for(const [id,o] of byOrder){const f=byFulfillment.get(id);if(o.status==='已完成'||o.status==='已取消')continue;
+    const orderList=Array.isArray(o.reservationAllocations)&&o.reservationAllocations.length?o.reservationAllocations:null;
+    const fulfillmentList=f?.status==='預定中'&&Array.isArray(f.allocations)&&f.allocations.length?f.allocations:null;
+    const held=o.status==='預定中'||o.warehouseReserved===true||orderList?.length||f?.status==='預定中'||prior[id]?.length;
+    if(!held)continue;
+    if(!['預定中','待交易'].includes(o.status)||['已完成','已取消'].includes(f?.status))throw new Error(`舊訂單 ${id} 與配貨狀態衝突，原資料保留，未重新開啟已處理配貨。`);
+    const chosen=normalize(orderList||fulfillmentList||prior[id],o,id);
+    if(orderList&&fulfillmentList&&!syncEqual(signature(normalize(orderList,o,id)),signature(normalize(fulfillmentList,o,id))))throw new Error(`舊訂單 ${id} 與配貨紀錄不一致，原資料保留，請先核對。`);
+    reservations[id]=chosen;repairs.push({id,order:{status:'預定中',warehouseReserved:true,reservationAllocations:chosen},fulfillment:{...(f||{}),orderId:id,status:'預定中',allocations:chosen}});
+  }
+  for(const [id,f] of byFulfillment)if(f.status==='預定中'&&!byOrder.has(id))throw new Error(`舊配貨 ${id} 的訂單不存在，未擅自清除預訂；請先核對該配貨紀錄。`);
+  for(const [id,list] of Object.entries(prior))if(list?.length&&!byOrder.has(id))throw new Error(`索引預訂 ${id} 缺少原訂單，未清除資料。`);
+  return {reservations,repairs};
+}
+function syncValidateLegacyPublic(previous,next){for(const [id,p] of Object.entries(previous)){const n=next[id]||{};if(syncQty(p.reserved)>syncQty(n.reserved))throw new Error(`商品 ${id} 仍有無法對應舊訂單的預訂；未清除原數量，請核對舊預訂。`);for(const [v,q] of Object.entries(p.reservedVariants||{}))if(syncQty(q)>syncQty(n.reservedVariants?.[v]))throw new Error(`商品 ${id}／${v} 有無法對應的舊預訂，原資料保留。`);}}
+// Acknowledged batches only. Never label a partially completed restore as rolled back or complete.
+let activeRestoreJournal=null;
+function restoreSaveJournal(){if(!activeRestoreJournal)return;activeRestoreJournal.updatedAt=new Date().toISOString();try{localStorage.setItem('nene-restore-journal-v6',JSON.stringify(activeRestoreJournal));}catch(err){activeRestoreJournal.localSaveError=String(err?.message||err);}}
+function restoreBegin(kind,targets=[]){activeRestoreJournal={id:crypto.randomUUID(),kind,status:'running',startedAt:new Date().toISOString(),targets,completed:[],inFlight:null};restoreSaveJournal();return activeRestoreJournal;}
+function restoreTrackStart(phase,accountId,operations=[]){if(!activeRestoreJournal)return;activeRestoreJournal.inFlight={phase,accountId:String(accountId||''),operations:syncClone(operations)};restoreSaveJournal();}
+function restoreTrackCommit(){if(!activeRestoreJournal?.inFlight)return;activeRestoreJournal.completed.push({...activeRestoreJournal.inFlight,acknowledgedAt:new Date().toISOString()});activeRestoreJournal.inFlight=null;restoreSaveJournal();}
+function restoreSummary(j=activeRestoreJournal){
+  if(!j)return '尚未開始寫入。';const accounts=new Set(j.completed.filter(x=>x.phase==='帳號完成').map(x=>x.accountId));
+  const partial=new Set(j.completed.filter(x=>x.phase==='帳號道具'||x.phase==='建立帳號').map(x=>x.accountId));for(const id of accounts)partial.delete(id);
+  const labels=ids=>[...ids].map(id=>j.targets.find(a=>a.id===id)?.label||id).join('、')||'無';
+  const phases={};for(const b of j.completed)phases[b.phase]=(phases[b.phase]||0)+b.operations.length;
+  return `已完整還原帳號：${labels(accounts)}\n已提交部分分段帳號：${labels(partial)}\n已確認成功分段：${j.completed.length} 批\n各階段已確認操作：${JSON.stringify(phases)}\n最後一批／失敗位置：${j.inFlight?j.inFlight.phase+'／'+(j.inFlight.accountId||'')+'（此批結果需查證）':'無待確認批次'}\n尚未完成帳號：${labels(new Set(j.targets.filter(a=>!accounts.has(a.id)).map(a=>a.id)))}`;
+}
+function restoreExportJournal(j=activeRestoreJournal){if(!j)return;const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(j,null,2)],{type:'application/json'}));a.href=url;a.download=`nene-restore-report-${j.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function restoreFinish(status,error=''){if(!activeRestoreJournal)return;activeRestoreJournal.status=status;activeRestoreJournal.error=String(error||'');restoreSaveJournal();}
+
+function restoreShowInterruptedNotice(){
+  try{const raw=localStorage.getItem('nene-restore-journal-v6');if(!raw)return;const j=JSON.parse(raw);if(!['running','failed','rollback-failed'].includes(j.status))return;const key='nene-restore-notice-'+j.id+'-'+j.updatedAt;if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');restoreExportJournal(j);alert('上一次還原未完成，請先核對以下已提交分段。\n'+restoreSummary(j)+'\n完整操作紀錄已重新下載。');}catch(err){console.warn('讀取上次還原紀錄失敗',err);}
+}
+function syncReservationTotals(index,exclude=""){
+  const totals=new Map();
+  for(const [id,list] of Object.entries(index.reservations||{})){if(id===exclude)continue;for(const a of list){const k=String(a.accountId)+"||"+syncKey(a.key);totals.set(k,(totals.get(k)||0)+syncQty(a.qty));}}
+  return totals;
+}
+
 const provider=new GoogleAuthProvider(), $=s=>document.querySelector(s);
 const ad=$("#ad"), batchAd=$("#batchAd"), idg=$("#idg"), shotDlg=$("#shotDlg"), editItemDlg=$("#editItemDlg");
 let d={accounts:[]}, active=null, currentUser=null, saving=false, activeCategory="家具", activeGender="", activeCandy="";
@@ -669,79 +788,15 @@ const publicStockRef=()=>doc(db,"publicSettings","warehouseStock");
 let linkedItems=new Map(), stockAccounts=[], publishTimer=null, lastPublished="";
 let linkedItemsReady=false,stockAccountsReady=false;
 let stockPublishChain=Promise.resolve(), stockPublishRevision=0;
-const stockKey=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
+const stockKey=syncIdentity;
 function queueStockPublish(){
-  const revision=++stockPublishRevision;
-  clearTimeout(publishTimer);
-  publishTimer=setTimeout(()=>{
-    stockPublishChain=stockPublishChain.catch(err=>console.error("前次庫存發布失敗",err)).then(async()=>{
-    if(revision!==stockPublishRevision)return;
-    if(auth.currentUser?.uid!==ADMIN_UID||!linkedItemsReady||!stockAccountsReady)return;
-    const totals={};
-    for(const a of stockAccounts)for(const i of (a.items||[])){
-      const key=stockKey(i);
-      totals[key]=(totals[key]||0)+Math.max(0,Math.floor(Number(i.qty)||0));
-    }
-    const output={};
-    for(const [id,link] of linkedItems){
-      const variants={};
-      for(const v of (link.variantLinks||[]))if(v.variant&&v.itemKey)variants[v.variant]=totals[v.itemKey]||0;
-      const entry={variants};
-      if(link.itemKey)entry.stock=totals[link.itemKey]||0;
-      output[id]=entry;
-    }
-    try{
-      const ownersByKey=new Map();
-      for(const a of stockAccounts){
-        const accountId=String(a.id||a._id||"");
-        if(!accountId)continue;
-        for(const i of (a.items||[])){
-          if(!i?.name)continue;
-          const key=stockKey(i),qty=Math.max(0,Math.floor(Number(i.qty)||0));
-          if(!ownersByKey.has(key))ownersByKey.set(key,[]);
-          const accountNumber=String(a.number||a.name||"").trim();
-          ownersByKey.get(key).push({accountId,label:accountNumber?`編號 ${accountNumber}`:"未設定編號",qty});
-        }
-      }
-      const inventoryRows=[...ownersByKey].map(([key,owners])=>({key,owners}));
-      // 庫存數量沒變、只有帳號編號變更時也必須重發索引；否則會一直留著舊的 UUID／未設定編號。
-      const hash=JSON.stringify({products:output,rows:inventoryRows});
-      // If a prior publish was interrupted, the next edit republishes both documents.
-      if(hash===lastPublished)return;
-      // 小倉倉只負責發布「實際總庫存」；訂單預訂由賣場管理。
-      // 發布前保留 warehouseStock 既有 reserved / reservedVariants，避免切進小倉倉時把預訂洗掉。
-      const currentPublicSnap=await getDoc(publicStockRef());
-      const currentProducts=currentPublicSnap.exists()?(currentPublicSnap.data()?.products||{}):{};
-      for(const [id,entry] of Object.entries(output)){
-        const previous=currentProducts[id]||{};
-        entry.reserved=Math.max(0,Math.floor(Number(previous.reserved)||0));
-        entry.reservedVariants={...(previous.reservedVariants||{})};
-      }
-      // Orders update inventory/meta independently. Never publish an old local snapshot over that update.
-      const freshMeta=await getDoc(metaRef());
-      const remoteRevision=String(freshMeta.exists()?(freshMeta.data()?.updated||""):"");
-      if(remoteRevision!==String(d?.updated||"")){
-        console.warn("雲端庫存已有其他更新，略過舊畫面的庫存發布；請重新整理小倉倉");
-        return;
-      }
-      if(revision!==stockPublishRevision)return;
-      // Publish index first, then stock. A newer edit queues another serialized publish.
-      await setDoc(doc(db,"adminSettings","warehouseInventoryIndex"),{rows:inventoryRows,updatedAt:new Date().toISOString()});
-      await setDoc(publicStockRef(),{products:output,updatedAt:new Date().toISOString()});
-      lastPublished=hash;
-    }
-    catch(err){console.error("公開庫存／配貨索引同步失敗",err);}
-    });
-  },1200);
+  // Inventory/index/public stock are committed together by persistAccounts; never publish local totals.
 }
 let stopPublicSync=[];
 onAuthStateChanged(auth,user=>{
   stopPublicSync.forEach(fn=>fn());stopPublicSync=[];
   linkedItemsReady=false;stockAccountsReady=false;
   if(user?.uid!==ADMIN_UID)return;
-  stopPublicSync.push(onSnapshot(collection(db,"inventoryLinks"),snap=>{
-    linkedItems=new Map(snap.docs.map(d=>[d.id,d.data()]));linkedItemsReady=true;
-  },err=>console.error("讀取商品連結失敗",err)));
   // 帳號庫存直接使用小倉倉已載入的本機狀態，不再每次帳號異動就重新掃描所有 items 子集合。
   // 這可避免大量重複讀取把 Firestore 每日免費額度迅速耗盡。
 });
@@ -753,58 +808,145 @@ function refreshStockFromLocal(publish=true){
 const itemCol=accountId=>collection(db,"users",ADMIN_UID,"accounts",String(accountId),"items");
 const itemRef=(accountId,itemId)=>doc(db,"users",ADMIN_UID,"accounts",String(accountId),"items",String(itemId));
 const ensureItemId=item=>{ if(!item._itemId)item._itemId=crypto.randomUUID(); return String(item._itemId); };
-const accountMetaData=a=>{ const x={...a}; delete x.items; x.itemsUpdatedAt=Date.now(); return x; };
-async function loadAccountItems(accountId){
-  const snap=await getDocs(itemCol(accountId));
-  return snap.docs.map(d=>({...d.data(),_itemId:String(d.id)}));
+// Baselines represent acknowledged cloud data, never a fresh local form snapshot.
+const accountBaselines=new Map();
+let validatedMemoryRevision="",memoryBaseline="",memoryDocumentBaseline=new Map();
+let validatedMetaDescriptor=null;
+let validatedMetaVersion="",validatedVersions={},metaStop=null,syncPending=false,syncBusy=false;
+let warehouseMutationChain=Promise.resolve();
+const cleanItem=x=>({...x,category:syncCategory(x.category)});
+function accountMetaData(a){const x={...a};delete x.items;return x;}
+function baselineAccount(a){const x=syncClone(a);x.items=(x.items||[]).map(cleanItem);return x;}
+function rememberBaselines(){accountBaselines.clear();for(const a of d.accounts||[])accountBaselines.set(String(a.id),baselineAccount(a));}
+async function loadAccountItems(accountId){const s=await getDocs(itemCol(accountId));return s.docs.map(x=>cleanItem({...x.data(),_itemId:x.id}));}
+async function loadAccountVersionedItems(id,raw,prior){
+  if(prior&&prior.itemsUpdatedAt!=null&&raw.itemsUpdatedAt!=null&&String(prior.itemsUpdatedAt)===String(raw.itemsUpdatedAt))return prior.items;
+  const delta=raw.lastItemChange;
+  if(prior&&delta&&!delta.all&&String(prior.itemsUpdatedAt||'')===String(delta.from)&&String(raw.itemsUpdatedAt||'')===String(delta.to)&&Array.isArray(delta.ids)){
+    const items=new Map((prior.items||[]).map(i=>[String(i._itemId),i]));
+    for(const itemId of [...new Set(delta.ids)]){const s=await getDoc(itemRef(id,itemId));s.exists()?items.set(String(itemId),cleanItem({...s.data(),_itemId:String(itemId)})):items.delete(String(itemId));}
+    return [...items.values()];
+  }
+  return loadAccountItems(id);
 }
 const accountWriteChains=new Map();
-async function persistAccount(a){
-  if(!a?.id)return;
-  const id=String(a.id);
-  const snapshot={...a,items:(a.items||[]).map(i=>({...i}))};
-  const previous=accountWriteChains.get(id)||Promise.resolve();
-  const task=previous.catch(()=>{}).then(()=>persistAccountNow(snapshot));
-  accountWriteChains.set(id,task);
-  try{await task}finally{if(accountWriteChains.get(id)===task)accountWriteChains.delete(id)}
+const resourceComparable=r=>Object.fromEntries(Object.entries(r||{}).filter(([k,v])=>!(v===0||v===""||v==null||(Array.isArray(v)&&!v.length))));
+function accountDiff(a,base){
+  const before=new Map((base?.items||[]).map(x=>[String(x._itemId),cleanItem(x)]));
+  const after=new Map((a.items||[]).map(x=>[ensureItemId(x),cleanItem(x)]));
+  const edits=[];
+  for(const [id,item] of after){const old=before.get(id);if(!old||!syncEqual(old,item))edits.push({id,old,item});}
+  for(const [id,old] of before)if(!after.has(id))edits.push({id,old,item:null});
+  const oldMeta=accountMetaData(base||{}),nextMeta=accountMetaData(a),patch={};
+  for(const [k,v] of Object.entries(nextMeta))if(k!=="itemsUpdatedAt"&&k!=="lastItemChange"&&!syncEqual(k==="resources"?resourceComparable(v):v,k==="resources"?resourceComparable(oldMeta[k]):oldMeta[k]))patch[k]=v;
+  return {edits,patch};
 }
-async function persistAccountNow(a){
-  if(!a?.id)return;
-  const accountId=String(a.id), items=Array.isArray(a.items)?a.items:[];
-  items.forEach(ensureItemId);
-  const old=await getDocs(itemCol(accountId));
-  const localIds=new Set(items.map(ensureItemId));
-
-  // 只寫入新增或真正改變的道具；其餘不重寫，降低 Firestore 寫入量。
-  // 仍讀取此帳號的既有文件以確認刪除，避免影響其他帳號。
-  const remoteItems=new Map(old.docs.map(x=>[x.id,x.data()]));
-  const changed=items.filter(item=>{
-    const id=ensureItemId(item),remote=remoteItems.get(id);
-    return !remote||JSON.stringify({...remote,_itemId:id})!==JSON.stringify({...item,_itemId:id});
+async function persistAccount(a){return persistAccounts([a]);}
+async function persistAccounts(accounts,extraOps=[]){
+  if(!currentUser||!migrationReady||!linkedItemsReady)throw new Error("資料尚未載入完成，請稍候再儲存。");
+  const snapshots=accounts.filter(a=>a?.id).map(a=>{(a.items||[]).forEach(ensureItemId);return syncClone(a)});
+  const task=warehouseMutationChain.catch(()=>{}).then(()=>persistAccountGroupNow(snapshots,extraOps));
+  warehouseMutationChain=task;
+  for(const a of snapshots)accountWriteChains.set(String(a.id),task);
+  try{return await task}finally{for(const a of snapshots)if(accountWriteChains.get(String(a.id))===task)accountWriteChains.delete(String(a.id));requestMetaSync();}
+}
+async function persistAccountGroupNow(snapshots,extraOps=[]){
+  const changes=snapshots.map(a=>({a,base:accountBaselines.get(String(a.id)),...accountDiff(a,accountBaselines.get(String(a.id)))})).filter(x=>x.edits.length||Object.keys(x.patch).length);
+  if(!changes.length&&!extraOps.length)return;
+  if(changes.reduce((n,x)=>n+x.edits.length+1,0)+extraOps.length+3>450)throw new Error("本次原子儲存超過 450 筆，未寫入任何資料。請將大量操作分批處理。");
+  const result=await runTransaction(db,async tx=>{
+    const mr=metaRef(),ir=doc(db,"adminSettings","warehouseInventoryIndex"),pr=publicStockRef();
+    const ms=await tx.get(mr),is=await tx.get(ir),ps=await tx.get(pr);
+    if(!is.exists())throw new Error("庫存索引尚未就緒，請重新整理完成初始化後再儲存。");
+    const reads=[];
+    for(const c of changes){const ar=accountRef(String(c.a.id)),as=await tx.get(ar);const items=[];
+      if(c.base&&!as.exists())throw new Error("這個帳號已在其他頁面刪除，未恢復舊資料。");
+      if(!c.base&&as.exists())throw new Error("帳號已存在，請重新整理後再操作。");
+      for(const edit of c.edits){const ref=itemRef(c.a.id,edit.id);items.push({...edit,ref,snap:await tx.get(ref)});}
+      reads.push({...c,ar,as,items});
+    }
+    const keys=[];
+    for(const c of reads){for(const e of c.items){if(e.old)keys.push(syncIdentity(e.old));if(e.item)keys.push(syncIdentity(e.item));if(e.snap.exists())keys.push(syncIdentity(e.snap.data()));}
+      if('number' in c.patch||'name' in c.patch)for(const i of c.base?.items||[])keys.push(syncIdentity(i));}
+    const index=await syncReadIndex(tx,is,keys);
+    const reservations=syncReservationTotals(index),writes=[],saved=[];
+    const version=crypto.randomUUID(),versions=syncCompactVersions(ms.data()?.accountVersions||{});
+    for(const c of reads){
+      const id=String(c.a.id),remoteMeta=c.as.exists()?c.as.data():{};
+      for(const k of Object.keys(c.patch)){
+        if(k==="resources"&&c.base){const merged={...(remoteMeta.resources||{})};for(const [rk,rv] of Object.entries(c.patch.resources||{})){const bv=c.base.resources?.[rk];if(syncEqual(rv,bv)||(!rv&&!bv))continue;const live=remoteMeta.resources?.[rk];if(!syncEqual(live,bv)&&!syncEqual(live,rv)&&!(!live&&!bv))throw new Error("資源欄位已被其他頁面修改，請重新整理。");merged[rk]=rv;}c.patch.resources=merged;}
+        else if(c.base&&!syncEqual(remoteMeta[k],accountMetaData(c.base)[k])&&!syncEqual(remoteMeta[k],c.patch[k]))throw new Error("帳號欄位已被其他頁面修改，請重新整理再編輯。");
+      }
+      const remoteItems=new Map((c.base?.items||[]).map(i=>[String(i._itemId),cleanItem(i)]));
+      for(const edit of c.items){const live=edit.snap.exists()?cleanItem({...edit.snap.data(),_itemId:edit.id}):null;
+        let next;
+        if(!edit.old){if(live)throw new Error("新物品 ID 已存在，請重新整理。");next=edit.item;}
+        else {
+          if(!live){if(!edit.item){remoteItems.delete(edit.id);continue;}throw new Error("物品已在其他頁面刪除，未恢復舊物品。");}
+          if(!edit.item){if(!syncEqual(live,edit.old))throw new Error("物品剛被更新或訂單扣庫存，請重新整理後再刪除。");next=null;}
+          else {next={...live};for(const [k,v] of Object.entries(edit.item)){if(syncEqual(v,edit.old[k]))continue;if(!syncEqual(live[k],edit.old[k])&&!syncEqual(live[k],v))throw new Error("同一物品欄位已被其他操作修改，請重新整理後再儲存。");next[k]=v;}}
+        }
+        // Apply only this document's delta to the authoritative index, retaining all other owners.
+        if(live){const row=index.rows.find(r=>r.key===syncIdentity(live));const owner=syncIndexOwner(index.rows,syncIdentity(live),id,edit.id);
+          if(index.rowLayout===6&&(!owner||syncQty(owner.qty)!==syncQty(live.qty)))throw new Error("物品文件與索引不一致，請重新整理校正。");
+          if(row)row.owners=row.owners.filter(o=>!(String(o.accountId)===id&&String(o.itemId)===edit.id));}
+        if(next){const key=syncIdentity(next);let row=index.rows.find(r=>r.key===key);if(!row){row={key,owners:[]};index.rows.push(row);}
+          row.owners.push({accountId:id,itemId:edit.id,label:`編號 ${c.a.number||c.a.name||"未設定"}`,qty:syncQty(next.qty)});remoteItems.set(edit.id,next);writes.push({ref:edit.ref,data:next});}
+        else {remoteItems.delete(edit.id);writes.push({ref:edit.ref,data:null});}
+      }
+      for(const row of index.rows){const owned=row.owners.filter(o=>String(o.accountId)===id);const total=owned.reduce((n,o)=>n+syncQty(o.qty),0);if(total<(reservations.get(id+"||"+row.key)||0))throw new Error("這項庫存已配給預訂訂單，請先取消預訂再刪除、減量或改分類。");for(const o of owned)o.label=`編號 ${c.patch.number??remoteMeta.number??c.a.number??c.a.name??"未設定"}`;}
+      const meta={...remoteMeta,...c.patch,id,itemsUpdatedAt:c.edits.length?version:(remoteMeta.itemsUpdatedAt||version)};delete meta.items;
+      if(c.edits.length)meta.lastItemChange={from:String(remoteMeta.itemsUpdatedAt||''),to:version,ids:c.edits.length<=128?c.edits.map(e=>e.id):[],all:c.edits.length>128};
+      versions[id]=version;saved.push({id,meta,items:[...remoteItems.values()],submitted:c.a,needsReload:!!c.base&&String(remoteMeta.itemsUpdatedAt||"")!==String(c.base.itemsUpdatedAt||""),oldStamp:c.base?.itemsUpdatedAt});
+      writes.push({ref:c.ar,data:meta});
+    }
+    index.rows=index.rows.filter(r=>r.owners.length);index.updatedAt=new Date().toISOString();syncCheckSize(index);
+    const products=syncProjection(index,linkedItems,ps.data()?.products||{});syncCheckSize(products);
+    const planned=syncIndexDocuments(index);
+    syncCheckTransaction([...writes.map(w=>w.data),...extraOps.map(o=>o.data),...planned.shards.map(s=>s.data),planned.root,products,versions],writes.length+extraOps.length+planned.shards.length+3);
+    for(const w of writes)w.data===null?tx.delete(w.ref):tx.set(w.ref,w.data);
+    for(const op of extraOps)op.type==="delete"?tx.delete(op.ref):tx.set(op.ref,op.data);
+    syncWriteIndex(tx,ir,index);tx.set(pr,{products,updatedAt:index.updatedAt});
+    syncMetaWrite(tx,mr,ms.data()||{},versions,version);
+    return saved;
   });
-  for(let i=0;i<changed.length;i+=300){
-    const batch=writeBatch(db);
-    changed.slice(i,i+300).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
-    await batch.commit();
-  }
-  await setDoc(accountRef(accountId),accountMetaData(a),{merge:false});
-
-  const stale=old.docs.filter(x=>!localIds.has(x.id));
-  for(let i=0;i<stale.length;i+=300){
-    const batch=writeBatch(db);
-    stale.slice(i,i+300).forEach(x=>batch.delete(x.ref));
-    await batch.commit();
-  }
-  refreshStockFromLocal();
-  scheduleWarehouseCacheWrite();
+  for(const r of result){const local=d.accounts.find(a=>String(a.id)===r.id);const baseline={...r.meta,items:r.items};if(r.needsReload)baseline.itemsUpdatedAt=r.oldStamp;accountBaselines.set(r.id,baselineAccount(baseline));
+    if(local){const pending=accountDiff(local,r.submitted);Object.assign(local,r.meta);if(r.needsReload)local.itemsUpdatedAt=r.oldStamp;const next=new Map(r.items.map(i=>[String(i._itemId),i]));for(const e of pending.edits)e.item?next.set(e.id,e.item):next.delete(e.id);local.items=[...next.values()];Object.assign(local,pending.patch);}}
+  refreshStockFromLocal(false);scheduleWarehouseCacheWrite();
 }
-async function persistAccounts(accounts){ for(const a of accounts)await persistAccount(a); }
+async function restoreAccountSafely(account){
+  (account.items||[]).forEach(ensureItemId);
+  const id=String(account.id),desired=new Map((account.items||[]).map(i=>[String(i._itemId),syncClone(i)]));
+  if(!accountBaselines.has(id)){restoreTrackStart('建立帳號',id,[{id,type:'set-meta'}]);await persistAccounts([{...account,items:[]}]);restoreTrackCommit();}
+  const existing=accountBaselines.get(id);
+  const ids=[...new Set([...(existing.items||[]).map(i=>String(i._itemId)),...desired.keys()])];
+  if(!ids.length){await persistAccounts([{...account,items:[]}]);return;}
+  for(let n=0;n<ids.length;n+=20){const current=accountBaselines.get(id),items=new Map((current.items||[]).map(i=>[String(i._itemId),syncClone(i)]));
+    for(const key of ids.slice(n,n+20))desired.has(key)?items.set(key,desired.get(key)):items.delete(key);
+    restoreTrackStart('帳號道具',id,ids.slice(n,n+20).map(key=>({id:key,type:desired.has(key)?'set':'delete'})));
+    await persistAccounts([{...account,items:[...items.values()]}]);restoreTrackCommit();
+  }
+}
 async function deleteAccountDeep(accountId){
-  await clearWarehouseCache();
-  const items=await getDocs(itemCol(accountId));
-  for(let i=0;i<items.docs.length;i+=350){const batch=writeBatch(db);items.docs.slice(i,i+350).forEach(x=>batch.delete(x.ref));await batch.commit();}
-  await deleteDoc(accountRef(String(accountId)));
+  const id=String(accountId),base=accountBaselines.get(id);if(!base)throw new Error("缺少帳號基準，請重新整理後再刪除。");
+  if((base.items||[]).length>150){
+    // Explicit large account deletion progresses in acknowledged chunks; never sends an oversized transaction.
+    const target={...base,items:[]};await restoreAccountSafely(target);return deleteAccountDeep(id);
+  }
+  await runTransaction(db,async tx=>{
+    const ar=accountRef(id),ir=doc(db,"adminSettings","warehouseInventoryIndex"),pr=publicStockRef(),mr=metaRef();
+    const as=await tx.get(ar),is=await tx.get(ir),ps=await tx.get(pr),ms=await tx.get(mr);
+    if(!as.exists())return;
+    if(String(as.data().itemsUpdatedAt||"")!==String(base.itemsUpdatedAt||""))throw new Error("帳號庫存已變更，請重新整理後再刪除。");
+    const index=await syncReadIndex(tx,is,(base.items||[]).map(syncIdentity));
+    if([...syncReservationTotals(index)].some(([k,q])=>k.startsWith(id+"||")&&q>0))throw new Error("這個帳號還有預訂配貨，請先取消預訂。");
+    index.rows=index.rows.map(r=>({...r,owners:r.owners.filter(o=>String(o.accountId)!==id)})).filter(r=>r.owners.length);
+    for(const item of base.items||[])tx.delete(itemRef(id,item._itemId));tx.delete(ar);
+    const version=crypto.randomUUID();syncWriteIndex(tx,ir,index);tx.set(pr,{products:syncProjection(index,linkedItems,ps.data()?.products||{}),updatedAt:version});
+    const versions=syncCompactVersions(ms.data()?.accountVersions||{});delete versions[id];syncMetaWrite(tx,mr,ms.data()||{},versions,version);
+  });accountBaselines.delete(id);await clearWarehouseCache();requestMetaSync();
 }
+
 const MIGRATION_VERSION=3;
 let migrationReady=false;
 
@@ -817,10 +959,11 @@ function naturalAccountCompare(a,b){
 function sortAccountsNaturally(){ d.accounts.sort(naturalAccountCompare); }
 
 function stableMemoryId(m,index=0){
+  if(m?._memoryId)return String(m._memoryId);
   const raw=JSON.stringify([m?.sig||[],m?.name||"",m?.variant||"",index]);
   let h=2166136261;
   for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
-  return "m"+(h>>>0).toString(36)+"_"+index;
+  const id="m"+(h>>>0).toString(36)+"_"+index;m._memoryId=id;return id;
 }
 // === 低讀取快取 ===
 // 小倉倉完整資料放 IndexedDB；每次開頁只先讀 1 份 meta。
@@ -834,7 +977,7 @@ function scheduleWarehouseCacheWrite(){
   clearTimeout(warehouseCacheWriteTimer);
   warehouseCacheWriteTimer=setTimeout(()=>{
     if(currentUser&&migrationReady)void getWarehouseCache().then(c=>{
-      if(c?.state) return setWarehouseCache(d,String(c.metaUpdated||""));
+      if(c?.state) return setWarehouseCache(d,validatedMetaVersion);
     });
   },700);
 }
@@ -852,7 +995,7 @@ async function clearWarehouseCache(){
   try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).delete(WAREHOUSE_CACHE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}catch(err){console.warn("清除快取失敗",err)}
 }
 async function setWarehouseCache(state,metaUpdated){
-  try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({metaUpdated:String(metaUpdated||""),state,savedAt:Date.now(),fullSyncedAt:warehouseFullSyncAt||Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
+  try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({format:6,metaDescriptor:validatedMetaDescriptor,versions:validatedVersions,memoryRevision:validatedMemoryRevision,metaUpdated:String(metaUpdated||""),state,savedAt:Date.now(),fullSyncedAt:warehouseFullSyncAt||Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
 }
 // 增量校正：meta 改變時只掃描帳號的輕量文件（約 617 筆），
 // 再依 itemsUpdatedAt 比對，僅下載真正改動帳號的 items。
@@ -860,93 +1003,161 @@ async function setWarehouseCache(state,metaUpdated){
 // 在本機寫入 meta 成功後更新快取版本；避免 F5 把自己的更新當成外部變更。
 // 只有確實帶 updated 且與目前畫面版本相符時才更新快取。
 async function writeWarehouseMeta(data,options={merge:true}){
-  await setDoc(metaRef(),data,options);
-  if(data?.updated&&String(data.updated)===String(d?.updated||"")&&migrationReady){
-    const version=String(data.updated);
-    await setWarehouseCache(d,version);
-  }
+  const payload={...data};delete payload.updated;
+  if(Object.keys(payload).length)await setDoc(metaRef(),payload,options);
+  scheduleWarehouseCacheWrite();requestMetaSync();
 }
-async function readHybridCloud(metaSnap=null,previousState=null){
-  metaSnap=metaSnap||await getDoc(metaRef());
-  const [accountSnap,memorySnap]=await Promise.all([getDocs(accountCol()),getDocs(memoryCol())]);
-  const meta=metaSnap.exists()?metaSnap.data():{};
+async function publishMemoryDelta(ids){
+  const unique=[...new Set(ids)];if(!unique.length)return;
+  await runTransaction(db,async tx=>{const s=await tx.get(metaRef()),version=crypto.randomUUID();tx.set(metaRef(),{...s.data(),updated:new Date().toISOString(),syncRevision:version,memoryRevision:version,lastMemoryChange:{from:String(s.data()?.memoryRevision||''),to:version,ids:unique.length<=128?unique:[],all:unique.length>128}});});requestMetaSync();
+}
+async function markRecognitionMemorySaved(){
+  const now=new Map((d.itemMemory||[]).map((m,i)=>[stableMemoryId(m,i),JSON.stringify(syncStable(m))]));
+  const ids=[...new Set([...now.keys(),...memoryDocumentBaseline.keys()])].filter(id=>now.get(id)!==memoryDocumentBaseline.get(id));
+  await publishMemoryDelta(ids);memoryDocumentBaseline=now;memoryBaseline=JSON.stringify(syncStable(d.itemMemory||[]));
+}
+async function readMemoryVersioned(meta,prior){
+  const delta=meta.lastMemoryChange;
+  if(delta&&!delta.all&&String(delta.from)===validatedMemoryRevision&&String(delta.to)===String(meta.memoryRevision||'')){
+    const result=new Map((prior||[]).map((m,i)=>[stableMemoryId(m,i),m]));
+    for(const id of [...new Set(delta.ids||[])]){const s=await getDoc(memoryRef(id));s.exists()?result.set(String(id),{...s.data(),_memoryId:String(id)}):result.delete(String(id));}
+    return [...result.values()];
+  }
+  const s=await getDocs(memoryCol());return s.docs.map(x=>({...x.data(),_memoryId:x.id}));
+}
+// Timestamp changes are not content changes. Legacy fallbacks require a schema/explicit signal.
+function warehouseMetaDescriptor(meta={}){
+  const object=meta.accountVersions;
+  return {protocol:Number(meta.syncProtocol||0),versioned:!!object&&typeof object==='object'&&!Array.isArray(object),
+    inventory:syncStable({legacyInventoryRevision:meta.legacyInventoryRevision??null,inventoryRevision:meta.inventoryRevision??null,backupRestoredAt:meta.backupRestoredAt??null,materialsRemovedAt:meta.materialsRemovedAt??null}),
+    memory:syncStable({legacyMemoryRevision:meta.legacyMemoryRevision??null,itemMemoryUpdatedAt:meta.itemMemoryUpdatedAt??null,inventoryMemoryBackfilledAt:meta.inventoryMemoryBackfilledAt??null})};
+}
+function warehouseMetaProof(meta){return {version:syncMetaVersion(meta),versions:meta?.accountVersions||{},memoryRevision:String(meta?.memoryRevision||''),descriptor:warehouseMetaDescriptor(meta||{})};}
+function warehouseMetaNeedsSync(meta){return syncMetaVersion(meta)!==validatedMetaVersion||syncChangedVersions(meta?.accountVersions||{},validatedVersions).length>0||String(meta?.memoryRevision||'')!==validatedMemoryRevision||!!validatedMetaDescriptor&&!syncEqual(warehouseMetaDescriptor(meta||{}),validatedMetaDescriptor);}
+function warehouseReadPlan(meta,previous=null){
+  const now=warehouseMetaDescriptor(meta),legacy=!now.versioned||now.protocol<6;
+  // An old sync6 cache lacks a descriptor. Its component versions remain usable; seed the descriptor without a warehouse rescan.
+  const inventorySignal=!!previous&&!syncEqual(now.inventory,previous.inventory);
+  const memorySignal=!!previous&&!syncEqual(now.memory,previous.memory);
+  return {descriptor:now,accounts:legacy||inventorySignal,memory:legacy||memorySignal,forceItems:inventorySignal,
+    reason:legacy?'legacy-schema':inventorySignal?'legacy-inventory-signal':memorySignal?'legacy-memory-signal':'component-versions'};
+}
+async function readHybridCloud(metaSnap=null,previousState=null,options={}){
+  metaSnap=metaSnap||await getDoc(metaRef());const meta=metaSnap.data()||{};
+  const readAccounts=!previousState||options.accounts!==false,readMemory=!previousState||options.memory!==false;
+  const [accountSnap,memorySnap]=await Promise.all([readAccounts?getDocs(accountCol()):null,readMemory?getDocs(memoryCol()):null]);
   const previousAccounts=new Map((previousState?.accounts||[]).map(a=>[String(a.id),a]));
-  const accounts=await Promise.all(accountSnap.docs.map(async x=>{
-    const raw={id:x.id,...x.data()};
-    const prior=previousAccounts.get(String(x.id));
-    const priorStamp=prior?.itemsUpdatedAt;
-    const newStamp=raw.itemsUpdatedAt;
-    // Firestore 訂單扣庫存也更新 itemsUpdatedAt；版本不變才可沿用快取物品。
-    // 對沒有修訂標記的舊帳號，保守重新載入以避免漏掉變更。
-    if(prior&&priorStamp!=null&&newStamp!=null&&String(priorStamp)===String(newStamp)&&Array.isArray(prior.items)){
-      raw.items=prior.items;
-    }else{
-      const splitItems=await loadAccountItems(x.id);
-      raw.items=(raw.itemsUpdatedAt!=null||raw.migratedFromLegacy===true||splitItems.length)
-        ?splitItems:(Array.isArray(raw.items)?raw.items:[]);
+  const accounts=accountSnap?await Promise.all(accountSnap.docs.map(async x=>{
+    const raw={id:x.id,...x.data()},prior=previousAccounts.get(String(x.id));
+    if(!options.forceItems&&prior&&prior.itemsUpdatedAt!=null&&raw.itemsUpdatedAt!=null&&String(prior.itemsUpdatedAt)===String(raw.itemsUpdatedAt)&&Array.isArray(prior.items))raw.items=prior.items;
+    else{
+      const split=options.forceItems?await loadAccountItems(x.id):await loadAccountVersionedItems(x.id,raw,prior);
+      raw.items=(raw.itemsUpdatedAt!=null||raw.migratedFromLegacy===true||split.length)?split:(Array.isArray(raw.items)?raw.items:[]);
     }
     return raw;
-  }));
-  return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
+  })):syncClone(previousState.accounts||[]);
+  return {accounts,itemMemory:memorySnap?memorySnap.docs.map(x=>({...x.data(),_memoryId:x.id})):syncClone(previousState?.itemMemory||[]),updated:String(meta.updated||'')};
 }
 
+async function ensureWarehouseIndex(){
+  const ref=syncIndexRef(),probe=await getDoc(ref),old=probe.data()||{};
+  if(old.rowLayout===6&&old.reservationSchemaVersion===2&&old.itemDocumentIds===true){linkedItems=new Map(Object.entries(old.links||{}));linkedItemsReady=true;return;}
+  // One-time migration only: verify both old reservation sources and the authoritative links.
+  const [ls,activeOrders,activeFulfillments]=await Promise.all([getDocs(collection(db,'inventoryLinks')),getDocs(query(collection(db,'orders'),where('status','in',['預定中','待交易']))),getDocs(query(collection(db,'orderFulfillments'),where('status','==','預定中')))]);
+  const orderMap=new Map(activeOrders.docs.map(s=>[s.id,s])),fulfillmentMap=new Map(activeFulfillments.docs.map(s=>[s.id,s]));
+  for(const id of new Set([...fulfillmentMap.keys(),...Object.keys(old.reservations||{})]))if(!orderMap.has(id)){const s=await getDoc(doc(db,'orders',id));if(s.exists())orderMap.set(id,s);}
+  for(const [id,s] of orderMap)if((s.data().status==='預定中'||s.data().warehouseReserved===true||s.data().reservationAllocations?.length)&&!fulfillmentMap.has(id)){const f=await getDoc(doc(db,'orderFulfillments',id));if(f.exists())fulfillmentMap.set(id,f);}
+  const os={docs:[...orderMap.values()]},fs={docs:[...fulfillmentMap.values()]};
+  const links=Object.fromEntries(ls.docs.map(s=>[s.id,{...s.data(),itemKey:syncKey(s.data().itemKey),variantLinks:(s.data().variantLinks||[]).map(v=>({...v,itemKey:syncKey(v.itemKey)}))}]));
+  const migrated=syncLegacyReservations(os.docs.map(s=>({id:s.id,data:s.data()})),fs.docs.filter(s=>s.id!=='_reservationLedger').map(s=>({id:s.id,data:s.data()})),old.reservations||{},links);
+  const grouped=new Map();
+  for(const a of accountBaselines.values())for(const i of a.items||[]){if(!i._itemId)throw new Error(`帳號 ${a.number||a.id} 的舊物品缺少文件 ID，未建立不完整索引。`);const key=syncIdentity(i);if(!grouped.has(key))grouped.set(key,{key,owners:[]});grouped.get(key).owners.push({accountId:String(a.id),itemId:String(i._itemId),label:`編號 ${a.number||a.name||'未設定'}`,qty:syncQty(i.qty)});}
+  const fingerprint=JSON.stringify(syncStable([validatedMetaVersion,old,links,migrated.reservations]));
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(fingerprint));
+  const generation=[...new Uint8Array(digest)].slice(0,8).map(n=>n.toString(16).padStart(2,'0')).join('');
+  const index={...old,rows:[...grouped.values()],rowLayout:6,rowGeneration:generation,rowShardIds:[],itemDocumentIds:true,reservations:migrated.reservations,reservationSchemaVersion:2,links,syncLinksVersion:1,syncProtocol:6,updatedAt:new Date().toISOString(),_partial:false,_beforeShards:{}};
+  index._loadedShardIds=[...new Set(index.rows.map(r=>syncShardId(r.key,generation)))];
+  // Immutable staged shards are invisible until the manifest commits. A failed stage never replaces the live index.
+  const staged=syncIndexDocuments(index);
+  for(let n=0;n<staged.shards.length;n+=20){const batch=writeBatch(db);for(const shard of staged.shards.slice(n,n+20))batch.set(syncShardRef(shard.id),shard.data);await batch.commit();}
+  const committed=await runTransaction(db,async tx=>{
+    const ms=await tx.get(metaRef()),is=await tx.get(ref),ps=await tx.get(publicStockRef());
+    if(is.data()?.rowLayout===6&&is.data()?.reservationSchemaVersion===2)return;
+    if(syncMetaVersion(ms.data())!==validatedMetaVersion||!syncEqual(is.data()||{},old))throw new Error('建立新索引期間雲端資料有變更；新分片尚未啟用，請重新整理重試。');
+    for(const s of [...ls.docs,...os.docs,...fs.docs]){const live=await tx.get(s.ref);if(!live.exists()||!syncEqual(live.data(),s.data()))throw new Error('舊訂單或商品連結在初始化期間變更，未啟用過期索引。');}
+    const products=syncProjection(index,new Map(Object.entries(links)),ps.data()?.products||{});
+    syncValidateLegacyPublic(ps.data()?.products||{},products);
+    const repairs=migrated.repairs.filter(r=>{const o=os.docs.find(s=>s.id===r.id)?.data(),f=fs.docs.find(s=>s.id===r.id)?.data();return !syncEqual(o?.reservationAllocations,r.order.reservationAllocations)||o?.status!=='預定中'||f?.status!=='預定中'||!syncEqual(f?.allocations,r.fulfillment.allocations)});
+    if(repairs.length*2+2>440)throw new Error('舊訂單修復超過單次安全界限；原索引及訂單尚未更動，請先分批整理舊預訂。');
+    for(const r of repairs){tx.set(doc(db,'orders',r.id),r.order,{merge:true});tx.set(doc(db,'orderFulfillments',r.id),r.fulfillment,{merge:true});}
+    syncCheckDocument(products,'公開庫存');
+    const versions=Object.fromEntries([...accountBaselines].map(([id,a])=>[id,ms.data()?.accountVersions?.[id]&&!String(ms.data().accountVersions[id]).startsWith('deleted:')?ms.data().accountVersions[id]:String(a.itemsUpdatedAt||generation)]));
+    tx.set(ref,staged.root);tx.set(publicStockRef(),{products,updatedAt:index.updatedAt});
+    return syncMetaWrite(tx,metaRef(),ms.data()||{},versions,crypto.randomUUID());
+  });
+  if(committed){validatedMetaVersion=syncMetaVersion(committed);validatedVersions=syncClone(committed.accountVersions);validatedMetaDescriptor=warehouseMetaDescriptor(committed);d.updated=committed.updated;}
+  const fresh=await getDoc(ref);linkedItems=new Map(Object.entries(fresh.data()?.links||{}));linkedItemsReady=true;
+}
+let syncRetryTimer=null;
+function requestMetaSync(){syncPending=true;clearTimeout(syncRetryTimer);syncRetryTimer=setTimeout(()=>void synchronizeWarehouse(),250);}
+function warehouseHasDraft(){return (d.accounts||[]).some(a=>{const b=accountBaselines.get(String(a.id));if(!b)return true;const c=accountDiff(a,b);return c.edits.length||Object.keys(c.patch).length});}
+async function synchronizeWarehouse(){
+  if(!syncPending||syncBusy||!currentUser||!migrationReady)return;
+  if(saving||activeRestoreJournal?.status==='running'||accountWriteChains.size||document.querySelector('dialog[open]')||warehouseHasDraft()){clearTimeout(syncRetryTimer);syncRetryTimer=setTimeout(()=>void synchronizeWarehouse(),1200);return;}
+  syncBusy=true;
+  try{
+    const ms=await getDoc(metaRef()),meta=ms.data()||{},version=syncMetaVersion(meta),plan=warehouseReadPlan(meta,validatedMetaDescriptor);
+    if(!warehouseMetaNeedsSync(meta)){syncPending=false;return;}
+    const versions=meta.accountVersions||{},ids=syncChangedVersions(versions,validatedVersions);
+    const memoryChanged=String(meta.memoryRevision||'')!==validatedMemoryRevision;
+    // Only actual legacy schema/signal changes use the compatibility catalog read.
+    let fresh=plan.accounts||plan.memory?await readHybridCloud(ms,d,plan):{...d,accounts:[...(d.accounts||[])],itemMemory:d.itemMemory||[]};
+    if(!plan.accounts)for(const id of ids){
+      const pos=fresh.accounts.findIndex(a=>String(a.id)===id),as=await getDoc(accountRef(id));
+      if(!as.exists()){if(pos>=0)fresh.accounts.splice(pos,1);continue;}
+      const a={id:as.id,...as.data()},prior=pos>=0?fresh.accounts[pos]:null;
+      a.items=await loadAccountVersionedItems(id,a,prior);if(pos>=0)fresh.accounts[pos]=a;else fresh.accounts.push(a);
+    }
+    if(memoryChanged&&!plan.memory)fresh.itemMemory=await readMemoryVersioned(meta,d.itemMemory||[]);
+    fresh.updated=String(meta.updated||'');
+    const check=await getDoc(metaRef());
+    if(!syncEqual(warehouseMetaProof(check.data()||{}),warehouseMetaProof(meta))||saving||accountWriteChains.size||warehouseHasDraft()){requestMetaSync();return;}
+    d=fresh;validatedMetaVersion=version;validatedVersions=syncClone(versions);validatedMetaDescriptor=plan.descriptor;validatedMemoryRevision=String(meta.memoryRevision||'');
+    memoryBaseline=JSON.stringify(syncStable(d.itemMemory||[]));memoryDocumentBaseline=new Map((d.itemMemory||[]).map((m,i)=>[stableMemoryId(m,i),JSON.stringify(syncStable(m))]));rememberBaselines();
+    active=d.accounts.some(a=>String(a.id)===String(active))?active:(d.accounts[0]?.id||null);
+    syncPending=false;warehouseFullSyncAt=Date.now();await setWarehouseCache(d,validatedMetaVersion);refreshStockFromLocal(false);render();
+  }catch(err){console.error('庫存增量同步失敗',err);syncPending=true;clearTimeout(syncRetryTimer);syncRetryTimer=setTimeout(()=>void synchronizeWarehouse(),5000);}
+  finally{syncBusy=false;}
+}
 async function loadCloud(){
-  // 只用雲端 meta 的版本號驗證快取。訂單扣庫存也會更新此版本號。
-  // 不符合時完整讀取 Firestore；快取絕不反向寫回雲端。
-  const metaSnap=await getDoc(metaRef());
-  const remoteVersion=String(metaSnap.exists()?(metaSnap.data()?.updated||""):"");
-  const cached=await getWarehouseCache();
-  const cacheLastFullSync=Number(cached?.fullSyncedAt||cached?.savedAt||0);
-  // 版本相同才可重用快取；不能只靠 30 分鐘期限判斷。
-  // 雲端版本未變時，即使過了 30 分鐘也不讀取 617 個帳號的 items。
-  const cacheValid=!!(cached?.state&&Array.isArray(cached.state.accounts)&&
-    String(cached.metaUpdated||"")===remoteVersion);
-  if(cacheValid){
-    d=cached.state;
-    warehouseFullSyncAt=Date.now();
+  migrationReady=false;
+  const ms=await getDoc(metaRef()),meta=ms.data()||{},version=syncMetaVersion(meta),cached=await getWarehouseCache();
+  const usable=!!(cached?.format===6&&cached.state&&Array.isArray(cached.state.accounts)&&Array.isArray(cached.state.itemMemory));
+  if(usable){
+    d=cached.state;validatedMetaVersion=String(cached.metaUpdated||'');validatedVersions=cached.versions||{};
+    validatedMemoryRevision=String(cached.memoryRevision||'');validatedMetaDescriptor=cached.metaDescriptor||null;rememberBaselines();
+    const descriptor=warehouseMetaDescriptor(meta);
+    if(warehouseMetaNeedsSync(meta)){
+      migrationReady=true;syncPending=true;await synchronizeWarehouse();migrationReady=false;
+      if(syncPending)throw new Error('雲端同步尚未完成，請稍後重新整理。');
+    }else validatedMetaDescriptor=descriptor;
   }else{
-    // 首次使用／版本確實改變時才完整校正，避免漏掉賣場直接扣除的庫存。
-    d=await readHybridCloud(metaSnap,cached?.state);
-    warehouseFullSyncAt=Date.now();
-    await setWarehouseCache(d,remoteVersion);
+    // No complete usable cache: the initial full read is necessary.
+    d=await readHybridCloud(ms,null);validatedMetaVersion=version;validatedVersions=syncClone(meta.accountVersions||{});
+    validatedMemoryRevision=String(meta.memoryRevision||'');validatedMetaDescriptor=warehouseMetaDescriptor(meta);
   }
-  migrationReady=true;
-  if(!Array.isArray(d.accounts))d.accounts=[];
-  if(!Array.isArray(d.itemMemory))d.itemMemory=[];
-  active=d.accounts[0]?.id||null;
-  // Loading a warehouse page must never overwrite stock updated by a completed order.
-  refreshStockFromLocal(false);
-  render();
-  setTimeout(()=>backfillInventoryMemory(),300);
+  const check=await getDoc(metaRef());
+  if(warehouseMetaNeedsSync(check.data()||{}))throw new Error('讀取期間庫存有變更，請重新整理以載入完整最新資料。');
+  memoryBaseline=JSON.stringify(syncStable(d.itemMemory||[]));memoryDocumentBaseline=new Map((d.itemMemory||[]).map((m,i)=>[stableMemoryId(m,i),JSON.stringify(syncStable(m))]));
+  rememberBaselines();await ensureWarehouseIndex();migrationReady=true;warehouseFullSyncAt=Date.now();active=d.accounts[0]?.id||null;
+  await setWarehouseCache(d,validatedMetaVersion);refreshStockFromLocal(false);render();
+  if(metaStop)metaStop();metaStop=onSnapshot(metaRef(),snap=>{if(snap.metadata?.hasPendingWrites||snap.metadata?.fromCache)return;const meta=snap.data()||{};if(warehouseMetaNeedsSync(meta))requestMetaSync();},err=>console.error('庫存版本監聽失敗',err));
+  restoreShowInterruptedNotice();setTimeout(()=>backfillInventoryMemory(),300);
 }
 
-// 訂單在賣場完成時會直接修改 Firestore items；小倉倉不可一直顯示開頁時的舊快照。
-// 只監聽「目前選取帳號」的 items，不掃描全部帳號，也不將讀到的資料反向發布。
-let liveItemUnsubscribe=null,liveItemAccountId="",liveItemGeneration=0;
-function watchActiveAccountItems(){
-  const id=currentUser&&migrationReady&&active?String(active):"";
-  if(id===liveItemAccountId)return;
-  if(liveItemUnsubscribe){liveItemUnsubscribe();liveItemUnsubscribe=null;}
-  liveItemAccountId=id;
-  const generation=++liveItemGeneration;
-  if(!id)return;
-  liveItemUnsubscribe=onSnapshot(itemCol(id),snap=>{
-    if(generation!==liveItemGeneration||!currentUser||String(active)!==id)return;
-    // 本機寫入中不覆蓋正在編輯的表單；寫入後由下次快照／切換頁面刷新。
-    if(saving||accountWriteChains.has(id))return;
-    const account=d.accounts.find(a=>String(a.id)===id);
-    if(!account)return;
-    const freshItems=snap.docs.map(x=>({...x.data(),_itemId:String(x.id)}));
-    const before=JSON.stringify((account.items||[]).map(x=>[x._itemId,x.qty,x.name,x.variant,x.category,x.gender,x.candyType] ).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
-    const after=JSON.stringify(freshItems.map(x=>[x._itemId,x.qty,x.name,x.variant,x.category,x.gender,x.candyType]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
-    if(before===after)return;
-    account.items=freshItems;
-    scheduleWarehouseCacheWrite();
-    // 這是讀取雲端最新庫存，絕不能觸發 publish，否則可能把訂單扣除洗回去。
-    refreshStockFromLocal(false);
-    render();
-  },err=>console.error("即時更新小倉倉道具失敗",err));
-}
+// Account switches render acknowledged memory. One meta listener requests only changed accounts.
+function watchActiveAccountItems(){if(!currentUser&&metaStop){metaStop();metaStop=null;}}
+
 async function cleanupRemovedMaterials(){
   // 「材料」分類已從網站移除：把舊帳號文件內殘留的材料物品真正刪掉，避免總覽重新讀回。
   const changed=[];
@@ -962,21 +1173,15 @@ async function cleanupRemovedMaterials(){
 }
 async function save(){
   if(!currentUser||!migrationReady)return;
-  d.updated=new Date().toISOString(); saving=true;
+  saving=true;
   try{
-    const remote=await getDocs(accountCol());
-    const localIds=new Set((d.accounts||[]).map(a=>String(a.id)));
-    for(const x of remote.docs)if(!localIds.has(x.id))await deleteAccountDeep(x.id);
-    // 帳號新增／刪除／備份還原等管理操作仍走完整安全儲存，避免遺漏資料。
-    await persistAccounts(d.accounts||[]);
-    const remoteMem=await getDocs(memoryCol());
-    const ops=[]; remoteMem.docs.forEach(x=>ops.push({type:"delete",ref:x.ref}));
-    (d.itemMemory||[]).forEach((m,i)=>ops.push({type:"set",ref:memoryRef(stableMemoryId(m,i)),data:m}));
-    for(let i=0;i<ops.length;i+=350){const batch=writeBatch(db);ops.slice(i,i+350).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));await batch.commit();}
-    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    const localIds=new Set(d.accounts.map(a=>String(a.id)));
+    for(const id of accountBaselines.keys())if(!localIds.has(id))await deleteAccountDeep(id);
+    const changed=d.accounts.filter(a=>{const c=accountDiff(a,accountBaselines.get(String(a.id)));return c.edits.length||Object.keys(c.patch).length;});
+    for(const a of changed)await persistAccount(a);
     render();
-  }catch(err){console.error(err);alert("雲端儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));}
-  finally{saving=false}
+  }catch(err){console.error(err);alert("雲端儲存失敗，請重新整理確認資料。\n"+(err?.message||err));}
+  finally{saving=false;requestMetaSync();}
 }
 function migrateCategories(){
   (d.accounts||[]).forEach(a=>{
@@ -1006,7 +1211,7 @@ function accountHasTempShots(a){
 async function syncTempShotCount(accountId,count){
   const a=d.accounts.find(x=>String(x.id)===String(accountId)),n=Math.max(0,Number(count)||0);
   if(a)a.tempShotCount=n;
-  try{await setDoc(accountRef(String(accountId)),{tempShotCount:n},{merge:true})}catch(err){console.error("tempShotCount sync failed",err)}
+  try{if(a)await persistAccount(a)}catch(err){console.error("tempShotCount sync failed",err)}
 }
 function render(){
   queueMicrotask(watchActiveAccountItems);
@@ -1205,6 +1410,7 @@ $("#editItemSave").onclick=async()=>{
         await setDoc(memoryRef(stableMemoryId(m,idx<0?j:idx)),m);
       }
     }
+    await markRecognitionMemorySaved();
     $("#su").textContent=d.updated;
   }catch(err){
     console.error(err);
@@ -1428,18 +1634,14 @@ $("#swapAccountConfirm").onclick=async()=>{
     if(operations>450){alert(`這兩個帳號共有 ${aShots.length+bShots.length} 張臨時截圖，超過安全交換上限。請先備份並整理截圖，這次沒有修改任何資料。`);return;}
     if(!confirm(`確認交換兩個編號底下的帳號資料？\n\n交換前：\n${swapAccountLabel(a)}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖）\n${swapAccountLabel(b)}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖）\n\n交換後：\n${a.number||a.name}／${b.gameId||"無遊戲 ID"}（${(b.items||[]).length} 筆道具、${bShots.length} 張截圖及全部資源）\n${b.number||b.name}／${a.gameId||"無遊戲 ID"}（${(a.items||[]).length} 筆道具、${aShots.length} 張截圖及全部資源）\n\n編號不變；遊戲 ID、所有物品、資源和臨時截圖對換。`))return;
     // 同一筆原子 batch：交換帳號資料、刪除舊截圖並在對方編號下重建。
-    const batch=writeBatch(db);
-    batch.update(accountRef(String(a.id)),{...bData,tempShotCount:bShots.length});
-    batch.update(accountRef(String(b.id)),{...aData,tempShotCount:aShots.length});
-    for(const shot of aShots)batch.delete(tempShotRef(String(a.id),shot.id));
-    for(const shot of bShots)batch.delete(tempShotRef(String(b.id),shot.id));
-    for(const shot of aShots)batch.set(tempShotRef(String(b.id),shot.id),shot.data);
-    for(const shot of bShots)batch.set(tempShotRef(String(a.id),shot.id),shot.data);
-    await batch.commit();
-    // 同步畫面快取，避免交換後短暫顯示原本帳號的截圖。
-    Object.assign(a,bData,{tempShotCount:bShots.length}); a.items=bItems;
-    Object.assign(b,aData,{tempShotCount:aShots.length}); b.items=aItems;
-    await persistAccounts([a,b]);
+    const extraOps=[];
+    for(const shot of aShots)extraOps.push({type:"delete",ref:tempShotRef(String(a.id),shot.id)});
+    for(const shot of bShots)extraOps.push({type:"delete",ref:tempShotRef(String(b.id),shot.id)});
+    for(const shot of aShots)extraOps.push({type:"set",ref:tempShotRef(String(b.id),shot.id),data:shot.data});
+    for(const shot of bShots)extraOps.push({type:"set",ref:tempShotRef(String(a.id),shot.id),data:shot.data});
+    Object.assign(a,bData,{tempShotCount:bShots.length});a.items=bItems;
+    Object.assign(b,aData,{tempShotCount:aShots.length});b.items=aItems;
+    await persistAccounts([a,b],extraOps);
     tempShotsCache.set(String(a.id),bShots.map(x=>({id:x.id,...x.data})));
     tempShotsCache.set(String(b.id),aShots.map(x=>({id:x.id,...x.data})));
     d.updated=new Date().toISOString();
@@ -1562,11 +1764,7 @@ $("#batchLoginSave").onclick=async()=>{
   try{
     const chosen=d.accounts.filter(a=>ids.includes(String(a.id)));
     chosen.forEach(a=>a.lastLogin=value);
-    for(let i=0;i<chosen.length;i+=400){
-      const batch=writeBatch(db);
-      chosen.slice(i,i+400).forEach(a=>batch.set(accountRef(String(a.id)),accountMetaData(a)));
-      await batch.commit();
-    }
+    for(const a of chosen)await persistAccount(a);
     d.updated=new Date().toISOString();
     await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     batchLoginDlg.close();
@@ -1784,7 +1982,15 @@ $("#eas").onclick=async()=>{
   }
 };
 
-$("#deleteAccount").onclick=async()=>{let a=cur();if(!a)return;if(confirm(`確定刪除帳號「${a.name}」？\n這會一起刪除這個帳號的庫存與臨時截圖，其他帳號不受影響。`)){try{await deleteTempShotsForAccount(a.id)}catch(err){console.error(err);return alert("刪除臨時截圖失敗，帳號尚未刪除。")}d.accounts=d.accounts.filter(x=>x.id!==a.id);active=d.accounts[0]?.id||null;await save()}};
+$("#deleteAccount").onclick=async()=>{
+  const a=cur();if(!a)return;
+  if(!confirm(`確定刪除帳號「${a.name}」？\n這會刪除該帳號的庫存及臨時截圖。`))return;
+  try{
+    await deleteAccountDeep(a.id);
+    d.accounts=d.accounts.filter(x=>String(x.id)!==String(a.id));active=d.accounts[0]?.id||null;render();
+    try{await deleteTempShotsForAccount(a.id)}catch(err){console.error(err);alert("帳號與庫存已刪除，但臨時截圖清理失敗，請稍後再清理。");}
+  }catch(err){console.error(err);alert("刪除帳號未完成，請重新整理確認。\n"+(err?.message||err));}
+};
 
 
 function renderTempShots(accountId){
@@ -2351,7 +2557,7 @@ async function rememberItemName(image,name,variant=""){
       if(shapeDistance(features.shapeSig,m.shapeSig)<=.16&&colorDistance(features.colorSig,m.colorSig)<=.18){duplicate=i;break}
     }else if(Array.isArray(m.sig)&&signatureDistance(sig,m.sig)<=.55){duplicate=i;break}
   }
-  if(duplicate>=0)d.itemMemory[duplicate]=rec;
+  if(duplicate>=0){rec._memoryId=stableMemoryId(d.itemMemory[duplicate],duplicate);d.itemMemory[duplicate]=rec;}
   else d.itemMemory.push(rec);
 }
 const INVENTORY_MEMORY_BACKFILL_VERSION=4;
@@ -2389,6 +2595,7 @@ async function backfillInventoryMemory(){
       }
       d.itemMemory.push(...newMem);
     }
+    await markRecognitionMemorySaved();
     await writeWarehouseMeta({inventoryMemoryBackfillVersion:INVENTORY_MEMORY_BACKFILL_VERSION,inventoryMemoryBackfilledAt:new Date().toISOString(),recognitionEngineVersion:2,recognitionMemoryRepair:"inventory-rescan-v4"},{merge:true});
   }catch(err){console.error("精準辨識記憶補建失敗",err)}
   finally{inventoryMemoryBackfillRunning=false}
@@ -2519,21 +2726,9 @@ $("#confirmRecognized").onclick=async()=>{
 
     // OCR 匯入只批次寫入本次新增／改變的道具，絕不掃描或重寫帳號其餘道具。
     // 同帳號寫入沿用序列佇列，避免和手動編輯同時覆蓋。
-    const accountId=String(a.id);
-    const snapshot=[...touched.values()].map(item=>({...item}));
-    const prior=accountWriteChains.get(accountId)||Promise.resolve();
-    const task=prior.catch(()=>{}).then(async()=>{
-      for(let i=0;i<snapshot.length;i+=350){
-        const batch=writeBatch(db);
-        snapshot.slice(i,i+350).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
-        await batch.commit();
-      }
-      await setDoc(accountRef(accountId),accountMetaData(a),{merge:false});
-      d.updated=new Date().toISOString();
-      await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
-    });
-    accountWriteChains.set(accountId,task);
-    try{await task}finally{if(accountWriteChains.get(accountId)===task)accountWriteChains.delete(accountId)}
+    await persistAccount(a);
+    d.updated=new Date().toISOString();
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true},{merge:true});
 
     // 只儲存本次新增或更新的辨識記憶，避免每次讀取整個 itemMemory 集合。
     const changedMem=(d.itemMemory||[]).map((m,i)=>({m,id:stableMemoryId(m,i)}))
@@ -2543,6 +2738,7 @@ $("#confirmRecognized").onclick=async()=>{
       changedMem.slice(i,i+350).forEach(({m,id})=>batch.set(memoryRef(id),m));
       await batch.commit();
     }
+    await markRecognitionMemorySaved();
     refreshStockFromLocal();
     scheduleWarehouseCacheWrite();
     $("#su").textContent=d.updated;
@@ -2681,6 +2877,8 @@ async function restorePortableBackup(file){
     );
     if(!okAgain)return;
 
+    saving=true;$("#app").inert=true;await warehouseMutationChain.catch(()=>{});
+    restoreBegin('小倉倉完整還原',state.accounts.map(a=>({id:String(a.id),label:String(a.number||a.name||a.id)})));
     d=JSON.parse(JSON.stringify(state));
     if(!Array.isArray(d.accounts))d.accounts=[];
     if(!Array.isArray(d.itemMemory))d.itemMemory=[];
@@ -2689,27 +2887,30 @@ async function restorePortableBackup(file){
     // 這樣即使還原中途失敗，也不會先把目前資料清掉。
     const existingSnap=await getDocs(accountCol());
     const incomingIds=new Set(d.accounts.map(a=>String(a.id)));
-    for(const a of d.accounts)await persistAccount(a);
+    for(const a of d.accounts){await restoreAccountSafely(a);restoreTrackStart('帳號完成',a.id,[{id:String(a.id),type:'account-complete'}]);restoreTrackCommit();}
     for(const docSnap of existingSnap.docs){
-      if(!incomingIds.has(String(docSnap.id)))await deleteAccountDeep(String(docSnap.id));
+      if(!incomingIds.has(String(docSnap.id))){restoreTrackStart('刪除舊帳號',docSnap.id,[{id:docSnap.id,type:'delete-account'}]);await deleteAccountDeep(String(docSnap.id));restoreTrackStart('刪除舊帳號完成',docSnap.id,[{id:docSnap.id,type:'delete-account'}]);restoreTrackCommit();}
     }
 
     // 辨識記憶完整取代。
     const oldMem=await getDocs(memoryCol());
     let memOps=[];
     for(const docSnap of oldMem.docs)memOps.push({type:"delete",ref:docSnap.ref});
-    for(const m of (d.itemMemory||[])){
-      const mid=String(m.id||m.memoryId||crypto.randomUUID());
+    for(const [idx,m] of (d.itemMemory||[]).entries()){
+      const mid=stableMemoryId(m,idx);
       memOps.push({type:"set",ref:memoryRef(mid),data:{...m,id:mid}});
     }
     for(let i=0;i<memOps.length;i+=20){
+      restoreTrackStart('辨識記憶','',memOps.slice(i,i+20).map(op=>({id:op.ref.id||op.ref.path,type:op.type})));
       const batch=writeBatch(db);
       for(const op of memOps.slice(i,i+20)){
         if(op.type==="delete")batch.delete(op.ref);
         else batch.set(op.ref,op.data);
       }
-      await batch.commit();
+      await batch.commit();restoreTrackCommit();await publishMemoryDelta(memOps.slice(i,i+20).map(op=>op.ref.id||op.ref.path.split("/").at(-1)));
     }
+
+    await markRecognitionMemorySaved();
 
     // v3 備份才會完整取代臨時截圖；v1/v2 沒有截圖內容，因此不碰現有 tempShots。
     if(Number(backup.version)>=3 && backup.tempShots && typeof backup.tempShots==="object"){
@@ -2718,19 +2919,21 @@ async function restorePortableBackup(file){
         if(!accountId)continue;
         const oldShots=await getDocs(tempShotCol(accountId));
         for(let i=0;i<oldShots.docs.length;i+=20){
+          restoreTrackStart('刪除臨時截圖',accountId,oldShots.docs.slice(i,i+20).map(x=>({id:x.id,type:'delete'})));
           const batch=writeBatch(db);
           oldShots.docs.slice(i,i+20).forEach(x=>batch.delete(x.ref));
-          await batch.commit();
+          await batch.commit();restoreTrackCommit();
         }
         const incoming=Array.isArray(tempShots[accountId])?tempShots[accountId]:[];
         for(let i=0;i<incoming.length;i+=5){
+          restoreTrackStart('還原臨時截圖',accountId,incoming.slice(i,i+5).map(x=>({id:x.id||'新ID',type:'set'})));
           const batch=writeBatch(db);
           for(const shot of incoming.slice(i,i+5)){
             const sid=String(shot.id||crypto.randomUUID());
             const data={...shot}; delete data.id; delete data._uploading;
             batch.set(tempShotRef(accountId,sid),data);
           }
-          await batch.commit();
+          await batch.commit();restoreTrackCommit();
         }
         const localAccount=d.accounts.find(x=>String(x.id)===accountId);
         if(localAccount)localAccount.tempShotCount=incoming.length;
@@ -2738,19 +2941,24 @@ async function restorePortableBackup(file){
       tempShotsCache.clear();
     }
 
+    for(const a of d.accounts){restoreTrackStart('帳號截圖數量',a.id,[{id:String(a.id),type:'set-meta'}]);await persistAccount(a);restoreTrackCommit();}
     await writeWarehouseMeta({
       updated:new Date().toISOString(),
       backupRestoreVersion:Number(backup.version)||2,
       backupRestoredAt:new Date().toISOString()
     },{merge:true});
 
+    restoreFinish("completed");restoreExportJournal();activeRestoreJournal=null;
     active=d.accounts[0]?.id||null;
     render();
     alert(`完整備份已還原完成。\n帳號：${d.accounts.length} 個\n臨時截圖：${tempShotTotal} 張`);
   }catch(err){
     console.error(err);
-    alert("還原失敗："+(err?.message||String(err))+"\n\n原本的小倉倉不會被修改。");
+    restoreFinish('failed',err?.message||err);
+    const report=restoreSummary();restoreExportJournal();activeRestoreJournal=null;
+    alert("還原未完成："+(err?.message||String(err))+"\n\n"+report+"\n\n完整操作清單已下載為 JSON；已確認的分段已生效，請重新整理核對，未自動回滾。");
   }finally{
+    saving=false;$("#app").inert=false;requestMetaSync();
     const input=$("#restoreBackupFile");
     if(input)input.value="";
   }
@@ -3007,35 +3215,7 @@ $("#saveOverviewJpg").onclick=async()=>{
 };
 // 自動低頻完整校正：平時只監聽目前帳號，30 分鐘才檢查一次全倉。
 // 不要求手動同步；背景頁面不做大量讀取，也不會把快取寫回雲端。
-let automaticSyncRunning=false;
-async function automaticWarehouseSync(){
-  if(automaticSyncRunning||!currentUser||!migrationReady||document.hidden)return;
-  if(Date.now()-warehouseFullSyncAt<WAREHOUSE_CACHE_TTL)return;
-  if(saving||accountWriteChains.size||document.querySelector('dialog[open]'))return;
-  automaticSyncRunning=true;
-  try{
-    // 先讀一份 meta；沒變時只延長檢查期限，不掃描 617 個帳號。
-    const metaSnap=await getDoc(metaRef());
-    const remoteVersion=String(metaSnap.exists()?(metaSnap.data()?.updated||""):"");
-    const cached=await getWarehouseCache();
-    if(cached?.state&&String(cached.metaUpdated||"")===remoteVersion){
-      warehouseFullSyncAt=Date.now();
-      return;
-    }
-    const fresh=await readHybridCloud(metaSnap,cached?.state);
-    // 等待使用者完成正在進行的操作，下次再同步，避免覆蓋本機修改。
-    if(saving||accountWriteChains.size||document.querySelector('dialog[open]'))return;
-    const oldActive=active;
-    d=fresh;
-    warehouseFullSyncAt=Date.now();
-    active=d.accounts.some(a=>a.id===oldActive)?oldActive:(d.accounts[0]?.id||null);
-    await setWarehouseCache(d,remoteVersion);
-    refreshStockFromLocal(false);
-    render();
-  }catch(err){console.error("小倉倉背景同步失敗，下次會自動重試",err)}
-  finally{automaticSyncRunning=false}
-}
-// 使用中每分鐘檢查一次到期與否；切回分頁也會自動檢查。
+async function automaticWarehouseSync(){if(!document.hidden)requestMetaSync();}
 setInterval(()=>{void automaticWarehouseSync()},60*1000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)void automaticWarehouseSync()});
 // 訂單提醒由整合首頁中常駐的 market iframe 統一監聽，避免小倉倉再重複讀取 orders。
@@ -3046,7 +3226,7 @@ onAuthStateChanged(auth,async user=>{
   }
   $("#userLabel").textContent=currentUser.email||"已登入";
   $("#authGate").classList.add("hidden");$("#app").style.visibility="visible";
-  try{await loadCloud()}catch(err){console.error(err);alert("讀取雲端庫存失敗｜"+(err?.code||err?.name||"error")+"\n"+(err?.message||String(err))+"\n\n這次只做讀取，沒有自動搬移或刪除庫存資料。")}
+  try{await loadCloud()}catch(err){console.error(err);alert("讀取雲端庫存失敗｜"+(err?.code||err?.name||"error")+"\n"+(err?.message||String(err))+"\n\n初始化／讀取未完成。初始化不會改寫帳號物品；索引可能已有未啟用的暫存分片。若有舊預訂衝突，請依上方訂單 ID 核對，原資料沒有被猜測清除。")}
 });
 
 
