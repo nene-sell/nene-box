@@ -770,7 +770,6 @@ async function persistAccount(a){
 }
 async function persistAccountNow(a){
   if(!a?.id)return;
-  await clearWarehouseCache();
   const accountId=String(a.id), items=Array.isArray(a.items)?a.items:[];
   items.forEach(ensureItemId);
   const old=await getDocs(itemCol(accountId));
@@ -797,6 +796,7 @@ async function persistAccountNow(a){
     await batch.commit();
   }
   refreshStockFromLocal();
+  scheduleWarehouseCacheWrite();
 }
 async function persistAccounts(accounts){ for(const a of accounts)await persistAccount(a); }
 async function deleteAccountDeep(accountId){
@@ -826,6 +826,15 @@ function stableMemoryId(m,index=0){
 // 小倉倉完整資料放 IndexedDB；每次開頁只先讀 1 份 meta。
 // meta.updated 沒變就直接用本機快取，不再重讀 616 個帳號與所有 items。
 const WAREHOUSE_CACHE_DB="nene-warehouse-cache-v1",WAREHOUSE_CACHE_STORE="state",WAREHOUSE_CACHE_KEY="main";
+// 30 分鐘內重開頁面不因其他頁面更新 meta 而掃描所有帳號；當前帳號由即時監聽校正。
+const WAREHOUSE_CACHE_TTL=30*60*1000;
+let warehouseCacheWriteTimer=null,warehouseFullSyncAt=0;
+function scheduleWarehouseCacheWrite(){
+  clearTimeout(warehouseCacheWriteTimer);
+  warehouseCacheWriteTimer=setTimeout(()=>{
+    if(currentUser&&migrationReady)void setWarehouseCache(d,d.updated||"");
+  },700);
+}
 function openWarehouseCache(){
   return new Promise((resolve,reject)=>{
     const req=indexedDB.open(WAREHOUSE_CACHE_DB,1);
@@ -840,7 +849,7 @@ async function clearWarehouseCache(){
   try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).delete(WAREHOUSE_CACHE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}catch(err){console.warn("清除快取失敗",err)}
 }
 async function setWarehouseCache(state,metaUpdated){
-  try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({metaUpdated:String(metaUpdated||""),state,savedAt:Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
+  try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({metaUpdated:String(metaUpdated||""),state,savedAt:Date.now(),fullSyncedAt:warehouseFullSyncAt||Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
 }
 async function readHybridCloud(metaSnap=null){
   metaSnap=metaSnap||await getDoc(metaRef());
@@ -863,10 +872,17 @@ async function loadCloud(){
   const metaSnap=await getDoc(metaRef());
   const remoteVersion=String(metaSnap.exists()?(metaSnap.data()?.updated||""):"");
   const cached=await getWarehouseCache();
-  if(cached?.state&&remoteVersion&&cached.metaUpdated===remoteVersion){
+  const cacheLastFullSync=Number(cached?.fullSyncedAt||cached?.savedAt||0);
+  const cacheFresh=!!(cached?.state&&Number.isFinite(cacheLastFullSync)&&
+    Date.now()-cacheLastFullSync>=0&&Date.now()-cacheLastFullSync<WAREHOUSE_CACHE_TTL);
+  if(cacheFresh){
+    // 避免 meta 每次寫入都讓 617 個帳號 + 全部 items 重新下載。
+    // 雲端的目前帳號道具仍由 watchActiveAccountItems 即時更新。
     d=cached.state;
+    warehouseFullSyncAt=cacheLastFullSync;
   }else{
     d=await readHybridCloud(metaSnap);
+    warehouseFullSyncAt=Date.now();
     await setWarehouseCache(d,remoteVersion);
   }
   migrationReady=true;
@@ -900,7 +916,7 @@ function watchActiveAccountItems(){
     const after=JSON.stringify(freshItems.map(x=>[x._itemId,x.qty,x.name,x.variant]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
     if(before===after)return;
     account.items=freshItems;
-    void clearWarehouseCache();
+    scheduleWarehouseCacheWrite();
     // 這是讀取雲端最新庫存，絕不能觸發 publish，否則可能把訂單扣除洗回去。
     refreshStockFromLocal(false);
     render();
@@ -2480,7 +2496,6 @@ $("#confirmRecognized").onclick=async()=>{
     const snapshot=[...touched.values()].map(item=>({...item}));
     const prior=accountWriteChains.get(accountId)||Promise.resolve();
     const task=prior.catch(()=>{}).then(async()=>{
-      await clearWarehouseCache();
       for(let i=0;i<snapshot.length;i+=350){
         const batch=writeBatch(db);
         snapshot.slice(i,i+350).forEach(item=>batch.set(itemRef(accountId,ensureItemId(item)),{...item,_itemId:ensureItemId(item)}));
@@ -2502,6 +2517,7 @@ $("#confirmRecognized").onclick=async()=>{
       await batch.commit();
     }
     refreshStockFromLocal();
+    scheduleWarehouseCacheWrite();
     $("#su").textContent=d.updated;
 
     render();
@@ -2962,6 +2978,40 @@ $("#saveOverviewJpg").onclick=async()=>{
   }catch(err){console.error(err);alert("總覽 JPG 製作失敗："+(err?.message||err))}
   finally{btn.disabled=false;btn.textContent="儲存 JPG"}
 };
+// 自動低頻完整校正：平時只監聽目前帳號，30 分鐘才檢查一次全倉。
+// 不要求手動同步；背景頁面不做大量讀取，也不會把快取寫回雲端。
+let automaticSyncRunning=false;
+async function automaticWarehouseSync(){
+  if(automaticSyncRunning||!currentUser||!migrationReady||document.hidden)return;
+  if(Date.now()-warehouseFullSyncAt<WAREHOUSE_CACHE_TTL)return;
+  if(saving||accountWriteChains.size||document.querySelector('dialog[open]'))return;
+  automaticSyncRunning=true;
+  try{
+    // 先讀一份 meta；沒變時只延長檢查期限，不掃描 617 個帳號。
+    const metaSnap=await getDoc(metaRef());
+    const remoteVersion=String(metaSnap.exists()?(metaSnap.data()?.updated||""):"");
+    const cached=await getWarehouseCache();
+    if(cached?.state&&String(cached.metaUpdated||"")===remoteVersion){
+      warehouseFullSyncAt=Date.now();
+      await setWarehouseCache(d,remoteVersion);
+      return;
+    }
+    const fresh=await readHybridCloud(metaSnap);
+    // 等待使用者完成正在進行的操作，下次再同步，避免覆蓋本機修改。
+    if(saving||accountWriteChains.size||document.querySelector('dialog[open]'))return;
+    const oldActive=active;
+    d=fresh;
+    warehouseFullSyncAt=Date.now();
+    active=d.accounts.some(a=>a.id===oldActive)?oldActive:(d.accounts[0]?.id||null);
+    await setWarehouseCache(d,remoteVersion);
+    refreshStockFromLocal(false);
+    render();
+  }catch(err){console.error("小倉倉背景同步失敗，下次會自動重試",err)}
+  finally{automaticSyncRunning=false}
+}
+// 使用中每分鐘檢查一次到期與否；切回分頁也會自動檢查。
+setInterval(()=>{void automaticWarehouseSync()},60*1000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)void automaticWarehouseSync()});
 // 訂單提醒由整合首頁中常駐的 market iframe 統一監聽，避免小倉倉再重複讀取 orders。
 onAuthStateChanged(auth,async user=>{
   currentUser=user&&user.uid===ADMIN_UID?user:null;
