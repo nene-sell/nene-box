@@ -2033,7 +2033,7 @@ body{background:linear-gradient(180deg,#f6ece8 0%,#efe2de 100%)!important}
 </section>
 
   <nav class="tabs category-settings-loading">
-    <button class="tab recent-tab" data-category="近期上架"><span class="cat-icon" aria-hidden="true">✦</span> 近期上架</button><button class="tab active" data-category="家具"><span class="cat-icon" aria-hidden="true">🛋️</span> 家具</button><button class="tab" data-category="花盆"><span class="cat-icon" aria-hidden="true">🪴</span> 花盆</button><div class="category-dropdown">
+    <button class="tab recent-tab" data-category="近期上架"><span class="cat-icon" aria-hidden="true">✦</span> 近期上架</button><button class="tab active" data-category="家具"><span class="cat-icon" aria-hidden="true">🛋️</span> 家具</button><button class="tab" data-category="玩偶"><span class="cat-icon" aria-hidden="true">🧸</span> 玩偶</button><button class="tab" data-category="花盆"><span class="cat-icon" aria-hidden="true">🪴</span> 花盆</button><div class="category-dropdown">
       <button class="tab group-tab" data-group="戒指" type="button"><span class="cat-icon" aria-hidden="true">💍</span> 戒指 <span class="drop-arrow">▾</span></button>
       <div class="category-menu">
         <button type="button" data-category="戒指限男">限男</button>
@@ -2089,6 +2089,7 @@ body{background:linear-gradient(180deg,#f6ece8 0%,#efe2de 100%)!important}
       <label>分類
         <select id="productCategory" required>
                     <option value="家具">家具</option>
+          <option value="玩偶">玩偶</option>
           
           <option value="花盆">花盆</option>
           <optgroup label="戒指">
@@ -2522,7 +2523,7 @@ function syncReservationTotals(index,exclude=""){
   return totals;
 }
 
-const CATEGORY_LABELS=["近期上架","家具","花盆","戒指","作物","寵物","特價區","自由出價","收購區","交換區"];
+const CATEGORY_LABELS=["近期上架","家具","玩偶","花盆","戒指","作物","寵物","特價區","自由出價","收購區","交換區"];
 let hiddenCategories=[];
 
 function topCategoryName(category){
@@ -5937,7 +5938,7 @@ onSnapshot(
       : [];
     products=snap.docs
       .filter(d=>d.id!==CATEGORY_SETTING_DOC_ID)
-      .map(d=>({id:d.id,...d.data(),category:syncCategory(d.data().category)}));
+      .map(d=>({id:d.id,...d.data(),category:String(d.data().category||"")}));
     // Manual reservation fields are retained; warehouse-linked reservations use the private ledger.
     ensureActiveCategoryVisible();
     $("#status").textContent="已連線";
