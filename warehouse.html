@@ -1796,9 +1796,9 @@ $("#is").onclick=async()=>{
   let same=a.items.find(x=>x.name===n&&x.variant===v&&x.category===cat&&(x.gender||"")===gender&&(x.candyType||"")===candyType);
   const itemImage=selectedEnvelopeImage||envelopeLibrary().find(x=>x.name===n&&(!v||x.variant===v))?.image||envelopeLibrary().find(x=>x.name===n)?.image||"";
   const nowStamp=Date.now();
-  if(same && cat==="糖果"){ same.qty=q; same.lastUsedAt=nowStamp; }
-  else if(same){same.qty+=q;same.lastUsedAt=nowStamp;if(itemImage&&!same.image)same.image=itemImage}
-  else a.items.push({name:n,category:cat,gender,candyType,variant:v,qty:q,createdAt:nowStamp,lastUsedAt:nowStamp,...(itemImage?{image:itemImage}:{})});
+  if(same && cat==="糖果"){ same.qty=q; same.lastAddedAt=nowStamp; same.lastUsedAt=nowStamp; }
+  else if(same){same.qty+=q;same.lastAddedAt=nowStamp;same.lastUsedAt=nowStamp;if(itemImage&&!same.image)same.image=itemImage}
+  else a.items.push({name:n,category:cat,gender,candyType,variant:v,qty:q,createdAt:nowStamp,lastAddedAt:nowStamp,lastUsedAt:nowStamp,...(itemImage?{image:itemImage}:{})});
   $("#in").value="";$("#iv").value="";$("#iq").value=1;selectedEnvelopeImage="";$("#envelopeImageInput").value="";$("#envelopeImagePreview").innerHTML="";
   idg.close();
   // 先更新畫面，不等待 Firebase，新增後立即看得到。
@@ -3101,7 +3101,9 @@ function overviewDateRange(){
 function overviewItemMatchesDate(item){
   const range=overviewDateRange();
   if(!range)return true;
-  const stamp=Number(item?.createdAt)||0;
+  // 新增／補貨時間優先；舊資料沿用 lastUsedAt 作相容判斷。
+  // 注意：舊 lastUsedAt 也可能是搬移時間，無法完全還原歷史新增事件。
+  const stamp=Number(item?.lastAddedAt||item?.lastUsedAt||item?.createdAt)||0;
   if(!stamp)return false;
   if(range.from&&stamp<range.from)return false;
   if(range.to&&stamp>=range.to)return false;
@@ -3245,7 +3247,7 @@ $("#clearOverviewSearch").onclick=()=>{$("#overviewSearch").value="";renderAllOv
 $("#overviewDatePreset").onchange=()=>{
   const custom=$("#overviewDatePreset").value==="custom";
   $("#overviewCustomDates").style.display=custom?"flex":"none";
-  $("#overviewDateNote").textContent=$("#overviewDatePreset").value==="all"?"":"舊庫存沒有新增日期的項目不會列入";
+  $("#overviewDateNote").textContent=$("#overviewDatePreset").value==="all"?"":"顯示期間內新增或補貨的款式；數量為目前庫存。舊紀錄可能依最後使用時間推估";
   renderAllOverview();
 };
 $("#overviewDateFrom").onchange=()=>renderAllOverview();
