@@ -2033,7 +2033,7 @@ body{background:linear-gradient(180deg,#f6ece8 0%,#efe2de 100%)!important}
 </section>
 
   <nav class="tabs category-settings-loading">
-    <button class="tab recent-tab" data-category="近期上架"><span class="cat-icon" aria-hidden="true">✦</span> 近期上架</button><button class="tab active" data-category="家具"><span class="cat-icon" aria-hidden="true">🛋️</span> 家具</button><button class="tab" data-category="玩偶"><span class="cat-icon" aria-hidden="true">🧸</span> 玩偶</button><button class="tab" data-category="花盆"><span class="cat-icon" aria-hidden="true">🪴</span> 花盆</button><div class="category-dropdown">
+    <button class="tab recent-tab" data-category="近期上架"><span class="cat-icon" aria-hidden="true">✦</span> 近期上架</button><button class="tab active" data-category="家具"><span class="cat-icon" aria-hidden="true">🛋️</span> 家具</button><button class="tab" data-category="花盆"><span class="cat-icon" aria-hidden="true">🪴</span> 花盆</button><div class="category-dropdown">
       <button class="tab group-tab" data-group="戒指" type="button"><span class="cat-icon" aria-hidden="true">💍</span> 戒指 <span class="drop-arrow">▾</span></button>
       <div class="category-menu">
         <button type="button" data-category="戒指限男">限男</button>
@@ -2089,7 +2089,6 @@ body{background:linear-gradient(180deg,#f6ece8 0%,#efe2de 100%)!important}
       <label>分類
         <select id="productCategory" required>
                     <option value="家具">家具</option>
-          <option value="玩偶">玩偶</option>
           
           <option value="花盆">花盆</option>
           <optgroup label="戒指">
@@ -2374,7 +2373,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, setDoc,
-  onSnapshot, serverTimestamp, runTransaction, getDoc, getDocs, writeBatch, Timestamp, collectionGroup, query, where
+  onSnapshot, serverTimestamp, runTransaction, getDoc, getDocs, writeBatch, Timestamp, collectionGroup, query, where, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig={
@@ -2407,7 +2406,123 @@ let editingRealImage = "";
 let editingDemoVideoPath = "";
 
 const CATEGORY_SETTING_DOC_ID="category_settings";
-const CATEGORY_LABELS=["近期上架","家具","玩偶","花盆","戒指","作物","寵物","特價區","自由出價","收購區","交換區"];
+// nene-sync-v6: shared identity, index and projection rules (inline, no extra deployment file).
+const syncCategory=c=>c==="玩偶"?"家具":String(c||"");
+const syncKey=k=>{const p=String(k||"").split("\u001f");p[0]=syncCategory(p[0]);return p.join("\u001f")};
+const syncIdentity=i=>[syncCategory(i?.category),i?.name||"",i?.variant||"",i?.gender||"",i?.candyType||""].map(String).join("\u001f");
+const syncClone=x=>JSON.parse(JSON.stringify(x));
+const syncStable=x=>x&&typeof x==="object"?(Array.isArray(x)?x.map(syncStable):Object.fromEntries(Object.keys(x).sort().filter(k=>x[k]!==undefined).map(k=>[k,syncStable(x[k])]))):x;
+const syncEqual=(a,b)=>JSON.stringify(syncStable(a))===JSON.stringify(syncStable(b));
+const syncMetaVersion=m=>m?.syncRevision?String(m.syncRevision)+"|"+String(m.updated||""):String(m?.updated||"");
+const syncQty=x=>Math.max(0,Math.floor(Number(x)||0));
+function syncRows(rows=[]){
+  const merged=new Map();
+  for(const r of rows){const key=syncKey(r.key);if(!merged.has(key))merged.set(key,{key,owners:[]});merged.get(key).owners.push(...syncClone(r.owners||[]));}
+  return [...merged.values()];
+}
+function syncProjection(index,links,previous={}){
+  if(index.syncLinksVersion===1)links=new Map(Object.entries(index.links||{}));
+  const totals=new Map(syncRows(index.rows||[]).map(r=>[r.key,r.owners.reduce((n,o)=>n+syncQty(o.qty),0)]));
+  const reserved=new Map();
+  for(const list of Object.values(index.reservations||{}))for(const a of list){const k=syncKey(a.key);reserved.set(k,(reserved.get(k)||0)+syncQty(a.qty));}
+  const out={};
+  for(const [id,l] of links){const p=previous[id]||{},entry={variants:{},reservedVariants:{}};
+    if(l.itemKey){const k=syncKey(l.itemKey);entry.stock=index._partial&&!(index._loadedShardIds||[]).includes(syncShardId(k,index.rowGeneration||""))?syncQty(p.stock):(totals.get(k)||0);entry.reserved=index.reservationSchemaVersion>=1?(reserved.get(k)||0):syncQty(p.reserved);}
+    for(const v of l.variantLinks||[])if(v.variant&&v.itemKey){const k=syncKey(v.itemKey);entry.variants[v.variant]=index._partial&&!(index._loadedShardIds||[]).includes(syncShardId(k,index.rowGeneration||""))?syncQty(p.variants?.[v.variant]):(totals.get(k)||0);entry.reservedVariants[v.variant]=index.reservationSchemaVersion>=1?(reserved.get(k)||0):syncQty(p.reservedVariants?.[v.variant]);}
+    out[id]=entry;
+  }
+  return out;
+}
+// 256 deterministic buckets. Only touched buckets participate in normal inventory transactions.
+const syncShardId=(key,generation="")=>{let h=2166136261;for(const c of syncKey(key)){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return 'warehouseInventoryRows6_'+(generation?generation+'_':'')+((h>>>0)&255).toString(16).padStart(2,'0')};
+const syncIndexRef=()=>doc(db,'adminSettings','warehouseInventoryIndex');
+const syncShardRef=id=>doc(db,'adminSettings',id);
+const syncChangedVersions=(a={},b={})=>[...new Set([...Object.keys(a),...Object.keys(b)])].filter(id=>String(a[id]||'')!==String(b[id]||''));
+function syncCompactVersions(versions={}){return Object.fromEntries(Object.entries(versions).filter(([id,v])=>!String(v).startsWith('deleted:')));}
+function syncMetaWrite(tx,ref,meta,versions,version){
+  const data={...meta,updated:new Date().toISOString(),syncRevision:version,accountVersions:syncCompactVersions(versions),syncProtocol:6};
+  syncCheckDocument(data,'帳號版本表',180000);tx.set(ref,data);return data;
+}
+const syncStringBytes=s=>new TextEncoder().encode(String(s)).length+1;
+function syncFieldBytes(v){if(v==null)return 1;if(typeof v==='string')return syncStringBytes(v);if(typeof v==='number')return 8;if(typeof v==='boolean')return 1;if(v instanceof Date||typeof v?.toMillis==='function')return 8;if(v instanceof Uint8Array)return v.byteLength;if(Array.isArray(v))return v.reduce((n,x)=>n+syncFieldBytes(x),0);return 32+Object.entries(v).reduce((n,[k,x])=>n+syncStringBytes(k)+syncFieldBytes(x),0);}
+function syncCheckDocument(data,label='庫存文件',limit=760000){
+  const bytes=Math.max(new TextEncoder().encode(JSON.stringify(data)).length,syncFieldBytes(data))+4096;
+  if(bytes>limit)throw new Error(`${label}估算 ${bytes} bytes，超過安全界限 ${limit}；這次未提交，未截斷任何資料。`);
+  return bytes;
+}
+function syncCheckTransaction(parts,count){if(count>450)throw new Error(`本次交易需要 ${count} 筆寫入，超過安全界限，未提交任何資料。`);const bytes=parts.reduce((n,x)=>n+new TextEncoder().encode(JSON.stringify(x??null)).length,0)+count*4096;if(bytes>8*1024*1024)throw new Error('本次交易資料超過 8 MiB 安全界限，未提交，請分批處理。');}
+async function syncReadIndex(tx,snapshot,keys=null){
+  const raw=snapshot.data()||{};
+  if(raw.rowLayout!==6)return {...raw,rows:syncRows(raw.rows||[])};
+  const ids=keys===null?[...(raw.rowShardIds||[])]:[...new Set(keys.filter(Boolean).map(k=>syncShardId(k,raw.rowGeneration||"")))];
+  const before={},rows=[];
+  for(const id of ids){const s=await tx.get(syncShardRef(id)),data=s.exists()?s.data():null;before[id]=data;rows.push(...(data?.rows||[]));}
+  return {...raw,rows:syncRows(rows),_partial:keys!==null,_loadedShardIds:ids,_beforeShards:before};
+}
+async function syncFetchIndex(keys=null){const s=await getDoc(syncIndexRef());return syncReadIndex({get:getDoc},s,keys);}
+function syncIndexDocuments(index){
+  const root={...index};for(const k of ['rows','_partial','_loadedShardIds','_beforeShards'])delete root[k];
+  if(index.rowLayout!==6)return {root:syncClone(index),shards:[]};
+  const grouped=new Map((index._loadedShardIds||[]).map(id=>[id,[]]));
+  for(const row of index.rows||[]){const id=syncShardId(row.key,index.rowGeneration||"");if(!grouped.has(id))throw new Error('索引交易缺少必要分片，未寫入。');grouped.get(id).push(row);}
+  const ids=new Set(root.rowShardIds||[]),shards=[];
+  for(const [id,rows] of grouped){rows.sort((a,b)=>a.key.localeCompare(b.key));const data=rows.length?{rows,layout:6}:null;const old=index._beforeShards?.[id]||null;
+    if(data)ids.add(id);else ids.delete(id);if(!syncEqual(data,old))shards.push({id,data});}
+  root.rowShardIds=[...ids].sort();if(shards.length)root.rowsRevision=crypto.randomUUID();
+  syncCheckDocument(root,'庫存索引主文件',360000);
+  for(const s of shards)if(s.data)syncCheckDocument(s.data,'庫存索引分片 '+s.id,360000);
+  return {root,shards};
+}
+function syncWriteIndex(tx,ref,index){const {root,shards}=syncIndexDocuments(index);for(const s of shards)s.data?tx.set(syncShardRef(s.id),s.data):tx.delete(syncShardRef(s.id));tx.set(ref,root);}
+function syncCheckSize(value){if(value?.rowLayout===6){syncIndexDocuments(value);return;}syncCheckDocument(value);}
+function syncIndexOwner(rows,key,accountId,itemId){return rows.find(r=>r.key===syncKey(key))?.owners.find(o=>String(o.accountId)===String(accountId)&&String(o.itemId)===String(itemId));}
+function syncDocumentAllocations(list,source){
+  if(!Array.isArray(list)||!list.length)throw new Error(`${source} 缺少配貨資料；已保留原資料，請先檢查舊訂單。`);
+  return list.map(a=>{if(!a?.accountId||!a?.key||!Number.isSafeInteger(Number(a.qty))||Number(a.qty)<=0)throw new Error(`${source} 配貨欄位不完整，尚未轉換。`);return {...a,accountId:String(a.accountId),key:syncKey(a.key),qty:Number(a.qty)};});
+}
+// Migration reads both sources, detects conflicts, and never turns a completed order back into a reservation.
+function syncLegacyReservations(orders,fulfillments,prior={},links={}){
+  const byOrder=new Map(orders.map(o=>[o.id,o.data])),byFulfillment=new Map(fulfillments.map(o=>[o.id,o.data])),reservations={},repairs=[];
+  function normalize(list,o,id){return syncDocumentAllocations(list,`舊訂單 ${id}`).map(a=>{if(!a.itemId){const matches=(o.items||[]).filter(item=>{const l=links[String(item.id)],v=String(item.variant||'');return (syncKey(v?(l?.variantLinks||[]).find(x=>x.variant===v)?.itemKey:l?.itemKey)||syncIdentity(item))===a.key;});if(matches.length!==1)throw new Error(`舊訂單 ${id} 的配貨缺少商品 ID 且無法唯一對應，未猜測轉換。`);a.itemId=String(matches[0].id);a.variant=String(matches[0].variant||'');}return a;});}
+  function signature(list){const groups=new Map();for(const a of list){const key=JSON.stringify([a.accountId,syncKey(a.key),String(a.itemId||''),String(a.variant||'')]);groups.set(key,(groups.get(key)||0)+syncQty(a.qty));}return [...groups].sort((a,b)=>a[0].localeCompare(b[0]));}
+  for(const [id,o] of byOrder){const f=byFulfillment.get(id);if(o.status==='已完成'||o.status==='已取消')continue;
+    const orderList=Array.isArray(o.reservationAllocations)&&o.reservationAllocations.length?o.reservationAllocations:null;
+    const fulfillmentList=f?.status==='預定中'&&Array.isArray(f.allocations)&&f.allocations.length?f.allocations:null;
+    const held=o.status==='預定中'||o.warehouseReserved===true||orderList?.length||f?.status==='預定中'||prior[id]?.length;
+    if(!held)continue;
+    if(!['預定中','待交易'].includes(o.status)||['已完成','已取消'].includes(f?.status))throw new Error(`舊訂單 ${id} 與配貨狀態衝突，原資料保留，未重新開啟已處理配貨。`);
+    const chosen=normalize(orderList||fulfillmentList||prior[id],o,id);
+    if(orderList&&fulfillmentList&&!syncEqual(signature(normalize(orderList,o,id)),signature(normalize(fulfillmentList,o,id))))throw new Error(`舊訂單 ${id} 與配貨紀錄不一致，原資料保留，請先核對。`);
+    reservations[id]=chosen;repairs.push({id,order:{status:'預定中',warehouseReserved:true,reservationAllocations:chosen},fulfillment:{...(f||{}),orderId:id,status:'預定中',allocations:chosen}});
+  }
+  for(const [id,f] of byFulfillment)if(f.status==='預定中'&&!byOrder.has(id))throw new Error(`舊配貨 ${id} 的訂單不存在，未擅自清除預訂；請先核對該配貨紀錄。`);
+  for(const [id,list] of Object.entries(prior))if(list?.length&&!byOrder.has(id))throw new Error(`索引預訂 ${id} 缺少原訂單，未清除資料。`);
+  return {reservations,repairs};
+}
+function syncValidateLegacyPublic(previous,next){for(const [id,p] of Object.entries(previous)){const n=next[id]||{};if(syncQty(p.reserved)>syncQty(n.reserved))throw new Error(`商品 ${id} 仍有無法對應舊訂單的預訂；未清除原數量，請核對舊預訂。`);for(const [v,q] of Object.entries(p.reservedVariants||{}))if(syncQty(q)>syncQty(n.reservedVariants?.[v]))throw new Error(`商品 ${id}／${v} 有無法對應的舊預訂，原資料保留。`);}}
+// Acknowledged batches only. Never label a partially completed restore as rolled back or complete.
+let activeRestoreJournal=null;
+function restoreSaveJournal(){if(!activeRestoreJournal)return;activeRestoreJournal.updatedAt=new Date().toISOString();try{localStorage.setItem('nene-restore-journal-v6',JSON.stringify(activeRestoreJournal));}catch(err){activeRestoreJournal.localSaveError=String(err?.message||err);}}
+function restoreBegin(kind,targets=[]){activeRestoreJournal={id:crypto.randomUUID(),kind,status:'running',startedAt:new Date().toISOString(),targets,completed:[],inFlight:null};restoreSaveJournal();return activeRestoreJournal;}
+function restoreTrackStart(phase,accountId,operations=[]){if(!activeRestoreJournal)return;activeRestoreJournal.inFlight={phase,accountId:String(accountId||''),operations:syncClone(operations)};restoreSaveJournal();}
+function restoreTrackCommit(){if(!activeRestoreJournal?.inFlight)return;activeRestoreJournal.completed.push({...activeRestoreJournal.inFlight,acknowledgedAt:new Date().toISOString()});activeRestoreJournal.inFlight=null;restoreSaveJournal();}
+function restoreSummary(j=activeRestoreJournal){
+  if(!j)return '尚未開始寫入。';const accounts=new Set(j.completed.filter(x=>x.phase==='帳號完成').map(x=>x.accountId));
+  const partial=new Set(j.completed.filter(x=>x.phase==='帳號道具'||x.phase==='建立帳號').map(x=>x.accountId));for(const id of accounts)partial.delete(id);
+  const labels=ids=>[...ids].map(id=>j.targets.find(a=>a.id===id)?.label||id).join('、')||'無';
+  const phases={};for(const b of j.completed)phases[b.phase]=(phases[b.phase]||0)+b.operations.length;
+  return `已完整還原帳號：${labels(accounts)}\n已提交部分分段帳號：${labels(partial)}\n已確認成功分段：${j.completed.length} 批\n各階段已確認操作：${JSON.stringify(phases)}\n最後一批／失敗位置：${j.inFlight?j.inFlight.phase+'／'+(j.inFlight.accountId||'')+'（此批結果需查證）':'無待確認批次'}\n尚未完成帳號：${labels(new Set(j.targets.filter(a=>!accounts.has(a.id)).map(a=>a.id)))}`;
+}
+function restoreExportJournal(j=activeRestoreJournal){if(!j)return;const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(j,null,2)],{type:'application/json'}));a.href=url;a.download=`nene-restore-report-${j.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function restoreFinish(status,error=''){if(!activeRestoreJournal)return;activeRestoreJournal.status=status;activeRestoreJournal.error=String(error||'');restoreSaveJournal();}
+
+function syncReservationTotals(index,exclude=""){
+  const totals=new Map();
+  for(const [id,list] of Object.entries(index.reservations||{})){if(id===exclude)continue;for(const a of list){const k=String(a.accountId)+"||"+syncKey(a.key);totals.set(k,(totals.get(k)||0)+syncQty(a.qty));}}
+  return totals;
+}
+
+const CATEGORY_LABELS=["近期上架","家具","花盆","戒指","作物","寵物","特價區","自由出價","收購區","交換區"];
 let hiddenCategories=[];
 
 function topCategoryName(category){
@@ -2615,32 +2730,7 @@ onSnapshot(doc(db,"publicSettings","warehouseStock"),snap=>{
 // With hundreds of accounts, rescanning every items subcollection whenever an
 // account document changes can consume a large number of Firestore reads.
 // We publish only after an explicit admin inventory/link action.
-const marketStockKey=i=>[i.category||"",i.name||"",i.variant||"",i.gender||"",i.candyType||""].map(String).join("\u001f");
-async function publishPublicWarehouseStockFromCandidates(){
-  if(auth.currentUser?.uid!==ADMIN_UID)return;
-  const totals={};
-  for(const entry of (warehouseCandidates||[])) totals[entry.key]=Math.max(0,Math.floor(Number(entry.qty)||0));
-  const linkSnap=await getDocs(collection(db,"inventoryLinks"));
-  const output={};
-  for(const d of linkSnap.docs){
-    const link=d.data()||{};
-    const variants={};
-    const previous=publicWarehouseStock[d.id]||{};
-    for(const v of (link.variantLinks||[])){
-      if(!v.variant||!v.itemKey)continue;
-      // A missing item key means no owner has that item: stock must be zero.
-      variants[v.variant]=totals[v.itemKey]||0;
-    }
-    const entry={variants,reservedVariants:{...(previous.reservedVariants||{})}};
-    if(link.itemKey){
-      entry.stock=totals[link.itemKey]||0;
-    }
-    entry.reserved=Math.max(0,Math.floor(Number(previous.reserved)||0));
-    output[d.id]=entry;
-  }
-  await setDoc(doc(db,"publicSettings","warehouseStock"),{products:output,updatedAt:new Date().toISOString()});
-}
-
+const marketStockKey=syncIdentity;
 function usesWarehouseStock(p){
   // 收購／交換不是賣場出貨庫存；其餘販售商品一律以小倉倉為唯一庫存來源。
   return p?.category!=="收購區" && p?.category!=="交換區";
@@ -3632,11 +3722,6 @@ async function generateProductCatalogImage(selectedFile=null){
         sections:[{label:"家具",match:p=>String(p.category||"")==="家具"}]
       },
       {
-        file:"玩偶",
-        title:"玩偶",
-        sections:[{label:"玩偶",match:p=>String(p.category||"")==="玩偶"}]
-      },
-      {
         file:"花盆",
         title:"花盆",
         sections:[{label:"花盆",match:p=>String(p.category||"")==="花盆"}]
@@ -4127,9 +4212,9 @@ function updateProductFormMode(){
 // 商品對應獨立儲存在 inventoryLinks；不改小倉倉資料，也不會自動扣庫存。
 let warehouseCandidates=[];
 let warehouseLinkCache=new Map();
-let warehouseLoadPromise=null;
+let warehouseLoadPromise=null,warehouseCandidatesRevision="";
 let warehouseCurrentProductId="";
-const warehouseIdentity=x=>[x.category||"",x.name||"",x.variant||"",x.gender||"",x.candyType||""].map(String).join("\u001f");
+const warehouseIdentity=syncIdentity;
 const warehouseParseKey=k=>k.split("\u001f");
 const warehouseEscape=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function loadWarehouseCandidates(force=false){
@@ -4138,7 +4223,10 @@ async function loadWarehouseCandidates(force=false){
   warehouseLoadPromise=(async()=>{
     const indexSnap=await getDoc(doc(db,"adminSettings","warehouseInventoryIndex"));
     if(!indexSnap.exists()){warehouseCandidates=[];return warehouseCandidates;}
-    const rows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
+    const revision=String(indexSnap.data()?.rowsRevision||indexSnap.data()?.updatedAt||"");
+    if(!force&&warehouseCandidatesRevision===revision&&warehouseCandidates.length)return warehouseCandidates;
+    const full=await syncReadIndex({get:getDoc},indexSnap,null);warehouseCandidatesRevision=revision;
+    const rows=syncRows(full.rows||[]);
     warehouseCandidates=rows.map(r=>{
       const key=String(r?.key||"");
       const [category,name,variant,gender,candyType]=warehouseParseKey(key);
@@ -4242,11 +4330,11 @@ async function loadWarehouseLinkForProduct(id){
       id?getDoc(doc(db,"inventoryLinks",id)):Promise.resolve(null)
     ]);
     if(warehouseCurrentProductId!==id)return;
-    sel.dataset.chosen=link?.exists()?String(link.data().itemKey||""):"";
+    sel.dataset.chosen=link?.exists()?syncKey(link.data().itemKey):"";
     const links=link?.exists()?(link.data().variantLinks||[]):[];
     $$(".variant-row",$("#variantRows")).forEach(row=>{
       const name=row.querySelector(".variant-name").value.trim();
-      row.dataset.warehouseKey=String(links.find(x=>x.variant===name)?.itemKey||"");
+      row.dataset.warehouseKey=syncKey(links.find(x=>x.variant===name)?.itemKey);
     });
     showWarehouseChoice();
     renderAllVariantWarehousePickers();
@@ -4256,22 +4344,24 @@ async function loadWarehouseLinkForProduct(id){
   }
 }
 async function saveWarehouseLink(id,variantLinks=[]){
-  const linkSelect=$("#warehouseItemChoice");
-  const key=variantLinks.length?"":(linkSelect.value||linkSelect.dataset.chosen||"");
-  const ref=doc(db,"inventoryLinks",id);
-  const links=variantLinks.filter(v=>v.variant&&v.itemKey).map(v=>({variant:v.variant,itemKey:v.itemKey}));
-  if(key){
-    const [category,name,variant,gender,candyType]=warehouseParseKey(key);
-    await setDoc(ref,{productId:id,itemKey:key,category,name,variant,gender,candyType,variantLinks:links,updatedAt:serverTimestamp()});
-  }else if(links.length){
-    await setDoc(ref,{productId:id,variantLinks:links,updatedAt:serverTimestamp()});
-  }else{
-    const existing=await getDoc(ref);
-    if(existing.exists())await deleteDoc(ref);
-  }
-  // Reuse the inventory data already loaded for the admin picker; no automatic
-  // all-account rescan is started here.
-  await publishPublicWarehouseStockFromCandidates();
+  await initializeReservationLedger();
+  const select=$("#warehouseItemChoice"),key=variantLinks.length?"":syncKey(select.value||select.dataset.chosen||"");
+  const variants=variantLinks.filter(v=>v.variant&&v.itemKey).map(v=>({variant:v.variant,itemKey:syncKey(v.itemKey)}));
+  const link=key||variants.length?{productId:id,itemKey:key,variantLinks:variants}:null;
+  const seed=await readInventoryLinks();
+  await runTransaction(db,async tx=>{
+    const ref=doc(db,"inventoryLinks",id),is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef());
+    if(!is.exists())throw new Error("請先開啟小倉倉初始化庫存索引。");
+    const previous=is.data()?.links?.[id]||{};
+    const keys=[key,...variants.map(v=>v.itemKey),previous.itemKey,...(previous.variantLinks||[]).map(v=>v.itemKey)].filter(Boolean);
+    const index=await syncReadIndex(tx,is,keys);index.links=is.data().syncLinksVersion===1?{...(is.data().links||{})}:Object.fromEntries(seed);index.syncLinksVersion=1;
+    if(link)index.links[id]=link;else delete index.links[id];
+    const active=Object.values(index.reservations||{}).flat().some(a=>String(a.itemId)===String(id));
+    if(active&&!syncEqual(is.data()?.links?.[id],link))throw new Error("商品已有預訂配貨，請先取消相關預訂再改庫存連結。");
+    syncCheckSize(index);const products=syncProjection(index,new Map(Object.entries(index.links)),ps.data()?.products||{});syncCheckSize(products);
+    if(link)tx.set(ref,{...link,updatedAt:serverTimestamp()});else tx.delete(ref);
+    syncWriteIndex(tx,inventoryIndexRef(),index);tx.set(inventoryPublicRef(),{products,updatedAt:new Date().toISOString()});
+  });
 }
 
 function openProduct(p=null){
@@ -4577,14 +4667,19 @@ $("#productForm").addEventListener("submit", async e=>{
 });
 
 async function deleteProduct(p){
-  if(!isAdmin())return;
-  if(!confirm(`確定刪除「${p.name}」？`))return;
+  if(!isAdmin()||!confirm(`確定刪除「${p.name}」？`))return;
   try{
-    await deleteDoc(doc(db,"products",p.id));
-    toast("商品已刪除");
-  }catch(err){
-    alert(err.message||"刪除失敗");
-  }
+    await initializeReservationLedger();
+    await runTransaction(db,async tx=>{
+      const is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef());
+      const index={...(is.data()||{}),links:{...(is.data()?.links||{})}};
+      if(Object.values(index.reservations||{}).flat().some(a=>String(a.itemId)===String(p.id)))throw new Error("這項商品仍有預訂配貨，請先取消相關預訂。");
+      delete index.links[p.id];const products={...(ps.data()?.products||{})};delete products[p.id];
+      tx.delete(doc(db,"products",p.id));tx.delete(doc(db,"inventoryLinks",p.id));
+      if(is.exists())syncWriteIndex(tx,inventoryIndexRef(),index);
+      tx.set(inventoryPublicRef(),{products,updatedAt:new Date().toISOString()});
+    });toast("商品已刪除");
+  }catch(err){alert(err.message||"刪除失敗");}
 }
 
 $("#googleLoginBtn").onclick=async()=>{
@@ -4632,9 +4727,9 @@ onAuthStateChanged(auth,user=>{
 });
 
 $("#ordersBtn")?.addEventListener("click",()=>{ if(isAdmin()){ordersView="pending";startOrdersDataListener();renderOrders();$("#ordersDialog").showModal();} });
-$("#ordersDialog")?.addEventListener("close",stopOrdersData);
+$("#ordersDialog")?.addEventListener("close",()=>{stopOrdersData();startOrdersListener();});
 $("#pendingOrdersTab")?.addEventListener("click",()=>{ordersView="pending";renderOrders();});
-$("#historyOrdersTab")?.addEventListener("click",()=>{ordersView="history";renderOrders();});
+$("#historyOrdersTab")?.addEventListener("click",()=>{ordersView="history";startOrdersDataListener();renderOrders();});
 
 
 $("#categorySettingsBtn")?.addEventListener("click",()=>{
@@ -4691,7 +4786,7 @@ function openCatalogPicker(){
       <div class="catalog-picker-grid">
         <button data-cat="近期上架">近期上架</button>
         <button data-cat="家具">家具</button>
-        <button data-cat="玩偶">玩偶</button>
+        
         <button data-cat="花盆">花盆</button>
         <button data-cat="戒指">戒指</button>
         <button data-cat="作物">作物</button>
@@ -4930,7 +5025,7 @@ function renderOrders(){
   const pending=adminOrders.filter(o=>o.status==="待交易"||o.status==="預定中");
   const history=adminOrders.filter(o=>o.status!=="待交易"&&o.status!=="預定中"&&o.status!=="已取消");
   $("#pendingOrdersCount").textContent=String(pending.length);
-  $("#historyOrdersCount").textContent=String(history.length);
+  $("#historyOrdersCount").textContent=historyServerCount==null?"…":String(historyServerCount);
   for(const [tab,selected] of [["#pendingOrdersTab",ordersView==="pending"],["#historyOrdersTab",ordersView==="history"]]){
     $(tab).classList.toggle("active",selected);
     $(tab).setAttribute("aria-selected",String(selected));
@@ -4993,49 +5088,40 @@ async function saveOrderAdminFields(orderId,btn){
   }catch(e){console.error(e);alert(e?.message||"儲存失敗");}
   finally{btn.disabled=false;}
 }
-let ordersListenerReady=false;
-let pendingOrderIds=new Set();
-let stopPendingOrdersListener=null;
-let stopOrdersDataListener=null;
-let ghostReservationRepairDone=false;
-function setOrdersBadgeCount(count){
-  count=Math.max(0,Number(count)||0);
-  const badge=$("#ordersBadge");
-  if(badge){badge.textContent=String(count);badge.classList.toggle("hidden",count===0);badge.setAttribute("aria-label",`待交易訂單 ${count} 筆`);}
-  try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:"nene-orders-pending",count},"*");}catch(_){}
+let ordersListenerReady=false,pendingOrderIds=new Set(),stopPendingOrdersListener=null,stopOrdersDataListener=null;
+let ordersListenerGeneration=0,historyServerCount=null,historyCountRun=0;
+function setOrdersBadgeCount(count){const n=Math.max(0,Number(count)||0),badge=$("#ordersBadge");if(badge){badge.textContent=String(n);badge.classList.toggle('hidden',n===0);badge.setAttribute('aria-label',`待交易訂單 ${n} 筆`);}try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'nene-orders-pending',count:n},'*');}catch(_){}}
+async function refreshOrderHistoryCount(){
+  if(!isAdmin()||stopOrdersDataListener)return;const run=++historyCountRun;
+  try{const [total,cancelled]=await Promise.all([getCountFromServer(collection(db,'orders')),getCountFromServer(query(collection(db,'orders'),where('status','==','已取消')))]);if(run!==historyCountRun||stopOrdersDataListener||!isAdmin())return;historyServerCount=Math.max(0,total.data().count-cancelled.data().count-pendingOrderIds.size);renderOrders();}catch(err){console.error('歷史訂單計數失敗',err);}
 }
-function stopOrdersData(){if(stopOrdersDataListener){try{stopOrdersDataListener();}catch(_){}stopOrdersDataListener=null;}}
+function stopOrdersData(){if(stopOrdersDataListener){stopOrdersDataListener();stopOrdersDataListener=null;}}
+function acceptOrdersSnapshot(snap,full,notify){
+  adminOrders=snap.docs.map(s=>({id:s.id,...s.data()}));ordersListenerReady=true;
+  const active=snap.docs.filter(s=>['待交易','預定中'].includes(s.data()?.status)),next=new Set(active.map(s=>s.id));
+  if(notify){const fresh=active.filter(s=>!pendingOrderIds.has(s.id)&&s.data()?.status==='待交易');if(fresh.length)toast(fresh.length===1?`有新訂單：${fresh[0].data().orderNumber||fresh[0].id}`:`有 ${fresh.length} 筆新訂單`);}
+  const changed=next.size!==pendingOrderIds.size||[...next].some(id=>!pendingOrderIds.has(id));pendingOrderIds=next;setOrdersBadgeCount(active.length);
+  if(full)historyServerCount=adminOrders.filter(o=>!['待交易','預定中','已取消'].includes(o.status)).length;
+  renderOrders();if(!full&&(changed||historyServerCount===null))void refreshOrderHistoryCount();
+  reconcilePublicOrderReservations(active).catch(err=>console.error('預訂校正失敗',err));
+}
 function startOrdersDataListener(){
-  stopOrdersData();
   if(!isAdmin())return;
-  stopOrdersDataListener=onSnapshot(collection(db,"orders"),snap=>{
-    adminOrders=snap.docs.map(d=>({id:d.id,...d.data()}));
-    ordersListenerReady=true;renderOrders();
-    // 訂單清單每次變動都用「這一份最新快照」重建預訂。
-    // 不再只在開站時校正一次；刪除／取消後 Firestore 快照一到，幽靈預訂會立即歸零。
-    // 直接沿用本次 orders snapshot，避免為了校正再多讀一次整個 orders collection。
-    ghostReservationRepairDone=true;
-    reconcilePublicOrderReservations(snap.docs).catch(e=>{console.error("預訂即時校正失敗",e);});
-  },err=>{console.error(err);toast("訂單讀取失敗");});
+  if(ordersView!=='history'){if(!stopPendingOrdersListener)startOrdersListener();void refreshOrderHistoryCount();return;}
+  if(stopOrdersDataListener)return;
+  if(stopPendingOrdersListener){stopPendingOrdersListener();stopPendingOrdersListener=null;}
+  const generation=++ordersListenerGeneration;let ready=false;
+  // Full history is fetched only when the existing history tab is opened.
+  stopOrdersDataListener=onSnapshot(collection(db,'orders'),snap=>{if(generation!==ordersListenerGeneration)return;acceptOrdersSnapshot(snap,true,ready);ready=true;},err=>console.error('歷史訂單讀取失敗',err));
 }
 function startOrdersListener(){
-  if(stopPendingOrdersListener){try{stopPendingOrdersListener();}catch(_){}stopPendingOrdersListener=null;}
-  stopOrdersData();adminOrders=[];ordersListenerReady=false;pendingOrderIds=new Set();renderOrders();setOrdersBadgeCount(0);
-  if(!isAdmin())return;
-  let pendingReady=false;
-  stopPendingOrdersListener=onSnapshot(collection(db,"orders"),snap=>{
-    const activeDocs=snap.docs.filter(d=>{const st=d.data()?.status;return st==="待交易"||st==="預定中";});
-    const nextIds=new Set(activeDocs.map(d=>d.id));
-    if(pendingReady){
-      const fresh=activeDocs.filter(d=>!pendingOrderIds.has(d.id)&&d.data()?.status==="待交易");
-      if(fresh.length){const first=fresh[0].data()||{};toast(fresh.length===1?`有新訂單：${first.orderNumber||fresh[0].id}`:`有 ${fresh.length} 筆新訂單`);}
-    }
-    pendingOrderIds=nextIds;pendingReady=true;setOrdersBadgeCount(activeDocs.length);
-    // 這個 listener 登入管理員後一定會啟動；直接用同一份 orders 快照重建公開庫存。
-    // 因此就算不打開「訂單」視窗，已刪除／已取消訂單留下的預訂也會立即清掉。
-    reconcilePublicOrderReservations(snap.docs).catch(e=>{console.error("預訂背景校正失敗",e);});
-  },err=>{console.error("待交易訂單提醒讀取失敗",err);setOrdersBadgeCount(0);});
+  const generation=++ordersListenerGeneration;
+  if(stopPendingOrdersListener){stopPendingOrdersListener();stopPendingOrdersListener=null;}stopOrdersData();
+  adminOrders=[];ordersListenerReady=false;pendingOrderIds=new Set();historyServerCount=null;renderOrders();setOrdersBadgeCount(0);
+  if(!isAdmin())return;let ready=false;
+  stopPendingOrdersListener=onSnapshot(query(collection(db,'orders'),where('status','in',['待交易','預定中'])),snap=>{if(generation!==ordersListenerGeneration)return;acceptOrdersSnapshot(snap,false,ready);ready=true;},err=>console.error('待交易訂單提醒讀取失敗',err));
 }
+
 // 一張訂單一次顯示全部商品的手動配貨，不再逐商品開多個視窗。
 function chooseFulfillmentAccounts(order,rows){
   return new Promise((resolve,reject)=>{
@@ -5111,12 +5197,14 @@ async function planWarehouseFulfillment(order){
   const links=new Map(linkIds.map((id,i)=>[id,linkSnaps[i].exists()?linkSnaps[i].data():null]));
   const indexSnap=await getDoc(doc(db,"adminSettings","warehouseInventoryIndex"));
   if(!indexSnap.exists())throw new Error("小倉倉配貨索引尚未建立，請先開啟一次小倉倉後再試");
-  const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
+  const requestedKeys=items.map(item=>{const l=links.get(String(item.id)),v=String(item.variant||'');return syncKey(v?(l?.variantLinks||[]).find(x=>x.variant===v)?.itemKey:l?.itemKey)||warehouseIdentity(item)});
+  const selectionIndex=await syncReadIndex({get:getDoc},indexSnap,requestedKeys);
+  const indexRows=syncRows(selectionIndex.rows||[]);
   const ownersByKey=new Map(indexRows.map(r=>[String(r?.key||""),Array.isArray(r?.owners)?r.owners:[]]));
   const linkedRows=[];
   for(const item of items){
     const link=links.get(String(item.id||""));let key="";
-    if(link) key=String(item.variant||"")?String((link.variantLinks||[]).find(v=>v.variant===item.variant)?.itemKey||""):String(link.itemKey||"");
+    if(link) key=String(item.variant||"")?syncKey((link.variantLinks||[]).find(v=>v.variant===item.variant)?.itemKey):syncKey(link.itemKey);
     if(!key){const exactKey=warehouseIdentity(item);if(ownersByKey.has(exactKey))key=exactKey;}
     if(!key)throw new Error(`「${item.name||"商品"}${item.variant?"／"+item.variant:""}」找不到小倉倉對應道具，請先在商品管理設定庫存連結`);
     linkedRows.push({item,key,qty:Math.max(1,Math.floor(Number(item.qty)||1))});
@@ -5124,17 +5212,10 @@ async function planWarehouseFulfillment(order){
   if(!linkedRows.length)return {allocations:[],linkedIds:new Set()};
   // 預訂唯一來源改為 orders：只有 status=預定中 且帶 reservationAllocations 的訂單才算。
   // 這樣取消第 3 張待交易訂單不會碰到第 1、2 張的預訂，也不再依賴另一個 collection 的狀態同步。
-  const ordersSnap=await getDocs(collection(db,"orders"));
-  const liveReservedMap={};
-  for(const d of ordersSnap.docs){
-    const o=d.data()||{};
-    if(o.status!=="預定中")continue;
-    for(const a of (Array.isArray(o.reservationAllocations)?o.reservationAllocations:[])){
-      const slot=reservationSlot(a.accountId,a.key);
-      liveReservedMap[slot]=(liveReservedMap[slot]||0)+Math.max(0,Math.floor(Number(a.qty)||0));
-    }
-  }
-  const reservedFor=(accountId,key)=>Math.max(0,Math.floor(Number(liveReservedMap[reservationSlot(accountId,key)])||0));
+  await initializeReservationLedger();
+  const latestIndex=await getDoc(inventoryIndexRef());
+  const reservedMap=syncReservationTotals(latestIndex.data()||{});
+  const reservedFor=(accountId,key)=>reservedMap.get(String(accountId)+"||"+syncKey(key))||0;
   const candidateAccountIds=[...new Set(linkedRows.flatMap(r=>(ownersByKey.get(r.key)||[]).map(x=>String(x.accountId||"")).filter(Boolean)))];
   const accountSnaps=await Promise.all(candidateAccountIds.map(id=>getDoc(doc(db,"users",ADMIN_UID,"accounts",id))));
   const accountMeta=new Map(candidateAccountIds.map((id,i)=>{const a=accountSnaps[i].exists()?accountSnaps[i].data():{};return [id,{label:String(a.number||a.name||a.gameId||id),gameId:String(a.gameId||"")}];}));
@@ -5172,7 +5253,7 @@ async function planWarehouseFulfillment(order){
     toast(`已移除 ${removedItems.length} 個缺貨品項，繼續配貨`);
   }
   const allocations=await chooseFulfillmentAccounts(workingOrder,usableRows);
-  return {allocations,linkedIds:new Set(usableRows.map(r=>String(r.item.id||""))),order:workingOrder,liveReservationEntries:{...liveReservedMap}};
+  return {allocations,linkedIds:new Set(usableRows.map(r=>String(r.item.id||""))),order:workingOrder,liveReservationEntries:{}};
 }
 
 const reservationSlot=(accountId,key)=>encodeURIComponent(String(accountId))+"|"+encodeURIComponent(String(key));
@@ -5256,391 +5337,138 @@ function completePublicReservation(products,order,allocations=[]){
 
 // 訂單預訂的唯一來源：orderFulfillments(status=預定中)。
 // 每次配貨／取消後重建公開「預訂」數量，避免舊版直接扣 stock 留下髒資料。
-async function reconcilePublicOrderReservations(orderDocsOverride=null){
-  if(auth.currentUser?.uid!==ADMIN_UID)return;
-  const [indexSnap,linkSnap,publicSnap]=await Promise.all([
-    getDoc(doc(db,"adminSettings","warehouseInventoryIndex")),
-    getDocs(collection(db,"inventoryLinks")),
-    getDoc(doc(db,"publicSettings","warehouseStock"))
-  ]);
-  const orderDocs=Array.isArray(orderDocsOverride)
-    ? orderDocsOverride
-    : (await getDocs(collection(db,"orders"))).docs;
-  const indexRows=Array.isArray(indexSnap.data()?.rows)?indexSnap.data().rows:[];
-  const indexByKey=new Map(indexRows.map(r=>[String(r?.key||""),r]));
-  const next=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
-
-  for(const entry of Object.values(next)){
-    if(!entry||typeof entry!=="object")continue;
-    entry.reserved=0;
-    entry.reservedVariants={};
-  }
-  for(const d of linkSnap.docs){
-    const link=d.data()||{}, entry=next[d.id]||(next[d.id]={reserved:0,reservedVariants:{}});
-    if(link.itemKey){
-      const row=indexByKey.get(String(link.itemKey));
-      entry.stock=row?(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0):0;
-    }
-    entry.variants={...(entry.variants||{})};
-    for(const v of (link.variantLinks||[])){
-      if(!v?.variant||!v?.itemKey)continue;
-      const row=indexByKey.get(String(v.itemKey));
-      entry.variants[String(v.variant)]=row?(row.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0):0;
-    }
-  }
-
-  // 只從目前仍「預定中」的訂單重建預訂。每張訂單自己保存 allocations，取消別張單不會洗掉它。
-  for(const d of orderDocs){
-    const o=d.data()||{};
-    if(o.status!=="預定中")continue;
-    for(const a of (Array.isArray(o.reservationAllocations)?o.reservationAllocations:[])){
-      const id=String(a?.itemId||""); if(!id)continue;
-      const qty=Math.max(0,Math.floor(Number(a?.qty)||0)); if(!qty)continue;
-      const variant=String(a?.variant||""), key=String(a?.key||"");
-      const entry=next[id]||(next[id]={reserved:0,reservedVariants:{}});
-      if(key){
-        const row=indexByKey.get(key);
-        if(row){
-          const total=(row.owners||[]).reduce((n,x)=>n+Math.max(0,Math.floor(Number(x?.qty)||0)),0);
-          if(variant){entry.variants={...(entry.variants||{})};entry.variants[variant]=total;}
-          else entry.stock=total;
-        }
-      }
-      if(variant){entry.reservedVariants={...(entry.reservedVariants||{})};entry.reservedVariants[variant]=Math.max(0,Math.floor(Number(entry.reservedVariants[variant])||0)+qty);}
-      else entry.reserved=Math.max(0,Math.floor(Number(entry.reserved)||0)+qty);
-    }
-  }
-  await setDoc(doc(db,"publicSettings","warehouseStock"),{products:next,updatedAt:new Date().toISOString()},{merge:false});
-  publicWarehouseStock=next;
-  render();renderCart();
+// The private index serializes reservations and inventory; public stock is derived only inside transactions.
+const inventoryIndexRef=()=>doc(db,"adminSettings","warehouseInventoryIndex");
+const inventoryPublicRef=()=>doc(db,"publicSettings","warehouseStock");
+async function readInventoryLinks(){const index=await getDoc(inventoryIndexRef());if(index.data()?.syncLinksVersion===1)return new Map(Object.entries(index.data().links||{}));const s=await getDocs(collection(db,"inventoryLinks"));return new Map(s.docs.map(x=>[x.id,x.data()]));}
+async function initializeReservationLedger(){
+  if(storeRestoreRunning)throw new Error("正在還原賣場，請等還原完成後操作訂單。");
+  const s=await getDoc(inventoryIndexRef());
+  if(s.data()?.rowLayout!==6||s.data()?.reservationSchemaVersion!==2||!s.data()?.itemDocumentIds)throw new Error("請先開啟新版小倉倉，完成物品文件索引及舊預訂核對；尚未修改訂單。");
 }
-
-async function reserveWarehouseOrder(orderId,btn){
-  if(!isAdmin()||!orderId)return;
-  btn.disabled=true;btn.textContent="配貨中…";
-  try{
-    const order=adminOrders.find(o=>o.id===orderId);
-    if(!order||order.status!=="待交易")throw new Error("訂單已變更，請重新整理");
-    const plan=await planWarehouseFulfillment(order);
-    if(!plan.allocations.length)throw new Error("這張訂單沒有可連結的小倉倉商品");
-    const summary=allocationSummary(plan.allocations);
-    const plannedOrder=plan.order||order;
-    if(!confirm(`確認訂單 ${plannedOrder.orderNumber||orderId}？\n\n預訂配貨：${summary}\n\n確認後賣場可購買數量會先扣除，但小倉倉實際庫存要到「完成交易」才會扣。`))throw new Error("已取消配貨，庫存未變動");
+let storeRestoreRunning=false;
+let inventoryReconcileChain=Promise.resolve(),lastReservationSnapshotHash="";
+async function reconcilePublicOrderReservations(orderDocsOverride=null){
+  if(auth.currentUser?.uid!==ADMIN_UID||storeRestoreRunning)return;
+  if(Array.isArray(orderDocsOverride)){const hash=JSON.stringify(orderDocsOverride.map(s=>[s.id,s.data()?.status,s.data()?.reservationAllocations||[]]));if(hash===lastReservationSnapshotHash)return;lastReservationSnapshotHash=hash;}
+  const task=inventoryReconcileChain.catch(()=>{}).then(async()=>{
+    await initializeReservationLedger();const links=await readInventoryLinks();
     await runTransaction(db,async tx=>{
-      const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),iref=doc(db,"adminSettings","warehouseInventoryIndex");
-      const os=await tx.get(oref),fs=await tx.get(fref),is=await tx.get(iref);
-      if(!os.exists()||os.data().status!=="待交易")throw new Error("訂單已處理，未重複預定");
-      if(fs.exists()&&fs.data()?.status!=="已取消")throw new Error("這張訂單已有配貨紀錄");
-      const indexRows=Array.isArray(is.data()?.rows)?is.data().rows:[];
-      const ownersByKey=new Map(indexRows.map(r=>[String(r?.key||""),Array.isArray(r?.owners)?r.owners:[]]));
-      // 以剛剛從「仍存在且預訂中」訂單重建的有效預訂為基準，忽略舊測試／已刪訂單殘留的 reservation。
-      for(const a of plan.allocations){
-        const actual=(ownersByKey.get(a.key)||[]).filter(x=>String(x.accountId||"")===String(a.accountId)).reduce((n,x)=>n+Math.max(0,Math.floor(Number(x.qty)||0)),0);
-        const already=Math.max(0,Math.floor(Number((plan.liveReservationEntries||{})[reservationSlot(a.accountId,a.key)])||0));
-        if(actual-already<a.qty)throw new Error(`帳號 ${a.label||a.accountId} 的可預訂庫存已不足，請重新配貨`);
-      }
-      // 配貨只寫訂單與配貨紀錄；公開可售／預訂數量統一由 reconcilePublicOrderReservations() 重建。
-      tx.set(fref,{orderId,status:"預定中",allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-manual-reservation"},{merge:false});
-      tx.update(oref,{status:"預定中",reservedAt:serverTimestamp(),warehouseReserved:true,reservationAllocations:plan.allocations});
+      const is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef());
+      if(!is.exists())return;
+      const index=await syncReadIndex(tx,is,[]);
+      // Re-read the ledger's order documents, never trust an older UI snapshot.
+      let changed=false;
+      for(const id of Object.keys(index.reservations||{})){
+        if(Array.isArray(orderDocsOverride)&&orderDocsOverride.some(s=>s.id===id&&s.data()?.status==='預定中'))continue;
+        const os=await tx.get(doc(db,"orders",id));const o=os.data();if(!os.exists()||o?.status!=="預定中"){delete index.reservations[id];changed=true;}}
+      const products=syncProjection(index,links,ps.data()?.products||{});
+      if(changed){syncCheckSize(index);syncWriteIndex(tx,inventoryIndexRef(),index);}
+      if(!syncEqual(products,ps.data()?.products||{})){syncCheckSize(products);tx.set(inventoryPublicRef(),{products,updatedAt:new Date().toISOString()});}
     });
-    // 以所有「預定中」配貨紀錄重建一次，確保畫面預訂數與實際配貨一致。
-    await reconcilePublicOrderReservations();
-    const localOrder=adminOrders.find(o=>o.id===orderId);
-    if(localOrder){localOrder.status="預定中";localOrder.warehouseReserved=true;renderOrders();}
-    render();renderCart();
-    toast("已確認訂單並預訂庫存，可按「完成交易並扣庫存」完成訂單");
-  }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"確認配貨失敗");}
+  });inventoryReconcileChain=task;try{return await task}catch(err){lastReservationSnapshotHash="";throw err;}
+}
+async function publishPublicWarehouseStockFromCandidates(){return reconcilePublicOrderReservations();}
+function normalizedAllocations(list){
+  const grouped=new Map();for(const a of list||[]){const key=syncKey(a.key),accountId=String(a.accountId||""),qty=syncQty(a.qty);if(!key||!accountId||!qty)throw new Error("配貨資料不完整");const sig=[accountId,key,String(a.itemId||""),String(a.variant||"")].join("||");const p=grouped.get(sig)||{...a,accountId,key,qty:0};p.qty+=qty;grouped.set(sig,p);}return [...grouped.values()];
+}
+function checkAllocationStock(index,allocations,exclude=""){
+  const held=syncReservationTotals(index,exclude),needed=new Map();
+  for(const a of allocations){const k=a.accountId+"||"+syncKey(a.key);needed.set(k,(needed.get(k)||0)+a.qty);}
+  for(const [k,qty] of needed){const cut=k.indexOf("||"),id=k.slice(0,cut),key=k.slice(cut+2);const row=syncRows(index.rows||[]).find(r=>r.key===key);const total=(row?.owners||[]).filter(o=>String(o.accountId)===id).reduce((n,o)=>n+syncQty(o.qty),0);if(total-(held.get(k)||0)<qty)throw new Error("實際可配貨庫存已不足，請重新選擇帳號。");}
+}
+function checkAllocationOrder(order,allocations,links){
+  const needed=new Map(),planned=new Map();
+  for(const item of order.items||[]){const id=String(item.id||""),variant=String(item.variant||""),link=links.get(id);const key=syncKey(variant?(link?.variantLinks||[]).find(v=>v.variant===variant)?.itemKey:link?.itemKey)||syncIdentity(item);const sig=[id,variant,key].join("||");needed.set(sig,(needed.get(sig)||0)+Math.max(1,syncQty(item.qty)));}
+  for(const a of allocations){const sig=[String(a.itemId||""),String(a.variant||""),syncKey(a.key)].join("||");planned.set(sig,(planned.get(sig)||0)+a.qty);}
+  if(needed.size!==planned.size||[...needed].some(([k,q])=>planned.get(k)!==q))throw new Error("訂單內容或商品連結已改變，請重新配貨。");
+}
+async function reserveWarehouseOrder(orderId,btn){
+  if(!isAdmin()||!orderId)return;btn.disabled=true;btn.textContent="配貨中…";
+  try{
+    await initializeReservationLedger();const order=adminOrders.find(o=>o.id===orderId);if(order?.status!=="待交易")throw new Error("訂單狀態已變更");
+    const plan=await planWarehouseFulfillment(order),allocations=normalizedAllocations(plan.allocations);
+    if(!allocations.length)throw new Error("這張訂單沒有可配貨商品");
+    if(!confirm(`確認訂單 ${(plan.order||order).orderNumber||orderId}？\n\n預訂配貨：${allocationSummary(allocations)}\n\n確認後先預訂，完成交易才扣除小倉倉實際庫存。`))return;
+    const links=await readInventoryLinks();
+    await runTransaction(db,async tx=>{
+      const or=doc(db,"orders",orderId),fr=doc(db,"orderFulfillments",orderId);const os=await tx.get(or),fs=await tx.get(fr),is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef());
+      if(os.data()?.status!=="待交易"||(fs.exists()&&fs.data()?.status!=="已取消"))throw new Error("這張訂單已處理");
+      const liveLinks=new Map();for(const item of os.data().items||[]){const id=String(item.id);const ls=await tx.get(doc(db,"inventoryLinks",id));if(ls.exists())liveLinks.set(id,ls.data());}
+      const index=await syncReadIndex(tx,is,allocations.map(a=>a.key));
+      checkAllocationOrder(os.data(),allocations,liveLinks);checkAllocationStock(index,allocations,orderId);index.reservations[orderId]=allocations;syncCheckSize(index);
+      syncWriteIndex(tx,inventoryIndexRef(),index);tx.set(inventoryPublicRef(),{products:syncProjection(index,new Map([...links,...liveLinks]),ps.data()?.products||{}),updatedAt:new Date().toISOString()});
+      tx.set(fr,{orderId,status:"預定中",allocations,createdAt:serverTimestamp(),kind:"warehouse-manual-reservation"});
+      tx.update(or,{status:"預定中",reservedAt:serverTimestamp(),warehouseReserved:true,reservationAllocations:allocations});
+    });toast("已確認訂單並預訂庫存");
+  }catch(e){console.error(e);if(e.message!=="已取消配貨，庫存未變動")alert(e.message||"配貨失敗");}
   finally{btn.disabled=false;btn.textContent="確認訂單・手動配貨";}
 }
-async function completeWarehouseReservedOrder(orderId,btn){
-  if(!isAdmin()||!orderId)return;
-  const order=adminOrders.find(o=>o.id===orderId);
-  if(!order||order.status!=="預定中")return alert("這張訂單目前不是預定中");
-  if(!confirm(`確定完成訂單 ${order.orderNumber||orderId}？\n\n完成後會依已選好的配貨帳號一次扣完小倉倉實際庫存。`))return;
-  btn.disabled=true;btn.textContent="扣庫存中…";
-  try{
-    // 先解析這張訂單實際要扣的 warehouse item refs；真正的數量驗證與扣除仍全部在同一個 transaction 完成。
-    const previewAllocations=Array.isArray(order.reservationAllocations)&&order.reservationAllocations.length
-      ? order.reservationAllocations
-      : [];
-    if(!previewAllocations.length)throw new Error("這張訂單沒有預定配貨資料，未扣除庫存");
-    const previewAccountIds=[...new Set(previewAllocations.map(a=>String(a.accountId||"")).filter(Boolean))];
-    const resolvedRefs=new Map();
-    for(const id of previewAccountIds){
-      const snap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",id,"items"));
-      for(const d of snap.docs){
-        const key=warehouseIdentity(d.data());
-        const mapKey=`${id}||${key}`;
-        if(!resolvedRefs.has(mapKey))resolvedRefs.set(mapKey,[]);
-        resolvedRefs.get(mapKey).push(d.ref);
-      }
-    }
-    await runTransaction(db,async tx=>{
-      const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId),iref=doc(db,"adminSettings","warehouseInventoryIndex");
-      const os=await tx.get(oref),fs=await tx.get(fref),is=await tx.get(iref);
-      const publicRef=doc(db,"publicSettings","warehouseStock");
-      const publicSnap=await tx.get(publicRef);
-      if(!os.exists()||os.data().status!=="預定中")throw new Error("訂單已處理，未重複扣庫存");
-      if(!fs.exists()||fs.data()?.status!=="預定中")throw new Error("找不到這張訂單的預定配貨資料");
-
-      // 訂單本身保存的 reservationAllocations 是完成交易的唯一扣庫存清單。
-      // 同帳號＋同商品先合併，避免 qty=2 被拆成兩筆時只處理到其中一筆。
-      const raw=Array.isArray(os.data()?.reservationAllocations)?os.data().reservationAllocations:[];
-      if(!raw.length)throw new Error("配貨資料是空的，未扣除庫存");
-      const merged=new Map();
-      for(const a of raw){
-        const accountId=String(a?.accountId||""),key=String(a?.key||""),qty=Math.max(0,Math.floor(Number(a?.qty)||0));
-        if(!accountId||!key||!qty)continue;
-        const mk=`${accountId}||${key}`;
-        const prev=merged.get(mk)||{...a,accountId,key,qty:0};
-        prev.qty+=qty; merged.set(mk,prev);
-      }
-      const allocations=[...merged.values()];
-      if(!allocations.length)throw new Error("配貨資料是空的，未扣除庫存");
-
-      const accountIds=[...new Set(allocations.map(a=>a.accountId))];
-      const accountDocs=new Map();
-      for(const id of accountIds){
-        const ref=doc(db,"users",ADMIN_UID,"accounts",id),snap=await tx.get(ref);
-        if(!snap.exists())throw new Error(`出貨帳號 ${id} 已不存在`);
-        accountDocs.set(id,{ref,snap});
-      }
-
-      const liveRows=new Map();
-      for(const a of allocations){
-        const mk=`${a.accountId}||${a.key}`,refs=resolvedRefs.get(mk)||[];
-        if(!refs.length)throw new Error(`帳號 ${a.label||a.accountId} 找不到已配貨商品，未扣除任何數量`);
-        const rows=[];
-        for(const ref of refs){
-          const snap=await tx.get(ref);
-          if(snap.exists()&&warehouseIdentity(snap.data())===a.key)rows.push({ref,qty:Math.max(0,Math.floor(Number(snap.data()?.qty)||0))});
-        }
-        liveRows.set(mk,rows);
-      }
-
-      // 第一階段只計算與驗證；任一品項不足就 throw，transaction 不會留下半扣狀態。
-      const updates=new Map();
-      for(const a of allocations){
-        const mk=`${a.accountId}||${a.key}`,rows=liveRows.get(mk)||[];
-        let remain=a.qty;
-        for(const row of rows){
-          const current=updates.has(row.ref.path)?updates.get(row.ref.path).qty:row.qty;
-          const take=Math.min(current,remain);
-          updates.set(row.ref.path,{ref:row.ref,qty:current-take});
-          remain-=take;
-          if(!remain)break;
-        }
-        if(remain)throw new Error(`帳號 ${a.label||a.accountId} 的實際庫存不足，未扣除任何數量`);
-      }
-
-      // 全部驗證成功後才一次寫入所有實際庫存。
-      // 訂單扣至 0 時保留小倉倉道具紀錄，顯示灰色零庫存卡片。
-      // 手動「刪除」仍由小倉倉的刪除按鈕處理，不受此變更影響。
-      for(const u of updates.values()){
-        tx.update(u.ref,{qty:Math.max(0,u.qty)});
-      }
-      for(const id of accountIds)tx.update(accountDocs.get(id).ref,{itemsUpdatedAt:Date.now()});
-
-      // 同一份合併後 allocations 同步扣管理員索引，數量與實際庫存完全一致。
-      const rows=Array.isArray(is.data()?.rows)?JSON.parse(JSON.stringify(is.data().rows)):[];
-      for(const a of allocations){
-        const row=rows.find(r=>String(r?.key||"")===a.key);if(!row)throw new Error(`配貨索引缺少 ${a.itemName||a.key}，未完成交易`);
-        let remain=a.qty;
-        for(const owner of (row.owners||[])){
-          if(String(owner.accountId||"")!==a.accountId)continue;
-          const have=Math.max(0,Math.floor(Number(owner.qty)||0)),take=Math.min(have,remain);
-          owner.qty=have-take;remain-=take;if(!remain)break;
-        }
-        if(remain)throw new Error(`帳號 ${a.label||a.accountId} 的配貨索引數量不足，未完成交易`);
-        row.owners=(row.owners||[]).filter(x=>Math.max(0,Math.floor(Number(x.qty)||0))>0);
-      }
-      // Update public stock atomically with the actual item deductions and inventory index.
-      // This prevents an order from being marked complete while public stock still shows the old quantity.
-      const publicProducts=JSON.parse(JSON.stringify(publicSnap.exists()?(publicSnap.data()?.products||{}):{}));
-      const totalsByKey=new Map(rows.map(r=>[String(r?.key||""),(r.owners||[]).reduce((n,o)=>n+Math.max(0,Math.floor(Number(o?.qty)||0)),0)]));
-      const linkIds=[...new Set(allocations.map(a=>String(a.itemId||"")).filter(Boolean))];
-      // Use the fulfilled allocations to decrement the existing public entry, while the
-      // post-transaction reconciliation will rebuild every linked product from the index.
-      for(const a of allocations){
-        const itemId=String(a.itemId||"");if(!itemId)continue;
-        const entry=publicProducts[itemId]||(publicProducts[itemId]={});
-        const variant=String(a.variant||"");
-        const total=totalsByKey.get(a.key);
-        if(variant){entry.variants={...(entry.variants||{})};entry.variants[variant]=total==null?Math.max(0,Number(entry.variants[variant]||0)-a.qty):total;}
-        else entry.stock=total==null?Math.max(0,Number(entry.stock||0)-a.qty):total;
-        // Reserved quantities are rebuilt from live pending orders after the transaction.
-        if(variant){entry.reservedVariants={...(entry.reservedVariants||{})};entry.reservedVariants[variant]=Math.max(0,Number(entry.reservedVariants[variant]||0)-a.qty);}
-        else entry.reserved=Math.max(0,Number(entry.reserved||0)-a.qty);
-      }
-      tx.set(publicRef,{products:publicProducts,updatedAt:new Date().toISOString()},{merge:false});
-      tx.set(iref,{rows,updatedAt:new Date().toISOString()},{merge:false});
-      tx.set(fref,{status:"已完成",completedAt:serverTimestamp(),allocations},{merge:true});
-      tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
-      tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:true,reservationAllocations:[]});
-    });
-    await reconcilePublicOrderReservations();
-    toast("交易完成，已一次扣完全部配貨庫存");
-  }catch(e){console.error(e);alert(e?.message||"完成交易失敗");}
-  finally{btn.disabled=false;btn.textContent="完成交易並扣庫存";}
-}
 async function cancelWarehouseReservation(orderId){
+  await initializeReservationLedger();const links=await readInventoryLinks();
   await runTransaction(db,async tx=>{
-    const oref=doc(db,"orders",orderId),fref=doc(db,"orderFulfillments",orderId);
-    const os=await tx.get(oref),fs=await tx.get(fref);
-    if(!os.exists()||os.data().status!=="預定中")throw new Error("訂單狀態已變更");
-    if(!fs.exists()||fs.data()?.status!=="預定中")throw new Error("找不到預定配貨資料");
-    // 取消只改訂單／配貨狀態，不直接加減任何庫存。
-    tx.set(fref,{status:"已取消",cancelledAt:serverTimestamp()},{merge:true});
-    tx.update(oref,{status:"已取消",cancelledAt:serverTimestamp(),warehouseReserved:false,reservationAllocations:[]});
+    const or=doc(db,"orders",orderId),fr=doc(db,"orderFulfillments",orderId);const os=await tx.get(or),is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef());
+    if(os.data()?.status!=="預定中")throw new Error("訂單狀態已變更");
+    const index=await syncReadIndex(tx,is,[]);delete index.reservations[orderId];
+    syncWriteIndex(tx,inventoryIndexRef(),index);tx.set(inventoryPublicRef(),{products:syncProjection(index,links,ps.data()?.products||{}),updatedAt:new Date().toISOString()});
+    tx.set(fr,{status:"已取消",cancelledAt:serverTimestamp()},{merge:true});tx.update(or,{status:"已取消",cancelledAt:serverTimestamp(),warehouseReserved:false,reservationAllocations:[]});
   });
-  // 唯一同步入口：依小倉倉實際庫存 + 目前仍存在的預訂中訂單重建公開數字。
-  await reconcilePublicOrderReservations();
 }
-
-async function publishCompletedOrderStock(order){
-  if(auth.currentUser?.uid!==ADMIN_UID)return;
-  const next=JSON.parse(JSON.stringify(publicWarehouseStock||{}));
-  let changed=false;
-  for(const item of (order?.items||[])){
-    const id=String(item.id||"");
-    const entry=next[id];
-    if(!entry)continue;
-    const qty=Math.max(1,Math.floor(Number(item.qty)||1));
-    const variant=String(item.variant||"");
-    if(variant && entry.variants && Object.prototype.hasOwnProperty.call(entry.variants,variant)){
-      entry.variants[variant]=Math.max(0,Math.floor(Number(entry.variants[variant])||0)-qty);changed=true;
-    }else if(!variant && Object.prototype.hasOwnProperty.call(entry,"stock")){
-      entry.stock=Math.max(0,Math.floor(Number(entry.stock)||0)-qty);changed=true;
+async function resolveFulfillmentDocuments(allocations,index=null){
+  if(!index)index=await syncFetchIndex(allocations.map(a=>a.key));
+  if(index.rowLayout!==6||index.itemDocumentIds!==true)throw new Error("物品文件索引尚未升級，未掃描帳號物品；請先開啟新版小倉倉。");
+  const needed=new Map(),refs=new Map();
+  for(const a of allocations){const slot=JSON.stringify([String(a.accountId),syncKey(a.key)]);needed.set(slot,(needed.get(slot)||0)+syncQty(a.qty));}
+  for(const [slot,qty] of needed){const [id,key]=JSON.parse(slot);let remain=qty;const owners=index.rows.find(r=>r.key===key)?.owners||[];const chosen=refs.get(id)||new Map();
+    for(const owner of owners){if(String(owner.accountId)!==id||!owner.itemId||syncQty(owner.qty)<=0)continue;
+      const take=Math.min(remain,syncQty(owner.qty));if(take){const ref=doc(db,'users',ADMIN_UID,'accounts',id,'items',String(owner.itemId));chosen.set(ref.path,ref);remain-=take;}if(!remain)break;}
+    if(remain)throw new Error(`帳號 ${id} 的指定物品可配貨數不足，未讀取無關物品。`);refs.set(id,chosen);
+  }
+  return {refs:new Map([...refs].map(([id,map])=>[id,[...map.values()]]))};
+}
+async function commitWarehouseCompletion(orderId,preview,reserved){
+  await initializeReservationLedger();const allocations=normalizedAllocations(preview),links=await readInventoryLinks();
+  await runTransaction(db,async tx=>{
+    const or=doc(db,"orders",orderId),fr=doc(db,"orderFulfillments",orderId),mr=doc(db,"users",ADMIN_UID,"inventory","meta");
+    const os=await tx.get(or),fs=await tx.get(fr),is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef()),ms=await tx.get(mr);
+    if(os.data()?.status!==(reserved?"預定中":"待交易"))throw new Error("訂單已處理，未重複扣庫存");
+    if(reserved&&(!fs.exists()||fs.data()?.status!=="預定中"))throw new Error("找不到預訂配貨資料");
+    if(!reserved&&fs.exists()&&fs.data()?.status!=="已取消")throw new Error("這張訂單已有配貨紀錄");
+    if(reserved&&!syncEqual(normalizedAllocations(os.data().reservationAllocations),allocations))throw new Error("預訂配貨已變更，請重新整理");
+    const liveLinks=new Map();for(const item of os.data().items||[]){const id=String(item.id);const ls=await tx.get(doc(db,"inventoryLinks",id));if(ls.exists())liveLinks.set(id,ls.data());}
+    const index=await syncReadIndex(tx,is,allocations.map(a=>a.key));
+    const resolved=await resolveFulfillmentDocuments(allocations,index);
+    const accountReads=new Map(),itemReads=[];
+    for(const [id,refs] of resolved.refs){const ar=doc(db,"users",ADMIN_UID,"accounts",id),as=await tx.get(ar);if(!as.exists())throw new Error("帳號庫存在配貨後已變更，請重新配貨；尚未扣除任何庫存。");accountReads.set(id,{ref:ar,snap:as});for(const ref of refs){const s=await tx.get(ref);if(s.exists())itemReads.push({id,ref,item:s.data(),qty:syncQty(s.data().qty)});}}
+    if(itemReads.length+accountReads.size+5>450)throw new Error("這張訂單涉及的道具過多，請拆成較小訂單；這次未扣除任何庫存。");
+    checkAllocationOrder(os.data(),allocations,liveLinks);checkAllocationStock(index,allocations,reserved?orderId:"");
+    for(const a of allocations){let remain=a.qty;for(const row of itemReads){if(row.id!==a.accountId||syncIdentity(row.item)!==a.key)continue;const take=Math.min(row.qty,remain);row.qty-=take;remain-=take;if(!remain)break;}if(remain)throw new Error("實際庫存不足，未扣除任何品項。");
     }
-  }
-  if(changed){
-    await setDoc(doc(db,"publicSettings","warehouseStock"),{products:next,updatedAt:new Date().toISOString()});
-    publicWarehouseStock=next;render();renderCart();
-  }
+    for(const row of itemReads){const owner=syncIndexOwner(index.rows,syncIdentity(row.item),row.id,row.ref.id||row.ref.path.split('/').at(-1));if(!owner||syncQty(owner.qty)!==syncQty(row.item.qty))throw new Error("物品文件與索引數量不一致，未扣除任何庫存。");owner.qty=row.qty;}
+    delete index.reservations[orderId];const version=crypto.randomUUID(),versions=syncCompactVersions(ms.data()?.accountVersions||{});index.updatedAt=version;syncCheckSize(index);
+    const products=syncProjection(index,new Map([...links,...liveLinks]),ps.data()?.products||{});syncCheckSize(products);
+    const planned=syncIndexDocuments(index);syncCheckTransaction([...planned.shards.map(s=>s.data),planned.root,products,versions],itemReads.filter(r=>r.qty!==syncQty(r.item.qty)).length+accountReads.size+planned.shards.length+5);
+    // All reads precede all writes. Items, revisions, index, reservation, public stock and order commit together.
+    for(const row of itemReads)if(row.qty!==syncQty(row.item.qty))tx.update(row.ref,{qty:row.qty});
+    for(const [id,a] of accountReads){versions[id]=version;tx.update(a.ref,{itemsUpdatedAt:version,lastItemChange:{from:String(a.snap.data().itemsUpdatedAt||''),to:version,ids:itemReads.filter(r=>r.id===id&&r.qty!==syncQty(r.item.qty)).map(r=>r.ref.id||r.ref.path.split('/').at(-1)),all:false}});}
+    syncWriteIndex(tx,inventoryIndexRef(),index);tx.set(inventoryPublicRef(),{products,updatedAt:version});syncMetaWrite(tx,mr,ms.data()||{},versions,version);
+    tx.set(fr,{orderId,status:"已完成",allocations,completedAt:serverTimestamp(),kind:"warehouse-fulfillment"},{merge:true});tx.update(or,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:true,warehouseReserved:false,reservationAllocations:[]});
+  });
+}
+async function completeWarehouseReservedOrder(orderId,btn){
+  if(!isAdmin())return;const order=adminOrders.find(o=>o.id===orderId);if(order?.status!=="預定中")return alert("訂單狀態已變更");
+  if(!confirm(`確定完成訂單 ${order.orderNumber||orderId} 並扣除已配貨庫存？`))return;
+  btn.disabled=true;btn.textContent="扣庫存中…";
+  try{await commitWarehouseCompletion(orderId,order.reservationAllocations,true);toast("交易完成，全部配貨庫存已同步扣除");}catch(e){console.error(e);alert(e.message||"完成交易失敗");}finally{btn.disabled=false;btn.textContent="完成交易並扣庫存";}
+}
+async function completeOrder(orderId,btn){
+  if(!isAdmin())return;btn.disabled=true;btn.textContent="處理中…";
+  try{const order=adminOrders.find(o=>o.id===orderId);if(order?.status!=="待交易")throw new Error("訂單狀態已變更");const plan=await planWarehouseFulfillment(order);if(!plan.allocations.length)throw new Error("沒有可配貨商品");
+    if(!confirm(`確定完成訂單 ${(plan.order||order).orderNumber||orderId}？\n\n小倉倉扣除：${allocationSummary(plan.allocations)}`))return;
+    await commitWarehouseCompletion(orderId,plan.allocations,false);toast("交易完成，指定帳號庫存已同步更新");
+  }catch(e){console.error(e);if(e.message!=="已取消配貨，庫存未變動")alert(e.message||"完成交易失敗");}finally{btn.disabled=false;btn.textContent="完成交易";}
 }
 
-async function completeOrder(orderId,btn){
-  if(!isAdmin()||!orderId)return;
-  btn.disabled=true;btn.textContent="處理中…";
-  try{
-    const order=adminOrders.find(o=>o.id===orderId);
-    if(!order||order.status!=="待交易")throw new Error("訂單已變更，請重新整理");
-    const plan=await planWarehouseFulfillment(order);
-    const summary=plan.allocations.map(x=>`${x.label}：${x.qty}`).join("、");
-    if(!confirm(`確定完成訂單 ${order.orderNumber||orderId}？${summary?"\n\n小倉倉扣除："+summary:""}\n\n只有確認後才會扣除庫存。`))return;
-    await runTransaction(db,async tx=>{
-      const oref=doc(db,"orders",orderId);
-      const osnap=await tx.get(oref);
-      if(!osnap.exists()||osnap.data().status!=="待交易")throw new Error("訂單已處理，未重複扣庫存");
-      const liveOrder=osnap.data();
-      // 交易中先完成所有讀取，再寫入；Firestore 會在庫存變更時重新驗證。
-      const productIds=[...new Set((liveOrder.items||[]).map(i=>String(i.id||"")))];
-      const productsRead=new Map();
-      const linksRead=new Map();
-      for(const id of productIds){
-        const pref=doc(db,"products",id),lref=doc(db,"inventoryLinks",id);
-        productsRead.set(id,{ref:pref,snap:await tx.get(pref)});
-        linksRead.set(id,await tx.get(lref));
-      }
-      const accountIds=[...new Set(plan.allocations.map(a=>a.accountId))];
-      const accountRead=new Map();
-      for(const id of accountIds){
-        const ref=doc(db,"users",ADMIN_UID,"accounts",id);
-        accountRead.set(id,{ref,snap:await tx.get(ref)});
-      }
-      const itemRead=new Map();
-      for(const id of accountIds){
-        const plannedKeys=new Set(plan.allocations.filter(a=>a.accountId===id).map(a=>a.key));
-        const itemSnap=await getDocs(collection(db,"users",ADMIN_UID,"accounts",id,"items"));
-        const refs=itemSnap.docs.filter(x=>plannedKeys.has(warehouseIdentity(x.data()))).map(x=>x.ref);
-        itemRead.set(id,refs);
-      }
-      const itemTxRead=new Map();
-      for(const [id,refs] of itemRead){
-        const rows=[];
-        for(const ref of refs){const snap=await tx.get(ref);if(snap.exists())rows.push({ref,snap});}
-        itemTxRead.set(id,rows);
-      }
-      const fulfillmentRef=doc(db,"orderFulfillments",orderId);
-      const existing=await tx.get(fulfillmentRef);
-      if(existing.exists())throw new Error("此訂單已有配貨紀錄，未重複扣除");
-      const needed=new Map();
-      for(const item of (liveOrder.items||[])){
-        const id=String(item.id||""),linkSnap=linksRead.get(id);
-        const link=linkSnap?.exists()?linkSnap.data():null;
-        const qty=Math.max(1,Math.floor(Number(item.qty)||1));
-        if(link){
-          const key=String(item.variant||"")
-            ?String((link.variantLinks||[]).find(v=>v.variant===item.variant)?.itemKey||"")
-            :String(link.itemKey||"");
-          if(!key)throw new Error(`「${item.name||"商品"}」連結已變更`);
-          const k=id+"\u001f"+key;
-          needed.set(k,(needed.get(k)||0)+qty);
-        }
-      }
-      const planned=new Map();
-      for(const a of plan.allocations){
-        const k=a.key;
-        planned.set(k,(planned.get(k)||0)+a.qty);
-      }
-      const requiredByKey=new Map();
-      for(const [k,qty] of needed){
-        const key=k.slice(k.indexOf("\u001f")+1);
-        requiredByKey.set(key,(requiredByKey.get(key)||0)+qty);
-      }
-      if(requiredByKey.size!==planned.size||[...requiredByKey].some(([k,v])=>planned.get(k)!==v))
-        throw new Error("商品連結或訂單內容已變更，請重新配貨");
-      for(const [id,{snap}] of accountRead){
-        if(!snap.exists())throw new Error("出貨帳號已刪除");
-        const rows=(itemTxRead.get(id)||[]).map(x=>({ref:x.ref,item:{...x.snap.data(),_itemId:x.snap.id}}));
-        for(const a of plan.allocations.filter(x=>x.accountId===id)){
-          let remaining=a.qty;
-          for(const row of rows){
-            if(warehouseIdentity(row.item)!==a.key)continue;
-            const available=Math.max(0,Math.floor(Number(row.item.qty)||0));
-            const taken=Math.min(remaining,available);
-            row.item.qty=available-taken;remaining-=taken;
-            if(!remaining)break;
-          }
-          if(remaining)throw new Error(`帳號 ${a.label} 的實際庫存不足，未扣除任何數量`);
-        }
-        for(const row of rows)tx.update(row.ref,{qty:Math.max(0,Math.floor(Number(row.item.qty)||0))});
-        tx.update(accountRead.get(id).ref,{itemsUpdatedAt:Date.now()});
-      }
-      // 未連結商品維持原有手動庫存扣除方式。
-      for(const id of productIds){
-        const {ref,snap}=productsRead.get(id);
-        const rows=(liveOrder.items||[]).filter(i=>String(i.id||"")===id);
-        if(!snap.exists())throw new Error(`「${rows[0]?.name||"商品"}」已下架`);
-        if(linksRead.get(id)?.exists())continue;
-        const p={id:snap.id,...snap.data()},vars=Array.isArray(p.variants)?p.variants.map(v=>({...v})):[];
-        if(vars.length){
-          for(const item of rows){
-            const idx=vars.findIndex(v=>v.name===String(item.variant||""));
-            const qty=Math.max(1,Math.floor(Number(item.qty)||1));
-            if(idx<0||Math.max(0,Number(vars[idx].stock)||0)-Math.max(0,Number(vars[idx].reserved)||0)<qty)
-              throw new Error(`「${p.name||"商品"}」庫存不足`);
-            vars[idx].stock=Number(vars[idx].stock)-qty;
-          }
-          tx.update(ref,{variants:vars,stock:vars.reduce((n,v)=>n+Math.max(0,Number(v.stock)||0),0),updatedAt:serverTimestamp()});
-        }else{
-          const qty=rows.reduce((n,i)=>n+Math.max(1,Math.floor(Number(i.qty)||1)),0);
-          const stock=Math.max(0,Number(p.stock)||0),reserved=Math.max(0,Number(p.reservedQty??p.reserved)||0);
-          if(stock-reserved<qty)throw new Error(`「${p.name||"商品"}」庫存不足`);
-          tx.update(ref,{stock:stock-qty,updatedAt:serverTimestamp()});
-        }
-      }
-      tx.set(fulfillmentRef,{orderId,allocations:plan.allocations,createdAt:serverTimestamp(),kind:"warehouse-fulfillment"});
-      // 讓小倉倉的低讀取快取知道庫存已被訂單扣除；下次開啟只在版本變更時重載。
-      if(plan.allocations.length>0)tx.set(doc(db,"users",ADMIN_UID,"inventory","meta"),{updated:new Date().toISOString()},{merge:true});
-      tx.update(oref,{status:"已完成",completedAt:serverTimestamp(),warehouseFulfilled:plan.allocations.length>0});
-    });
-    // 完成訂單後只更新這張訂單影響的公開庫存，不再重新掃全部帳號。
-    await publishCompletedOrderStock(order);
-    toast("交易完成，指定帳號庫存已更新");
-  }catch(e){console.error(e);if(e?.message!=="已取消配貨，庫存未變動")alert(e?.message||"完成交易失敗");}
-  finally{btn.disabled=false;btn.textContent="完成交易";}
-}
 async function completeReservedOrder(orderId,btn){
   if(!isAdmin()||!orderId)return;
   const order=adminOrders.find(o=>o.id===orderId);
@@ -6031,12 +5859,37 @@ async function replaceFirestoreWithDocs(target){
     for(const row of target[name]||[])ops.push({type:"set",name,id:row.id,data:row.data});
   }
   for(let i=0;i<ops.length;i+=350){
+    restoreTrackStart(storeRestoreRunning==='rollback'?'賣場回滾':'賣場還原','',ops.slice(i,i+350).map(op=>({collection:op.name,id:op.id,type:op.type})));
     const batch=writeBatch(db);
     for(const op of ops.slice(i,i+350)){
       const ref=doc(db,op.name,op.id); if(op.type==="delete")batch.delete(ref);else batch.set(ref,op.data);
     }
-    await batch.commit();
+    await batch.commit();restoreTrackCommit();
   }
+}
+async function preflightMarketRestore(target){
+  const s=await getDoc(inventoryIndexRef());if(s.data()?.rowLayout!==6)throw new Error('請先開啟新版小倉倉完成索引升級，再還原賣場。');
+  const orders=(target.orders||[]).map(o=>({id:o.id,data:o.data})),pending=orders.filter(o=>o.data.status==='預定中'||o.data.warehouseReserved===true),fulfillments=[];
+  for(const o of pending){const f=await getDoc(doc(db,'orderFulfillments',o.id));if(f.exists())fulfillments.push({id:o.id,data:f.data()});}
+  const plan=syncLegacyReservations(orders,fulfillments,{},s.data().links||{}),allocations=Object.values(plan.reservations).flat();
+  const index=await syncReadIndex({get:getDoc},s,allocations.map(a=>a.key));index.reservations={};
+  checkAllocationStock(index,allocations);for(const o of pending)checkAllocationOrder(o.data,plan.reservations[o.id]||[],new Map(Object.entries(index.links||{})));
+}
+async function finalizeMarketRestore(target){
+  restoreTrackStart('配貨帳本同步','',(target.orders||[]).map(o=>({id:o.id,type:'verify-order'})));
+  await runTransaction(db,async tx=>{
+    const is=await tx.get(inventoryIndexRef()),ps=await tx.get(inventoryPublicRef());
+    const ids=[...new Set([...(target.orders||[]).map(o=>o.id),...Object.keys(is.data()?.reservations||{})])],orders=[],fulfillments=[],removed=[];
+    for(const id of ids){const os=await tx.get(doc(db,'orders',id)),fs=await tx.get(doc(db,'orderFulfillments',id));if(os.exists()){orders.push({id,data:os.data()});if(fs.exists())fulfillments.push({id,data:fs.data()});}else if(fs.data()?.status==='預定中')removed.push(id);}
+    const plan=syncLegacyReservations(orders,fulfillments,{},is.data()?.links||{}),all=Object.values(plan.reservations).flat();
+    const index=await syncReadIndex(tx,is,all.map(a=>a.key));index.reservations={};checkAllocationStock(index,all);index.reservations=plan.reservations;
+    const products=syncProjection(index,new Map(Object.entries(index.links||{})),ps.data()?.products||{});
+    const repair=plan.repairs.filter(r=>{const o=orders.find(o=>o.id===r.id)?.data,f=fulfillments.find(o=>o.id===r.id)?.data;return !syncEqual(o?.reservationAllocations,r.order.reservationAllocations)||o?.status!=='預定中'||f?.status!=='預定中'||!syncEqual(f?.allocations,r.fulfillment.allocations)});
+    syncCheckTransaction([index.reservations,products],repair.length*2+removed.length+2);
+    for(const r of repair){tx.set(doc(db,'orders',r.id),r.order,{merge:true});tx.set(doc(db,'orderFulfillments',r.id),r.fulfillment,{merge:true});}
+    for(const id of removed)tx.set(doc(db,'orderFulfillments',id),{status:'已取消',cancelledReason:'backup-restore-removed-order',cancelledAt:serverTimestamp()},{merge:true});
+    syncWriteIndex(tx,inventoryIndexRef(),index);tx.set(inventoryPublicRef(),{products,updatedAt:new Date().toISOString()});
+  });restoreTrackCommit();
 }
 async function restoreFullBackup(file){
   if(!isAdmin()||!file)return;
@@ -6048,60 +5901,44 @@ async function restoreFullBackup(file){
     if(!first){toast("已取消還原，資料未修改");return;}
     const second=confirm("最後確認：這個動作會刪除／覆蓋 Firebase 目前的商品與訂單資料，再還原成備份內容。\n\n按『取消』不會修改任何資料。確定開始嗎？");
     if(!second){toast("已取消還原，資料未修改");return;}
+    await preflightMarketRestore(target);
+    restoreBegin('賣場完整還原');storeRestoreRunning='restore';
     btn.textContent="⏳ 還原中…";
     // 寫入前再抓一份記憶體回復點；若中途失敗，盡力自動回滾。
     const rollback=await collectAllStoreDocs();
     const rollbackDecoded={};
     for(const name of BACKUP_COLLECTIONS)rollbackDecoded[name]=(rollback[name]||[]).map(r=>({id:r.id,data:deserializeFirestoreValue(r.data)}));
     try{
-      await replaceFirestoreWithDocs(target);
+      await replaceFirestoreWithDocs(target);await finalizeMarketRestore(target);
     }catch(err){
       console.error("restore failed, rolling back",err);
-      try{await replaceFirestoreWithDocs(rollbackDecoded);}catch(rb){console.error("rollback failed",rb);throw new Error(`還原失敗，而且自動回滾也失敗：${rb?.message||rb}`);}
+      try{storeRestoreRunning="rollback";await replaceFirestoreWithDocs(rollbackDecoded);await finalizeMarketRestore(rollbackDecoded);restoreFinish("rolled-back",err?.message||err);}catch(rb){console.error("rollback failed",rb);restoreFinish("rollback-failed",rb?.message||rb);throw new Error(`還原及回滾均未完成：${rb?.message||rb}\n${restoreSummary()}\n請依下載報告核對已確認操作，不能視為全部恢復。`);}
       throw new Error(`還原失敗，已自動恢復還原前資料：${err?.message||err}`);
     }
+    restoreFinish("completed");restoreExportJournal();activeRestoreJournal=null;
     const videoCount=(manifest.assets||[]).filter(x=>x.kind==="video"&&!x.backupError).length;
     alert(`完整還原完成。\n商品：${target.products.length} 筆\n訂單：${target.orders.length} 筆\n${videoCount?`\n備份 ZIP 內另有 ${videoCount} 個影片檔；若是搬到新網站，仍需把 media/videos 裡的影片上傳到新網站對應路徑。`:""}`);
     toast("完整還原完成");
-  }catch(e){console.error(e);alert(e?.message||"還原備份失敗");}
-  finally{btn.disabled=false;btn.textContent=old;$("#restoreFileInput").value="";}
+  }catch(e){console.error(e);if(activeRestoreJournal){if(activeRestoreJournal.status==='running')restoreFinish('failed',e?.message||e);restoreExportJournal();}alert((e?.message||"還原備份失敗")+(activeRestoreJournal?"\n\n"+restoreSummary()+"\n完整分段操作報告已下載。":""));activeRestoreJournal=null;}
+  finally{storeRestoreRunning=false;lastReservationSnapshotHash="";btn.disabled=false;btn.textContent=old;$("#restoreFileInput").value="";}
 }
 $("#backupBtn")?.addEventListener("click",createFullBackup);
 $("#restoreBtn")?.addEventListener("click",()=>$("#restoreFileInput")?.click());
 $("#restoreFileInput")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)restoreFullBackup(f);});
 
-// 舊版手動預定欄位已停用：管理員載入時只清除 products 裡的舊 reserved/reservedQty/款式 reserved。
-// 訂單配貨使用 publicSettings/warehouseStock 的 reserved，不受這個清理影響。
-let legacyReservationCleanupDone=false;
-async function clearLegacyManualReservations(){
-  if(legacyReservationCleanupDone||auth.currentUser?.uid!==ADMIN_UID)return;
-  legacyReservationCleanupDone=true;
-  try{
-    const snap=await getDocs(collection(db,"products"));
-    const jobs=[];
-    for(const d of snap.docs){
-      if(d.id===CATEGORY_SETTING_DOC_ID)continue;
-      const data=d.data()||{};
-      const variants=Array.isArray(data.variants)?data.variants.map(v=>({...v,reserved:0,reservedQty:0})):data.variants;
-      const hasLegacy=(Number(data.reservedQty)||0)>0||(Number(data.reserved)||0)>0||(Array.isArray(data.variants)&&data.variants.some(v=>(Number(v?.reserved)||0)>0||(Number(v?.reservedQty)||0)>0));
-      if(hasLegacy)jobs.push(updateDoc(d.ref,{reservedQty:0,reserved:0,...(Array.isArray(variants)?{variants}:{}),updatedAt:serverTimestamp()}));
-    }
-    if(jobs.length)await Promise.all(jobs);
-  }catch(e){console.error("清除舊手動預定失敗",e);legacyReservationCleanupDone=false;}
-}
-
+// 手動預訂欄位保留；不再載入全商品並清空預訂。
 onSnapshot(
   collection(db,"products"),
   snap=>{
     productsInitialLoaded=true;
     const settingsSnap=snap.docs.find(d=>d.id===CATEGORY_SETTING_DOC_ID);
     hiddenCategories=Array.isArray(settingsSnap?.data()?.hiddenCategories)
-      ? settingsSnap.data().hiddenCategories.map(String)
+      ? settingsSnap.data().hiddenCategories.filter(c=>c!=="玩偶").map(String)
       : [];
     products=snap.docs
       .filter(d=>d.id!==CATEGORY_SETTING_DOC_ID)
-      .map(d=>({id:d.id,...d.data()}));
-    clearLegacyManualReservations();
+      .map(d=>({id:d.id,...d.data(),category:syncCategory(d.data().category)}));
+    // Manual reservation fields are retained; warehouse-linked reservations use the private ledger.
     ensureActiveCategoryVisible();
     $("#status").textContent="已連線";
     render();
