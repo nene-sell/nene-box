@@ -425,7 +425,7 @@
 </div>
 <div class="categoryTabs">
 <button class="btn catTab active" data-cat="家具">家具</button>
-<button class="btn catTab" data-cat="玩偶">玩偶</button>
+
 <button class="btn catTab" data-cat="花盆">花盆</button>
 <button class="btn catTab" data-cat="戒指">戒指</button>
 <button class="btn catTab" data-cat="作物">作物</button>
@@ -549,7 +549,7 @@
 <div class="field"><label>名稱</label><input id="editItemName"></div>
 <div class="field"><label>分類</label><select id="editItemCat">
 <option value="家具">家具</option>
-<option value="玩偶">玩偶</option>
+
 <option value="花盆">花盆</option>
 <option value="戒指">戒指</option>
 <option value="作物">作物</option>
@@ -571,7 +571,7 @@
 <div class="actions"><button class="btn" id="transferItemCancel" type="button">取消</button><button class="btn primary" id="transferItemConfirm" type="button">確認轉移</button></div>
 </div></dialog><dialog id="idg"><h3>新增物品</h3><div class="field"><label>物品名稱</label><input id="in" placeholder="例如：海底珊瑚拍照區"></div><div class="field"><label>分類</label><select id="ic">
 <option value="家具">家具</option>
-<option value="玩偶">玩偶</option>
+
 <option value="花盆">花盆</option>
 <option value="戒指">戒指</option>
 <option value="作物">作物</option>
@@ -585,7 +585,7 @@
 <div class="field"><label>目前要加入哪個帳號</label><div id="shotAccount" style="font-weight:800;padding:8px 0"></div></div>
 <div class="field"><label>辨識後加入分類</label>
 <select id="shotCategory">
-<option value="家具">家具</option><option value="玩偶">玩偶</option><option value="花盆">花盆</option><option value="戒指">戒指</option><option value="作物">作物</option><option value="寵物">寵物</option></select></div>
+<option value="家具">家具</option><option value="花盆">花盆</option><option value="戒指">戒指</option><option value="作物">作物</option><option value="寵物">寵物</option></select></div>
 <div class="field" id="shotGenderWrap" style="display:none"><label>限制</label><select id="shotGender"><option value="限男">限男</option><option value="限女">限女</option></select></div>
 <div id="dropShot" style="border:2px dashed var(--line);border-radius:16px;padding:24px;text-align:center;background:#fff;cursor:pointer">把庫存截圖拖到這裡<br><span class="meta">或點一下選擇 JPG / PNG</span><input id="shotFile" type="file" accept="image/*" hidden></div>
 <div id="shotPreview" style="display:none;margin-top:12px"><img id="shotImg" style="width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#ddd"><div class="note">依 MSTAR 固定道具卡片版型辨識；只讀道具名稱區，不把「查看詳情」、NEW、頁碼等介面文字當成道具。少量或多量道具都可辨識。</div>
@@ -854,21 +854,42 @@ async function clearWarehouseCache(){
 async function setWarehouseCache(state,metaUpdated){
   try{const db=await openWarehouseCache();await new Promise((resolve,reject)=>{const tx=db.transaction(WAREHOUSE_CACHE_STORE,"readwrite");tx.objectStore(WAREHOUSE_CACHE_STORE).put({metaUpdated:String(metaUpdated||""),state,savedAt:Date.now(),fullSyncedAt:warehouseFullSyncAt||Date.now()},WAREHOUSE_CACHE_KEY);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});}catch(e){console.warn("儲存小倉倉本機快取失敗",e)}
 }
-async function readHybridCloud(metaSnap=null){
+// 增量校正：meta 改變時只掃描帳號的輕量文件（約 617 筆），
+// 再依 itemsUpdatedAt 比對，僅下載真正改動帳號的 items。
+// 舊版或未有快取時仍執行完整載入，避免遺漏歷史資料。
+// 在本機寫入 meta 成功後更新快取版本；避免 F5 把自己的更新當成外部變更。
+// 只有確實帶 updated 且與目前畫面版本相符時才更新快取。
+async function writeWarehouseMeta(data,options={merge:true}){
+  await setDoc(metaRef(),data,options);
+  if(data?.updated&&String(data.updated)===String(d?.updated||"")&&migrationReady){
+    const version=String(data.updated);
+    await setWarehouseCache(d,version);
+  }
+}
+async function readHybridCloud(metaSnap=null,previousState=null){
   metaSnap=metaSnap||await getDoc(metaRef());
   const [accountSnap,memorySnap]=await Promise.all([getDocs(accountCol()),getDocs(memoryCol())]);
   const meta=metaSnap.exists()?metaSnap.data():{};
+  const previousAccounts=new Map((previousState?.accounts||[]).map(a=>[String(a.id),a]));
   const accounts=await Promise.all(accountSnap.docs.map(async x=>{
     const raw={id:x.id,...x.data()};
-    const splitItems=await loadAccountItems(x.id);
-    // 已有新 items 子集合就讀新資料；尚未分拆的帳號則只讀舊 items[]。
-    // 讀取階段絕不刪除、搬移或改寫任何 Firebase 資料。
-    raw.items=(raw.itemsUpdatedAt!=null || raw.migratedFromLegacy===true || splitItems.length)
-      ? splitItems : (Array.isArray(raw.items)?raw.items:[]);
+    const prior=previousAccounts.get(String(x.id));
+    const priorStamp=prior?.itemsUpdatedAt;
+    const newStamp=raw.itemsUpdatedAt;
+    // Firestore 訂單扣庫存也更新 itemsUpdatedAt；版本不變才可沿用快取物品。
+    // 對沒有修訂標記的舊帳號，保守重新載入以避免漏掉變更。
+    if(prior&&priorStamp!=null&&newStamp!=null&&String(priorStamp)===String(newStamp)&&Array.isArray(prior.items)){
+      raw.items=prior.items;
+    }else{
+      const splitItems=await loadAccountItems(x.id);
+      raw.items=(raw.itemsUpdatedAt!=null||raw.migratedFromLegacy===true||splitItems.length)
+        ?splitItems:(Array.isArray(raw.items)?raw.items:[]);
+    }
     return raw;
   }));
   return {accounts,itemMemory:memorySnap.docs.map(x=>x.data()),updated:meta.updated||""};
 }
+
 async function loadCloud(){
   // 只用雲端 meta 的版本號驗證快取。訂單扣庫存也會更新此版本號。
   // 不符合時完整讀取 Firestore；快取絕不反向寫回雲端。
@@ -885,7 +906,7 @@ async function loadCloud(){
     warehouseFullSyncAt=Date.now();
   }else{
     // 首次使用／版本確實改變時才完整校正，避免漏掉賣場直接扣除的庫存。
-    d=await readHybridCloud(metaSnap);
+    d=await readHybridCloud(metaSnap,cached?.state);
     warehouseFullSyncAt=Date.now();
     await setWarehouseCache(d,remoteVersion);
   }
@@ -916,8 +937,8 @@ function watchActiveAccountItems(){
     const account=d.accounts.find(a=>String(a.id)===id);
     if(!account)return;
     const freshItems=snap.docs.map(x=>({...x.data(),_itemId:String(x.id)}));
-    const before=JSON.stringify((account.items||[]).map(x=>[x._itemId,x.qty,x.name,x.variant] ).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
-    const after=JSON.stringify(freshItems.map(x=>[x._itemId,x.qty,x.name,x.variant]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
+    const before=JSON.stringify((account.items||[]).map(x=>[x._itemId,x.qty,x.name,x.variant,x.category,x.gender,x.candyType] ).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
+    const after=JSON.stringify(freshItems.map(x=>[x._itemId,x.qty,x.name,x.variant,x.category,x.gender,x.candyType]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
     if(before===after)return;
     account.items=freshItems;
     scheduleWarehouseCacheWrite();
@@ -937,28 +958,30 @@ async function cleanupRemovedMaterials(){
   if(!changed.length)return;
   await persistAccounts(changed);
   d.updated=new Date().toISOString();
-  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,materialsRemoved:true,materialsRemovedAt:new Date().toISOString(),updated:d.updated},{merge:true});
+  await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,materialsRemoved:true,materialsRemovedAt:new Date().toISOString(),updated:d.updated},{merge:true});
 }
 async function save(){
   if(!currentUser||!migrationReady)return;
-  await clearWarehouseCache();
   d.updated=new Date().toISOString(); saving=true;
   try{
     const remote=await getDocs(accountCol());
     const localIds=new Set((d.accounts||[]).map(a=>String(a.id)));
     for(const x of remote.docs)if(!localIds.has(x.id))await deleteAccountDeep(x.id);
+    // 帳號新增／刪除／備份還原等管理操作仍走完整安全儲存，避免遺漏資料。
     await persistAccounts(d.accounts||[]);
     const remoteMem=await getDocs(memoryCol());
     const ops=[]; remoteMem.docs.forEach(x=>ops.push({type:"delete",ref:x.ref}));
     (d.itemMemory||[]).forEach((m,i)=>ops.push({type:"set",ref:memoryRef(stableMemoryId(m,i)),data:m}));
     for(let i=0;i<ops.length;i+=350){const batch=writeBatch(db);ops.slice(i,i+350).forEach(op=>op.type==="delete"?batch.delete(op.ref):batch.set(op.ref,op.data));await batch.commit();}
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     render();
   }catch(err){console.error(err);alert("雲端儲存失敗｜"+(err?.code||"unknown")+"\n"+(err?.message||String(err)));}
   finally{saving=false}
 }
 function migrateCategories(){
   (d.accounts||[]).forEach(a=>{
+    // 舊「玩偶」在畫面歸到家具；不為了移除分類批次寫入全部帳號。
+    (a.items||[]).forEach(item=>{if(item.category==="玩偶")item.category="家具";});
     a.items=Array.isArray(a.items)?a.items:[];
     a.resources=a.resources||{};
     a.resources={candy:0,eventCandy:0,magicCandy:0,birth:0,card:0,luckyStone:0,fishingBait:0,fishingRods:[],fragment1:0,fragment2:0,fragment3:0,fragment4:0,fragment5:0,fragment6:0,fragment7:0,fragment8:0,fragment9:0,fragment10:0,fragment11:0,fragment12:0,...a.resources};
@@ -1062,7 +1085,7 @@ function render(){
     try{
       await persistAccount(a);
       d.updated=new Date().toISOString();
-      await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+      await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
       $("#su").textContent=d.updated;
     }catch(err){
       a.items.splice(i,0,removed);
@@ -1130,7 +1153,7 @@ $("#transferItemConfirm").onclick=async()=>{
   try{
     await persistAccounts([source,target]);
     d.updated=new Date().toISOString();
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
     transferItemDlg.close();
   }catch(err){
@@ -1164,7 +1187,7 @@ $("#editItemSave").onclick=async()=>{
     // 修改單一道具只儲存目前帳號，不再為一個修改重寫全部帳號。
     d.updated=new Date().toISOString();
     await persistAccount(a);
-    await setDoc(metaRef(),{
+    await writeWarehouseMeta({
       schemaVersion:MIGRATION_VERSION,
       migratedFromLegacy:true,
       updated:d.updated
@@ -1422,7 +1445,7 @@ $("#swapAccountConfirm").onclick=async()=>{
     d.updated=new Date().toISOString();
     render();
     if(active===String(a.id)||active===String(b.id))renderTempShots(active);
-    try{await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});}
+    try{await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});}
     catch(metaErr){console.warn("帳號交換成功，更新時間未能同步",metaErr);}
     $("#su").textContent=d.updated;
     swapAccountDlg.close();
@@ -1477,7 +1500,7 @@ $("#is").onclick=async()=>{
   try{
     await persistAccount(a);
     d.updated=new Date().toISOString();
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated||"尚未";
   }catch(err){
     console.error(err);
@@ -1491,7 +1514,7 @@ $("#saveLoginRecord").onclick=async()=>{
   a.lastLogin=v; $("#loginRecordInput").value="";
   await persistAccount(a);
   d.updated=new Date().toISOString();
-  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+  await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
   render();
 };
 
@@ -1545,7 +1568,7 @@ $("#batchLoginSave").onclick=async()=>{
       await batch.commit();
     }
     d.updated=new Date().toISOString();
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     batchLoginDlg.close();
     render();
   }catch(err){
@@ -1579,7 +1602,7 @@ function renderRodResources(){
     renderRodResources();
     await persistAccount(a);
     d.updated=new Date().toISOString();
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
   });
 }
@@ -1596,7 +1619,7 @@ $("#addRodResource").onclick=async()=>{
   renderRodResources();
   await persistAccount(a);
   d.updated=new Date().toISOString();
-  await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+  await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
   $("#su").textContent=d.updated;
 };
 $("#rodNameInput").addEventListener("keydown",ev=>{if(ev.key==="Enter")$("#addRodResource").click()});
@@ -1619,7 +1642,7 @@ async function persistResourceAccount(accountId){
   try{
     await persistAccount(a);
     d.updated=new Date().toISOString();
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     if(seq===resourceSaveSeq)$("#su").textContent=d.updated;
   }catch(err){
     console.error(err);
@@ -1753,7 +1776,7 @@ $("#eas").onclick=async()=>{
   try{
     await persistAccount(a);
     d.updated=new Date().toISOString();
-    await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+    await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     $("#su").textContent=d.updated;
   }catch(err){
     console.error(err);
@@ -1922,7 +1945,7 @@ function quantityEnabled(category=activeCategory){return !noQuantityCategories.h
 let recognizedRows=[];
 function syncShotCategory(){
   const cat=(activeCategory==="糖果"?"家具":activeCategory)||"家具";
-  $("#shotCategory").value=["家具","玩偶","花盆","戒指","作物","寵物"].includes(cat)?cat:"家具";
+  $("#shotCategory").value=["家具","花盆","戒指","作物","寵物"].includes(cat)?cat:"家具";
   $("#shotGender").value=activeGender||"限男";
   $("#shotGenderWrap").style.display=(["戒指","作物"].includes($("#shotCategory").value))?"block":"none";
 }
@@ -1973,7 +1996,7 @@ function cropGridImage(img,index,cols=4){
   ctx.drawImage(img,col*cw,row*ch,cw,ch,0,0,canvas.width,canvas.height);
   return canvas.toDataURL("image/jpeg",.88);
 }
-const RECOGNITION_CATEGORIES=["家具","玩偶","花盆","戒指","作物","寵物"];
+const RECOGNITION_CATEGORIES=["家具","花盆","戒指","作物","寵物"];
 function drawRecognized(){
  const defaultCat=$("#shotCategory")?.value||"家具";
  $("#recognized").innerHTML=recognizedRows.map((x,i)=>{
@@ -2366,7 +2389,7 @@ async function backfillInventoryMemory(){
       }
       d.itemMemory.push(...newMem);
     }
-    await setDoc(metaRef(),{inventoryMemoryBackfillVersion:INVENTORY_MEMORY_BACKFILL_VERSION,inventoryMemoryBackfilledAt:new Date().toISOString(),recognitionEngineVersion:2,recognitionMemoryRepair:"inventory-rescan-v4"},{merge:true});
+    await writeWarehouseMeta({inventoryMemoryBackfillVersion:INVENTORY_MEMORY_BACKFILL_VERSION,inventoryMemoryBackfilledAt:new Date().toISOString(),recognitionEngineVersion:2,recognitionMemoryRepair:"inventory-rescan-v4"},{merge:true});
   }catch(err){console.error("精準辨識記憶補建失敗",err)}
   finally{inventoryMemoryBackfillRunning=false}
 }
@@ -2507,7 +2530,7 @@ $("#confirmRecognized").onclick=async()=>{
       }
       await setDoc(accountRef(accountId),accountMetaData(a),{merge:false});
       d.updated=new Date().toISOString();
-      await setDoc(metaRef(),{schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
+      await writeWarehouseMeta({schemaVersion:MIGRATION_VERSION,migratedFromLegacy:true,updated:d.updated},{merge:true});
     });
     accountWriteChains.set(accountId,task);
     try{await task}finally{if(accountWriteChains.get(accountId)===task)accountWriteChains.delete(accountId)}
@@ -2715,7 +2738,7 @@ async function restorePortableBackup(file){
       tempShotsCache.clear();
     }
 
-    await setDoc(metaRef(),{
+    await writeWarehouseMeta({
       updated:new Date().toISOString(),
       backupRestoreVersion:Number(backup.version)||2,
       backupRestoredAt:new Date().toISOString()
@@ -2796,7 +2819,7 @@ function buildAllOverview(){
       if(!rec.image&&item.image)rec.image=item.image;
     }
   }
-  const order=["家具","玩偶","花盆","戒指","作物","寵物","糖果"];
+  const order=["家具","花盆","戒指","作物","寵物","糖果"];
   for(const rec of merged.values())rec.owners.sort((a,b)=>String(a.number||a.gameId||"").localeCompare(String(b.number||b.gameId||""),"zh-TW",{numeric:true,sensitivity:"base"}));
   const rows=[...merged.values()].sort((a,b)=>{
     const ai=order.indexOf(a.category),bi=order.indexOf(b.category);
@@ -2999,7 +3022,7 @@ async function automaticWarehouseSync(){
       warehouseFullSyncAt=Date.now();
       return;
     }
-    const fresh=await readHybridCloud(metaSnap);
+    const fresh=await readHybridCloud(metaSnap,cached?.state);
     // 等待使用者完成正在進行的操作，下次再同步，避免覆蓋本機修改。
     if(saving||accountWriteChains.size||document.querySelector('dialog[open]'))return;
     const oldActive=active;
