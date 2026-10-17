@@ -4319,6 +4319,7 @@ $("#warehouseRefreshBtn").onclick=async()=>{
   try{await loadWarehouseCandidates(true);showWarehouseChoice();renderAllVariantWarehousePickers();}
   catch(err){console.error(err);$("#warehouseItemInfo").textContent="讀取失敗，請確認管理員已登入。";}
 };
+let warehouseLinkLoadPromise=Promise.resolve(true);
 async function loadWarehouseLinkForProduct(id){
   const sel=$("#warehouseItemChoice");
   sel.dataset.chosen="";
@@ -4330,7 +4331,7 @@ async function loadWarehouseLinkForProduct(id){
       loadWarehouseCandidates(),
       id?getDoc(doc(db,"inventoryLinks",id)):Promise.resolve(null)
     ]);
-    if(warehouseCurrentProductId!==id)return;
+    if(warehouseCurrentProductId!==id)return false;
     sel.dataset.chosen=link?.exists()?syncKey(link.data().itemKey):"";
     const links=link?.exists()?(link.data().variantLinks||[]):[];
     $$(".variant-row",$("#variantRows")).forEach(row=>{
@@ -4339,9 +4340,11 @@ async function loadWarehouseLinkForProduct(id){
     });
     showWarehouseChoice();
     renderAllVariantWarehousePickers();
+    return true;
   }catch(err){
     console.error(err);
     if(warehouseCurrentProductId===id)$("#warehouseItemInfo").textContent="小倉倉資料讀取失敗："+(err.message||err);
+    return false;
   }
 }
 async function saveWarehouseLink(id,variantLinks=[]){
@@ -4370,7 +4373,6 @@ function openProduct(p=null){
   $("#productId").value=p?.id||"";
   $("#warehouseItemChoice").dataset.chosen="";
   $("#warehouseItemInfo").textContent="正在讀取小倉倉…";
-  loadWarehouseLinkForProduct(p?.id||"");
   $("#productCategory").value=p?.category||"家具";
   $("#productName").value=p?.name||"";
   $("#productPrice").value=p?.price||"";
@@ -4388,6 +4390,9 @@ function openProduct(p=null){
   if($("#productStatus")) $("#productStatus").value=(p?.status==="sold"?"sold":"selling");
   loadVariantRows(p);
   renderAllVariantWarehousePickers();
+  // Load saved links only after variant rows exist; otherwise the async result
+  // can be applied to stale rows and a price-only save can clear variant links.
+  warehouseLinkLoadPromise=loadWarehouseLinkForProduct(p?.id||"");
   $("#productImage").value="";
   editingImage=p?.imageData||"";
   editingExchangeOffers=(p?.category==="交換區") ? normalizeExchangeOffers(p) : [{name:"",imageData:""}];
@@ -4585,6 +4590,12 @@ $("#productForm").addEventListener("submit", async e=>{
 
   try{
     const id=$("#productId").value;
+    // Do not overwrite a saved inventory link before the edit dialog has loaded it.
+    // Fail closed on a failed load: price-only edits must never silently unlink stock.
+    const linkLoaded=await warehouseLinkLoadPromise;
+    if(!linkLoaded || warehouseCurrentProductId!==id){
+      throw new Error("小倉倉連結尚未成功讀取，商品未儲存；請重新開啟商品後再試，避免原有連結遺失。");
+    }
     const variants=collectVariants();
     const existingProduct=id ? products.find(x=>x.id===id) : null;
     const wantsNew=!!$("#productIsNew")?.checked;
